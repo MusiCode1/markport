@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Dark rounded background -->
+  <rect width="100" height="100" rx="18" fill="#18181b"/>
+  <!-- Crystal body (hexagonal) -->
+  <path d="M50 10 L82 32 L82 68 L50 90 L18 68 L18 32 Z" fill="#6d28d9"/>
+  <!-- Top-left facet (lighter) -->
+  <path d="M50 10 L82 32 L57 46 L25 30 Z" fill="#a78bfa"/>
+  <!-- Right facet -->
+  <path d="M57 46 L82 32 L82 68 L57 72 Z" fill="#5b21b6"/>
+  <!-- Left facet -->
+  <path d="M25 30 L57 46 L57 72 L18 68 L18 32 Z" fill="#4c1d95"/>
+  <!-- Bottom facet -->
+  <path d="M57 72 L82 68 L50 90 L18 68 Z" fill="#3b0764"/>
+  <!-- Specular highlight -->
+  <ellipse cx="44" cy="34" rx="9" ry="5" fill="white" opacity="0.25" transform="rotate(-20 44 34)"/>
+</svg>

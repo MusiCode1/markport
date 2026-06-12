@@ -1,0 +1,12 @@
+vendor/
+node_modules/
+.git/
+.tmp/
+docs/
+.codenomad/
+.DS_Store
+.idea/
+.vscode/
+*.log
+npm-debug.log*
+nginx.htpasswd

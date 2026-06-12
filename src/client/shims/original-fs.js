@@ -241,7 +241,12 @@
     if (typeof opts === 'function') { cb = opts; opts = undefined; }
     const encoding = typeof opts === 'string' ? opts : (opts && opts.encoding);
     const url = '/api/fs/write?' + vaultQuery() + 'path=' + encodePath(p) + (encoding ? '&encoding=' + encoding : '');
-    fetch(url, { method: 'PUT', body: data })
+    // Always set Content-Type so express.raw() on the server parses the body.
+    // The Fetch API does NOT set Content-Type automatically for binary bodies
+    // (ArrayBuffer, TypedArray, polyfilled Buffer) — without it, body-parser's
+    // type-is check returns false even for type:'*/*', leaving req.body as {}
+    // and causing fsp.writeFile to throw "Received an instance of Object".
+    fetch(url, { method: 'PUT', body: data == null ? '' : data, headers: { 'Content-Type': 'application/octet-stream' } })
       .then(async (r) => {
         if (!r.ok) {
           const json = await r.json().catch(() => ({ error: 'write failed' }));

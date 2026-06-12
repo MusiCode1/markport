@@ -1,0 +1,58 @@
+services:
+  obsidian-web:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # Set these in .env (or Dockhand's env editor) to point at folders on
+      # your host. Defaults keep everything self-contained in the repo.
+
+      # Your vault — notes, and anything inside .obsidian/ (plugins, themes,
+      # snippets, fonts, settings). Point USER_DATA at your real vault folder.
+      - ${USER_DATA:-./user-data}:/app/user-data
+
+      # Granular overrides — only needed if you want to share a single
+      # plugins/themes/snippets/fonts folder across multiple vaults.
+      # - ${OBSIDIAN_PLUGINS:-./user-data/demo-vault/.obsidian/plugins}:/app/user-data/demo-vault/.obsidian/plugins
+      # - ${OBSIDIAN_THEMES:-./user-data/demo-vault/.obsidian/themes}:/app/user-data/demo-vault/.obsidian/themes
+      # - ${OBSIDIAN_SNIPPETS:-./user-data/demo-vault/.obsidian/snippets}:/app/user-data/demo-vault/.obsidian/snippets
+      # - ${OBSIDIAN_FONTS:-./user-data/demo-vault/.obsidian/fonts}:/app/user-data/demo-vault/.obsidian/fonts
+
+      # Obsidian renderer bundles (downloaded on first start)
+      - obsidian_vendor:/app/vendor
+
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      VAULT_PATH: "${VAULT_PATH:-user-data/demo-vault}"
+      WATCH_POLLING: "${WATCH_POLLING:-false}"
+      # VAULT_REGISTRY: "user-data/registry.json"
+
+      # Auth — generate a secret with:
+      #   node -e "const {authenticator}=require('otplib');console.log(authenticator.generateSecret())"
+      # Then set TOTP_SECRET in Dockhand's env editor or in a .env file.
+      # Visit /__totp-setup?token=YOUR_SECRET to scan the QR code.
+      TOTP_SECRET: "${TOTP_SECRET:-}"
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+
+  # Auth Option 2: HTTP Basic Auth via nginx
+  # nginx listens on port 80 and proxies to obsidian-web internally.
+  # Setup: htpasswd -c nginx.htpasswd <username>
+  # Start: docker compose --profile auth-nginx up
+  nginx:
+    profiles: ["auth-nginx"]
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.htpasswd:/etc/nginx/htpasswd:ro
+    depends_on:
+      - obsidian-web
+    restart: unless-stopped
+
+volumes:
+  obsidian_vendor:

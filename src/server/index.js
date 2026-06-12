@@ -22,17 +22,36 @@ const createVaultsRouter = require('./api/vaults');
 const createBootstrapRouter = require('./api/bootstrap');
 const { warmUpBootstrapCache } = require('./api/bootstrap');
 const createProxyRouter = require('./api/proxy');
+const createKeytarRouter = require('./api/keytar');
+const createLocalStorageRouter = require('./api/localstorage');
+const createPbkdf2Router = require('./api/pbkdf2');
 const attachWatchServer = require('./api/watch');
 const VaultRegistry = require('./vault-registry');
+const { createAuthMiddleware } = require('./middleware/auth');
 
 function createApp(appConfig = config) {
   const app = express();
-  const vaultRegistry = new VaultRegistry(appConfig.registryPath);
+  const vaultRegistry = new VaultRegistry(appConfig.registryPath, {
+    // Restrict /api/vaults/open to paths under vaultsRoot (VAULTS_ROOT env,
+    // default user-data/). The configured boot vault is always allowed even
+    // if it lives elsewhere. Tests pass no vaultsRoot → unrestricted.
+    vaultsRoot: appConfig.vaultsRoot,
+    allowPaths: [appConfig.vaultPath],
+  });
 
   // Compression — critical for /api/bootstrap (38MB uncompressed → ~6MB).
   // Brotli gives ~84% reduction, gzip ~79%. The middleware auto-selects based
   // on Accept-Encoding: browsers get brotli, curl/other tools get gzip.
   app.use(compression({ level: 6 }));
+
+  // Optional TOTP auth — enabled by setting TOTP_SECRET env var.
+  // Generate a secret: node -e "const {authenticator}=require('otplib');console.log(authenticator.generateSecret())"
+  // Then visit /__totp-setup?token=YOUR_SECRET to scan the QR code.
+  const authMiddleware = createAuthMiddleware(appConfig);
+  if (authMiddleware) {
+    app.use(authMiddleware);
+    console.log('[auth] TOTP authentication enabled — visit /__totp-setup?token=YOUR_SECRET to configure your authenticator app');
+  }
 
   // Request logging - very chatty, but invaluable while we are still
   // figuring out what Obsidian asks for during boot.
@@ -67,6 +86,14 @@ function createApp(appConfig = config) {
     } catch (err) {
       res.status(500).send('Error loading page: ' + err.message);
     }
+  }
+
+  // Favicon and app icons from the project root.
+  const rootIconFiles = ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'];
+  for (const f of rootIconFiles) {
+    app.get('/' + f, (req, res) => {
+      res.sendFile(path.join(appConfig.projectRoot, f));
+    });
   }
 
   // Custom entry point - our index.html, not Obsidian's.
@@ -107,6 +134,17 @@ function createApp(appConfig = config) {
     }));
   }
 
+  // Service Worker — served from the root path so its scope covers the whole
+  // origin. Service-Worker-Allowed: / is required because the file lives
+  // under /client/ but must control pages at /. Cache-Control: no-cache
+  // ensures browsers always re-fetch it so SW updates propagate promptly.
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.sendFile(path.join(appConfig.clientPath, 'sw.js'));
+  });
+
   // Worker scripts. Obsidian creates `new Worker("worker.js")` which under
   // Electron resolves to /Resources/obsidian/worker.js, but in a browser
   // it resolves relative to the document URL. Serve them at the root.
@@ -125,6 +163,9 @@ function createApp(appConfig = config) {
   }
 
   // API routes.
+  app.use('/api/keytar', createKeytarRouter(appConfig.userDataPath));
+  app.use('/api/localstorage', createLocalStorageRouter(appConfig.userDataPath));
+  app.use('/api/pbkdf2', createPbkdf2Router());
   app.use('/api/bootstrap', createBootstrapRouter(vaultRegistry, appConfig.vaultPath));
   app.use('/api/proxy-request', createProxyRouter());
   app.use('/api/vaults', createVaultsRouter(vaultRegistry));
@@ -150,22 +191,4 @@ function startServer(appConfig = config) {
     console.log('==========================================');
     console.log('  Vault:    ' + appConfig.vaultPath);
     console.log('  Obsidian: ' + appConfig.obsidianPath);
-    console.log('  Listening on http://' + appConfig.host + ':' + appConfig.port);
-    console.log('==========================================');
-
-    // Pre-build the bootstrap cache in the background so the first browser
-    // request is a cache HIT instead of a cold build.
-    setImmediate(() => {
-      warmUpBootstrapCache(app.locals.vaultRegistry, appConfig.vaultPath)
-        .catch((err) => console.warn('[bootstrap] warm-up error:', err.message));
-    });
-  });
-
-  return server;
-}
-
-if (require.main === module) {
-  startServer();
-}
-
-module.exports = { createApp, startServer };
+    console.log('  

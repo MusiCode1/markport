@@ -61,7 +61,18 @@ const CLIENT_MOBILE_PATH = path.resolve(PROJECT_ROOT, 'src', 'client-mobile');
 const OBSIDIAN_PATH = path.resolve(PROJECT_ROOT, 'vendor', 'obsidian');
 const OBSIDIAN_MOBILE_PATH = path.resolve(PROJECT_ROOT, 'vendor', 'obsidian-mobile');
 
+// Root directory that vaults opened via /api/vaults/open must live under.
+// Without this, any authenticated browser session could mount ANY server
+// directory (e.g. /etc) as a vault and read/write it through the fs API.
+// Set VAULTS_ROOT to move it, or VAULTS_ROOT='*' to disable the check
+// (e.g. vaults spread across several mounts you trust).
+const VAULTS_ROOT = process.env.VAULTS_ROOT === '*'
+  ? null
+  : path.resolve(PROJECT_ROOT, process.env.VAULTS_ROOT || 'user-data');
+
 module.exports = {
+  userDataPath: path.resolve(PROJECT_ROOT, 'user-data'),
+  vaultsRoot: VAULTS_ROOT,
   port: parsePort(process.env.PORT),
   host: process.env.HOST || '127.0.0.1',
   vaultPath: path.resolve(PROJECT_ROOT, process.env.VAULT_PATH || 'user-data/demo-vault'),

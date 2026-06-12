@@ -215,12 +215,24 @@ const MOBILE_SCRIPTS = [
   setStatus('Verifying vault...');
 
   // אמת שה-vault קיים על השרת (stat על ה-root)
-  fetch('/api/fs/stat?vault=' + encodeURIComponent(VAULT_ID) + '&path=')
-    .then(function(res) {
-      if (!res.ok) throw new Error('Vault not found (HTTP ' + res.status + ')');
-      return res.json();
-    })
-    .then(function(stat) {
+  // אמת vault + טען localStorage מהשרת במקביל — שניהם חייבים להיות מוכנים
+  // לפני הזרקת הסקריפטים של Obsidian (app.js קורא localStorage באתחול).
+  // כשל ב-localStorage אינו פטאלי — נשארים עם האחסון המקומי של הדפדפן.
+  Promise.all([
+    fetch('/api/fs/stat?vault=' + encodeURIComponent(VAULT_ID) + '&path=')
+      .then(function(res) {
+        if (!res.ok) throw new Error('Vault not found (HTTP ' + res.status + ')');
+        return res.json();
+      }),
+    (window.__owInstallRemoteLocalStorage
+      ? window.__owInstallRemoteLocalStorage()
+      : Promise.resolve()
+    ).catch(function(e) {
+      console.warn('[obsidian-web] remote localStorage unavailable, staying device-local:', e && e.message);
+    }),
+  ])
+    .then(function(results) {
+      var stat = results[0];
       if (!stat || (!stat.isDirectory && stat.type !== 'directory')) throw new Error('Vault path is not a directory');
 
       setStatus('Loading Obsidian mobile...');

@@ -4,6 +4,9 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <title>Obsidian Web</title>
+  <link rel="icon" href="/favicon.ico" sizes="any"/>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
   <link href="/obsidian/app.css" type="text/css" rel="stylesheet"/>
   <style>
     #ow-loading {
@@ -51,6 +54,7 @@
        together whenever any client file changes and needs to reach the
        browser past its HTTP cache. One global version for all client files. -->
   <script src="/client/shims/telemetry.js?v=3"></script>
+  <script src="/client/shims/remote-localstorage.js?v=3"></script>
   <script src="/client/shims/sync-http.js?v=3"></script>
   <script src="/client/shims/path.js?v=3"></script>
   <script src="/client/shims/url.js?v=3"></script>

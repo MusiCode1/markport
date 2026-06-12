@@ -1,5 +1,10 @@
 # Runtime — contains local absolute paths to user's vaults
 registry.json
 
+# Runtime — secrets and per-server state, never commit
+.keychain.json
+.localstorage.json
+.sessions.json
+
 # Demo vault — track content, ignore Obsidian's local state
 demo-vault/.obsidian/

@@ -1,0 +1,14 @@
+# Normalize all text files to LF in the repo and working tree.
+# Prevents CRLF conversion churn (whole-file diffs) on Windows checkouts.
+* text=auto eol=lf
+
+# Windows-specific scripts keep CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files — never touch line endings
+*.png binary
+*.ico binary
+*.jpg binary
+*.woff binary
+*.woff2 binary

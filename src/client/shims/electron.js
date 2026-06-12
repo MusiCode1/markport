@@ -18,6 +18,68 @@
  * are stubs that log so we can spot uses we missed.
  */
 (function (global) {
+  // ---- Clipboard image cache ------------------------------------------
+  //
+  // electron.clipboard.readImage() must return a NativeImage synchronously.
+  // The browser Clipboard API is async and blocked on plain HTTP anyway,
+  // so instead we intercept the native 'paste' DOM event (which fires before
+  // Obsidian's handler) and cache any image payload. readImage() returns the
+  // last cached image so Obsidian's paste handler gets real pixel data.
+  //
+  // The cache is overwritten on every paste that contains an image and cleared
+  // when Obsidian reads it (to avoid stale images showing up on text pastes).
+
+  let _clipboardImageCache = null; // { data: Uint8Array, mime: string } | null
+
+  document.addEventListener('paste', function (ev) {
+    const items = ev.clipboardData && ev.clipboardData.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = function () {
+          _clipboardImageCache = {
+            data: new Uint8Array(reader.result),
+            mime: item.type,
+          };
+        };
+        reader.readAsArrayBuffer(file);
+        break; // only need the first image
+      }
+    }
+  }, true); // capture phase so we run before Obsidian's listeners
+
+  function _makeNativeImage(cached) {
+    // Minimal NativeImage shim. Obsidian calls isEmpty() then toPNG() / toBuffer().
+    const empty = !cached;
+    return {
+      isEmpty:    () => empty,
+      toPNG:      () => (cached ? cached.data : new Uint8Array(0)),
+      toJPEG:     () => (cached ? cached.data : new Uint8Array(0)),
+      toBuffer:   () => (cached ? cached.data : new Uint8Array(0)),
+      toBitmap:   () => (cached ? cached.data : new Uint8Array(0)),
+      toDataURL:  () => {
+        if (!cached) return '';
+        let binary = '';
+        for (let i = 0; i < cached.data.length; i++) binary += String.fromCharCode(cached.data[i]);
+        return 'data:' + cached.mime + ';base64,' + btoa(binary);
+      },
+      getSize:    () => ({ width: 0, height: 0 }),
+      resize:     function () { return this; },
+      crop:       function () { return this; },
+    };
+  }
+
+  // Save a reference to the real window.open BEFORE Obsidian patches it.
+  // Obsidian overrides window.open to route URLs through its own link handler,
+  // which calls ipcRenderer.send('open-url', ...) — so if our 'open-url'
+  // handler calls window.open, we get infinite recursion. Using this saved
+  // reference bypasses Obsidian's patch and opens a real new tab.
+  const _nativeWindowOpen = window.open.bind(window);
+
   function warnUnimplemented(name) {
     return function () {
       console.warn('[obsidian-web] electron.' + name + ' called but not implemented:', arguments);
@@ -262,7 +324,9 @@
 
       // Special-cased channels that need args or non-GET semantics.
       if (channel === 'file-url') {
-        return global.__owSyncJson('GET', '/api/electron/file-url?path=' + encodeURIComponent(args[0] || '')).value;
+        // Include the vault ID so the server can resolve the path correctly.
+        const vaultParam = vaultId ? '&vault=' + encodeURIComponent(vaultId) : '';
+        return global.__owSyncJson('GET', '/api/electron/file-url?path=' + encodeURIComponent(args[0] || '') + vaultParam).value;
       }
       if (channel === 'trash') {
         return global.__owSyncJson('POST', '/api/electron/trash', { path: args[0], vault: vaultId }).ok || false;
@@ -360,10 +424,39 @@
       }
 
       // 'open-url' opens in a new tab.
+      // Use _nativeWindowOpen (saved before Obsidian patches window.open)
+      // to avoid the infinite recursion: Obsidian's patched window.open
+      // routes back through ipcRenderer.send('open-url', ...).
       if (channel === 'open-url' && args[0]) {
-        window.open(args[0], '_blank', 'noopener');
+        _nativeWindowOpen(args[0], '_blank', 'noopener');
         return;
       }
+
+      // 'open-window' / 'move-to-window': Obsidian requests that the current
+      // pane or vault open in a new Electron window. We can't create a full
+      // second Obsidian instance, but we can open a new browser tab pointing
+      // at the same vault so the user at least gets a second view.
+      if (channel === 'open-window' || channel === 'move-to-window' || channel === 'new-window') {
+        const params = new URLSearchParams(location.search);
+        const vaultId = params.get('vault') || (global.__obsidianWeb && global.__obsidianWeb.vaultId);
+        const url = vaultId
+          ? location.origin + '/?vault=' + encodeURIComponent(vaultId)
+          : location.origin + '/';
+        _nativeWindowOpen(url, '_blank', 'noopener');
+        return;
+      }
+
+      // 'open-vault-manager' / 'open-vault-picker': Obsidian wants to show the
+      // vault switcher UI. Open our /starter page in a new tab.
+      if (
+        channel === 'open-vault-manager' ||
+        channel === 'open-vault-picker' ||
+        channel === 'manage-vaults'
+      ) {
+        _nativeWindowOpen(location.origin + '/starter', '_blank', 'noopener');
+        return;
+      }
+
       // Application-menu IPC channels - ignored on web. Obsidian renders
       // its own DOM menus separately; the Electron menu bar isn't visible.
       if (
@@ -407,9 +500,29 @@
 
   const remote = {
     shell: {
-      showItemInFolder: warnUnimplemented('shell.showItemInFolder'),
-      openExternal: (url) => { window.open(url, '_blank', 'noopener'); return Promise.resolve(); },
-      openPath: warnUnimplemented('shell.openPath'),
+      // "Show in folder" — open the file directly in a new tab since we can't
+      // launch a native file manager. Strips the virtual /vault/ prefix and
+      // maps to /api/fs/read so the browser can display or download the asset.
+      showItemInFolder: (filePath) => {
+        const rel = (filePath || '').replace(/^\/vault\//, '').replace(/^\/+/, '');
+        const vaultId = global.__obsidianWeb && global.__obsidianWeb.vaultId;
+        const vaultParam = vaultId ? '&vault=' + encodeURIComponent(vaultId) : '';
+        _nativeWindowOpen('/api/fs/read?path=' + encodeURIComponent(rel) + vaultParam, '_blank', 'noopener');
+      },
+      openExternal: (url) => { _nativeWindowOpen(url, '_blank', 'noopener'); return Promise.resolve(); },
+      // "Open path" — same as showItemInFolder for vault files; for anything
+      // else treat it like openExternal.
+      openPath: (filePath) => {
+        if ((filePath || '').startsWith('/vault/') || (filePath || '').startsWith('vault/')) {
+          const rel = (filePath || '').replace(/^\/vault\//, '').replace(/^\/+/, '');
+          const vaultId = global.__obsidianWeb && global.__obsidianWeb.vaultId;
+          const vaultParam = vaultId ? '&vault=' + encodeURIComponent(vaultId) : '';
+          _nativeWindowOpen('/api/fs/read?path=' + encodeURIComponent(rel) + vaultParam, '_blank', 'noopener');
+        } else {
+          _nativeWindowOpen(filePath, '_blank', 'noopener');
+        }
+        return Promise.resolve('');
+      },
     },
     dialog: {
       showOpenDialogSync: (opts) => {
@@ -436,6 +549,96 @@
     webContents: {
       fromId: () => null,
       getFocusedWebContents: () => null,
+    },
+    // safeStorage: Electron's credential encryption API (used for keychain).
+    //
+    // Problem: In real Electron, encryptString() returns a Buffer (binary).
+    // Obsidian may store it by first doing Buffer.from(result, 'base64'), so
+    // any non-base64-safe tag in our return value gets corrupted on the
+    // round-trip. Previous fix ('OW:' prefix) broke because ':' is not a
+    // valid base64 character.
+    //
+    // Solution: Store the actual secret server-side (in .keychain.json via
+    // the /api/keytar endpoint, using synchronous XHR so encryptString stays
+    // synchronous). Return a token that is the base64 encoding of 'ow:' + id.
+    //
+    //   encryptString('secret') → stores secret, returns btoa('ow:abc123...')
+    //     e.g. 'b3c6YWJj...'
+    //
+    // The token survives EITHER storage path:
+    //   • String path: stored/retrieved as 'b3c6YWJj...' → atob() → 'ow:id' → lookup ✓
+    //   • Buffer path: Buffer.from('b3c6YWJj...', 'base64') → Uint8Array of
+    //     'ow:id' bytes → TextDecoder → 'ow:id' → lookup ✓
+    safeStorage: {
+      isEncryptionAvailable() { return true; },
+      encryptString(text) {
+        // Generate a random 18-char hex ID
+        const rnd = new Uint8Array(9);
+        crypto.getRandomValues(rnd);
+        const id = Array.from(rnd).map(b => b.toString(16).padStart(2, '0')).join('');
+        // Persist secret server-side via synchronous XHR
+        try {
+          global.__owSyncJson('PUT', '/api/keytar', {
+            service: '__safeStorage__',
+            account: id,
+            password: text,
+          });
+        } catch (e) {
+          console.warn('[obsidian-web] safeStorage.encryptString: store failed:', e.message);
+        }
+        // Return base64 of 'ow:' + id  — this is a valid base64 string that
+        // decodes back to the marker string whether Obsidian treats it as a
+        // plain string or decodes it as base64 first.
+        const marker = 'ow:' + id;
+        return btoa(String.fromCharCode(...new TextEncoder().encode(marker)));
+      },
+      decryptString(buf) {
+        // Recover the 'ow:id' marker regardless of whether buf arrived as a
+        // plain string (Obsidian stored token as-is) or Uint8Array (Obsidian
+        // did Buffer.from(token, 'base64') before storing).
+        let marker;
+        if (typeof buf !== 'string') {
+          marker = new TextDecoder().decode(buf);
+        } else {
+          try { marker = atob(buf); } catch (_) { marker = buf; }
+        }
+
+        // Current token format: marker = 'ow:' + id
+        if (marker && marker.startsWith('ow:')) {
+          const id = marker.slice(3);
+          try {
+            const url = '/api/keytar?service=' + encodeURIComponent('__safeStorage__')
+                      + '&account=' + encodeURIComponent(id);
+            const result = global.__owSyncJson('GET', url);
+            if (result && result.password != null) return result.password;
+          } catch (e) {
+            if (!e.status || e.status !== 404) {
+              console.warn('[obsidian-web] safeStorage.decryptString: lookup failed:', e.message);
+            }
+          }
+        }
+
+        // Legacy: old 'OW:' tagged base64 format (previous implementation)
+        const s = typeof buf === 'string' ? buf : new TextDecoder().decode(buf);
+        if (s.startsWith('OW:')) {
+          try {
+            const bin = atob(s.slice(3));
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new TextDecoder().decode(bytes);
+          } catch (_) {}
+        }
+
+        // Legacy: old comma-separated numbers from Uint8Array.toString()
+        if (typeof buf === 'string' && /^\d+(,\d+)*$/.test(buf)) {
+          try {
+            return new TextDecoder().decode(new Uint8Array(buf.split(',').map(Number)));
+          } catch (_) {}
+        }
+
+        // Last resort: return as-is
+        return s;
+      },
     },
     nativeTheme: (function () {
       const t = {
@@ -467,6 +670,20 @@
     clipboard: {
       writeText: (text) => navigator.clipboard.writeText(text),
       readText: () => navigator.clipboard.readText(),
+      // Returns the image that was most recently pasted (captured via the DOM
+      // paste event above). Clears the cache so a subsequent text paste doesn't
+      // accidentally return a stale image.
+      readImage: () => {
+        const cached = _clipboardImageCache;
+        _clipboardImageCache = null;
+        return _makeNativeImage(cached);
+      },
+      // Returns the MIME types currently on the clipboard. Obsidian checks this
+      // to decide whether a paste contains an image. Report 'image/png' when
+      // our cache is populated (i.e. the user just pasted an image).
+      availableFormats: () => (_clipboardImageCache ? ['image/png'] : []),
+      hasImage: () => !!_clipboardImageCache,
+      writeImage: () => {},
     },
   };
   remote.BrowserWindow.getFocusedWindow = () => makeWindow();

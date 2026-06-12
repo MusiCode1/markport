@@ -48,7 +48,7 @@ function isAllowed(urlStr) {
   }
 }
 
-function fetchUrl(urlStr, method, reqHeaders, body) {
+function fetchUrl(urlStr, method, reqHeaders, body, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
     let parsed;
     try { parsed = new URL(urlStr); } catch (e) { return reject(e); }
@@ -63,6 +63,16 @@ function fetchUrl(urlStr, method, reqHeaders, body) {
     };
 
     const req = lib.request(options, (res) => {
+      // Follow redirects (GitHub releases redirect to CDN)
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume(); // drain the response
+        if (redirectsLeft <= 0) return reject(new Error('too many redirects'));
+        const next = new URL(res.headers.location, urlStr).toString();
+        // Don't check allow-list for redirect targets — caller already validated origin
+        fetchUrl(next, res.statusCode === 303 ? 'GET' : method, reqHeaders, body, redirectsLeft - 1)
+          .then(resolve).catch(reject);
+        return;
+      }
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => {

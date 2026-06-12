@@ -83,6 +83,50 @@ Open `http://127.0.0.1:3000`.
 Open `http://127.0.0.1:3000/starter` to manage recent vaults and add a
 server folder path as a vault.
 
+## Docker (self-hosted / NAS)
+
+The repo ships a `docker-compose.yml` for running obsidian-web on a NAS or any Docker host.
+
+```bash
+docker compose up -d
+```
+
+### Vault location
+
+Inside the container, the server's working root is `/app/user-data/`. The `docker-compose.yml` mounts a host directory there:
+
+```
+${USER_DATA:-./user-data}  →  /app/user-data
+```
+
+**Your vault folder must live under that mount point.** For example, if your `.env` has:
+
+```
+USER_DATA=/volume1/obsidian
+```
+
+then place your vault at `/volume1/obsidian/<VaultName>/` on the host. Inside the container it appears at `/app/user-data/<VaultName>/`. The `VAULT_PATH` env var (default `user-data/demo-vault`) tells the server which subdirectory to open on boot — set it to `user-data/<VaultName>` to open your vault automatically.
+
+### Configuration (`.env`)
+
+Copy `.env.example` to `.env` and fill in your values:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USER_DATA` | `./user-data` | Host path mounted to `/app/user-data` — put your vault here |
+| `VAULT_PATH` | `user-data/demo-vault` | Relative path inside the container to the vault to open on boot |
+| `PORT` | `3000` | Host port |
+| `TOTP_SECRET` | _(empty — auth disabled)_ | Base-32 TOTP secret; set to enable auth. Generate with `node -e "const {authenticator}=require('otplib');console.log(authenticator.generateSecret())"` then visit `/__totp-setup?token=YOUR_SECRET` to scan the QR code. |
+| `WATCH_POLLING` | `false` | Set to `true` on network filesystems (NFS, SMB, rclone) that don't support inotify |
+
+### Notes
+
+- The Obsidian renderer is downloaded into a named Docker volume (`obsidian_vendor`) on first start — no manual step needed.
+- Run behind a reverse proxy (nginx, Caddy, Cloudflare Tunnel) for HTTPS. Without HTTPS, the Web Crypto API (`crypto.subtle`) is unavailable; the project includes a pure-JS polyfill so plugins like ion-sync that rely on AES-GCM/PBKDF2 still work on plain HTTP.
+- If you use a third-party sync plugin (e.g. ion-sync) that previously synced to the vault on another device, the initial sync may encounter ENOTDIR errors where old sync artifacts left files where directories should be. The server auto-repairs these by removing the blocking file and recreating the correct directory structure.
+
+---
+
 ## Obsidian Version
 
 `vendor/obsidian/` is generated from the official `obsidianmd/obsidian-releases` GitHub releases and is intentionally ignored by Git.

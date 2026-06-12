@@ -20,6 +20,15 @@
     xhr.open(method, url, false); // false = synchronous
     if (body !== undefined && body !== null) {
       if (typeof body === 'string' || body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+        // For binary bodies (ArrayBuffer/TypedArray) the browser does NOT set
+        // Content-Type automatically on XHR.  Without it, express.raw() on the
+        // server leaves req.body as {} and fsp.writeFile throws "Received an
+        // instance of Object".  Strings get text/plain;charset=UTF-8 from the
+        // browser, which body-parser already handles — we only need to add the
+        // header for binary types.
+        if (typeof body !== 'string') {
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        }
         xhr.send(body);
       } else {
         xhr.setRequestHeader('Content-Type', 'application/json');

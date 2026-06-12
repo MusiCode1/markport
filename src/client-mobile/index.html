@@ -6,6 +6,14 @@
   <title>Obsidian Web</title>
   <link href="/obsidian-mobile/app.css" type="text/css" rel="stylesheet"/>
   <style>
+    /* viewport-fit=cover extends the app edge-to-edge. The safe-area insets
+       push content clear of the status bar (top) and home indicator (bottom)
+       so nothing is hidden under system UI on iOS or Android. */
+    html {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background: var(--background-primary, #1e1e1e);
+    }
     #ow-loading {
       position: fixed; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 16px;
@@ -30,6 +38,10 @@
     <div class="ow-spinner"></div>
     <div class="ow-status" id="ow-status"></div>
   </div>
+
+  <!-- 0. localStorage שרת-צד (משותף עם הלקוח הדסקטופי) — מותקן ע"י boot.js
+       לפני הזרקת הסקריפטים של Obsidian. -->
+  <script src="/client/shims/remote-localstorage.js?v=1"></script>
 
   <!-- 1. Capacitor shim — חייב לפני native-bridge.js כדי שandroidBridge יהיה
        מוגדר כשהbridge מאתחל את הplatform. -->

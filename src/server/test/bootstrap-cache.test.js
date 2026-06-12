@@ -22,7 +22,15 @@ const { createApp } = require('../index');
 const { serverCache } = require('../api/bootstrap');
 
 async function startTestServer(config) {
-  const app = createApp(config);
+  // The mobile runtime paths were added after these tests were written;
+  // default them so each test doesn't have to spell them out.
+  const app = createApp({
+    clientMobilePath: config.clientPath,
+    obsidianMobilePath: config.obsidianPath,
+    userDataPath: path.dirname(config.registryPath),
+    projectRoot: path.dirname(config.clientPath),
+    ...config,
+  });
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address();

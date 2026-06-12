@@ -1,6 +1,9 @@
 # Vendor — extracted Obsidian bundles (regeneratable via scripts/update-obsidian.js)
 vendor/
 
+# Local environment — copy .env.example to .env, never commit real secrets
+.env
+
 # Node
 node_modules/
 npm-debug.log*

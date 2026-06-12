@@ -3,9 +3,30 @@ const fs = require('fs');
 const path = require('path');
 
 class VaultRegistry {
-  constructor(registryPath) {
+  /**
+   * @param {string} registryPath  JSON file tracking known vaults.
+   * @param {object} [opts]
+   * @param {string|null} [opts.vaultsRoot]  If set, open()/move() only accept
+   *   paths under this root. null/undefined = unrestricted (tests, VAULTS_ROOT='*').
+   * @param {string[]} [opts.allowPaths]  Extra paths allowed outside the root
+   *   (e.g. the VAULT_PATH boot vault, which may live anywhere).
+   */
+  constructor(registryPath, opts = {}) {
     this.registryPath = registryPath;
+    this.vaultsRoot = opts.vaultsRoot ? path.resolve(opts.vaultsRoot) : null;
+    this.allowPaths = (opts.allowPaths || []).filter(Boolean).map(p => path.resolve(p));
     this.vaults = this.load();
+  }
+
+  // A path is allowed if it IS the root / an allowlisted path, or lives
+  // under one of them. Paths already in the registry are always allowed
+  // (the admin registered them via config or an earlier policy).
+  isPathAllowed(resolved) {
+    if (!this.vaultsRoot) return true;
+    const roots = [this.vaultsRoot, ...this.allowPaths];
+    return roots.some(root =>
+      resolved === root || resolved.startsWith(root + path.sep)
+    );
   }
 
   load() {
@@ -51,6 +72,9 @@ class VaultRegistry {
     }
 
     const resolved = path.resolve(vaultPath);
+    if (!this.isPathAllowed(resolved) && !this.findIdByPath(resolved)) {
+      return { ok: false, error: 'path is outside the allowed vaults root' };
+    }
     if (create) {
       fs.mkdirSync(resolved, { recursive: true });
     }
@@ -97,6 +121,9 @@ class VaultRegistry {
     if (!id) return { ok: false, notFound: true };
 
     const resolvedNewPath = path.resolve(newPath);
+    if (!this.isPathAllowed(resolvedNewPath)) {
+      return { ok: false, error: 'destination is outside the allowed vaults root' };
+    }
     try {
       fs.renameSync(this.vaults[id].path, resolvedNewPath);
     } catch (err) {

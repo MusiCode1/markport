@@ -53,7 +53,14 @@ function createElectronRouter(vaultRegistry, fallbackVaultRoot) {
   // For now we just delete; later we can move to ~/.local/share/Trash.
   router.post('/trash', express.json(), async (req, res) => {
     try {
-      const rel = req.body.path;
+      // Obsidian passes the virtual vault path (/vault/some/file.md).
+      // Strip the VAULT_BASE prefix so it resolves correctly against the
+      // real vault root (same stripping original-fs.js does for /api/fs/*).
+      let rel = req.body.path || '';
+      const vaultPrefix = VAULT_BASE + '/';
+      if (rel.startsWith(vaultPrefix)) rel = rel.slice(vaultPrefix.length);
+      else if (rel === VAULT_BASE) rel = '';
+      else rel = rel.replace(/^\/+/, '');
       const vaultRoot = getVaultRoot(req);
       const absolute = path.resolve(vaultRoot, '.' + path.sep + rel);
       const resolvedRoot = path.resolve(vaultRoot);
@@ -97,8 +104,21 @@ function createElectronRouter(vaultRegistry, fallbackVaultRoot) {
   });
 
   // ipcRenderer.sendSync('file-url', filePath)
+  // Obsidian calls this to turn a vault-relative virtual path (e.g.
+  // /vault/images/photo.png) into a URL it can use as <img src>.
+  // In Electron that works via the app:// protocol; in a browser we must
+  // return a real HTTP URL. We strip the virtual vault prefix and return
+  // a path to our /api/fs/read endpoint, which serves the raw binary.
   router.get('/file-url', (req, res) => {
-    res.json({ value: 'file://' + (req.query.path || '') });
+    const filePath = req.query.path || '';
+    // Strip the virtual vault base prefix (/vault/ by default).
+    const prefix = VAULT_BASE + '/';
+    const relative = filePath.startsWith(prefix)
+      ? filePath.slice(prefix.length)
+      : filePath.replace(/^\/+/, '');
+    const vault = getCurrentVault(req);
+    const vaultParam = vault ? '&vault=' + encodeURIComponent(vault.id) : '';
+    res.json({ value: '/api/fs/read?path=' + encodeURIComponent(relative) + vaultParam });
   });
 
   // ipcRenderer.sendSync('version')
@@ -133,7 +153,10 @@ function createElectronRouter(vaultRegistry, fallbackVaultRoot) {
 
   // ipcRenderer.sendSync('sandbox') - opens a sandbox vault, ignore.
   router.get('/sandbox', (req, res) => res.json({ value: null }));
-  router.get('/starter', (req, res) => res.json({ value: null }));
+  // ipcRenderer.sendSync('starter') - returns the URL of the vault-picker page.
+  // Obsidian uses this to know where to navigate when the user opens the vault
+  // manager. Returning '/starter' lets it open our vault management page.
+  router.get('/starter', (req, res) => res.json({ value: '/starter' }));
   router.get('/help', (req, res) => res.json({ value: null }));
 
   // Update / insider channels - we are never updating, never insider.
