@@ -15,6 +15,7 @@ obsidian-web loads Obsidian's original renderer (`app.js`) completely unmodified
 - Core plugins (file explorer, tags, bookmarks, outgoing links, etc.)
 - Real-time sync across tabs via WebSocket
 - RTL / Unicode support
+- Optional cookie-session login with a real sign-in form for private vault deployments
 
 ### Fast bootstrap
 
@@ -83,6 +84,25 @@ Open `http://127.0.0.1:3000`.
 Open `http://127.0.0.1:3000/starter` to manage recent vaults and add a
 server folder path as a vault.
 
+### Authentication
+
+The Node server now supports a simple browser login flow for private vaults:
+
+- `GET /login` shows a normal sign-in form
+- `POST /login` creates an HttpOnly cookie session
+- `GET /logout` clears the session cookie
+- `GET /` and the app routes redirect to `/login` until signed in
+- If `OBSIDIAN_WEB_PASSWORD` is unset, auth stays off
+
+Set these environment variables to enable it:
+
+- `OBSIDIAN_WEB_USERNAME` — login username, default `ethan`
+- `OBSIDIAN_WEB_PASSWORD` — login password; leave empty to disable auth
+- `OBSIDIAN_WEB_REALM` — HTTP auth realm shown by the browser, default `Obsidian Web`
+- `OBSIDIAN_WEB_SESSION_SECRET` — signing secret for the cookie session; defaults to a derived value
+- `OBSIDIAN_WEB_COOKIE_NAME` — session cookie name, default `obsidian_web_session`
+- `OBSIDIAN_WEB_COOKIE_DAYS` — session lifetime in days, default `30`
+
 ## Obsidian Version
 
 `vendor/obsidian/` is generated from the official `obsidianmd/obsidian-releases` GitHub releases and is intentionally ignored by Git.
@@ -134,6 +154,12 @@ Server environment variables:
 - `HOST`: bind address, default `127.0.0.1`.
 - `VAULT_PATH`: vault path relative to the project root or absolute, default `user-data/demo-vault`.
 - `VAULT_REGISTRY`: recent-vault registry JSON path, default `user-data/registry.json`.
+- `OBSIDIAN_WEB_USERNAME`: login username for private deployments, default `ethan`.
+- `OBSIDIAN_WEB_PASSWORD`: login password; leave empty to disable auth.
+- `OBSIDIAN_WEB_REALM`: browser auth realm label, default `Obsidian Web`.
+- `OBSIDIAN_WEB_SESSION_SECRET`: optional cookie-signing secret.
+- `OBSIDIAN_WEB_COOKIE_NAME`: optional session cookie name.
+- `OBSIDIAN_WEB_COOKIE_DAYS`: session lifetime in days, default `30`.
 
 ### Bootstrap configuration
 
@@ -220,7 +246,7 @@ The Node.js server (`src/server/`) can be deployed to any Linux box. A typical s
 1. Clone the repo and run `node scripts/update-obsidian.js` to get Obsidian's renderer files
 2. `cd src/server && npm install && npm start`
 3. Put it behind a reverse proxy (nginx, Caddy, Cloudflare Tunnel) with HTTPS
-4. Do not expose the server directly to the internet without auth — there is no application-level authentication
+4. Do not expose the server directly to the internet without auth — the server supports private cookie-session logins now, and you should still put a trusted proxy in front of it for production
 
 ## Notes
 

@@ -2,6 +2,29 @@
 
 > ‏רציונל ‏ארכיטקטוני ‏פר-slice (‏מרדכי). ‏ליד הקוד, ‏לא ‏בריפו ‏השיטה.
 
+## 2026-07-06 — browser auth: login form + cookie session for private vaults
+
+### ‏רציונל
+ה-Node server קיבל שכבת גישה פרטית פשוטה שנועדה להבדיל את ה-fork הזה מהמקור: במקום להשאיר את ה-vault פתוח לכל מי שמחזיק את ה-URL, השרת מציג `/login`, יוצר cookie session אחרי התחברות מוצלחת, ומנתב את `/logout` לניקוי הסשן. זו שכבה קלה יותר מ-OAuth, אבל טובה מספיק לפריסה אישית ב-Zo כשהמטרה היא לשים את Obsidian מאחורי דלת אחת פשוטה.
+
+### ‏מה נכנס
+- טופס כניסה רגיל ב-`/login`
+- cookie session חתום ו-HttpOnly
+- `GET /logout` לניקוי הסשן
+- fallback ל-basic auth למקרה שמישהו רוצה לקלוט גישה ישנה או לבדוק ידנית
+- auth כבוי אם `OBSIDIAN_WEB_PASSWORD` ריק
+
+### ‏משתני סביבה
+- `OBSIDIAN_WEB_USERNAME`
+- `OBSIDIAN_WEB_PASSWORD`
+- `OBSIDIAN_WEB_REALM`
+- `OBSIDIAN_WEB_SESSION_SECRET`
+- `OBSIDIAN_WEB_COOKIE_NAME`
+- `OBSIDIAN_WEB_COOKIE_DAYS`
+
+### ‏החלטת מוצר
+ה-auth הזה שייך ל-fork הזה, לא ל-upstream. הוא מתועד כאן כדי שיהיה ברור שהריפו שלנו הוא גרסה מחוזקת לפריסה אישית, לא רק mirror של הקוד המקורי.
+
 ## 2026-06-13 — PR #9 shims: opt-in דרך env var, לא ברירת-מחדל (החלטת המשתמשת)
 
 > החלטה צופה-קדימה. נאכפת בסלייס **client-wiring** העתידי (שם יש לה שיניים), לא ב-server-shims הנוכחי. נכתבה כאן כדי לכוון את ה-brief של client-wiring כשייכתב.
