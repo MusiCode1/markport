@@ -84,6 +84,14 @@ module.exports = {
   watchPollInterval: process.env.WATCH_POLL_INTERVAL
     ? parseInt(process.env.WATCH_POLL_INTERVAL, 10)
     : 3000,
+  auth: {
+    username: process.env.OBSIDIAN_WEB_USERNAME || 'ethan',
+    password: process.env.OBSIDIAN_WEB_PASSWORD || '',
+    realm: process.env.OBSIDIAN_WEB_REALM || 'Obsidian Web',
+    sessionSecret: process.env.OBSIDIAN_WEB_SESSION_SECRET || `${process.env.OBSIDIAN_WEB_USERNAME || 'ethan'}:${process.env.OBSIDIAN_WEB_PASSWORD || ''}:${process.env.OBSIDIAN_WEB_REALM || 'Obsidian Web'}`,
+    cookieName: process.env.OBSIDIAN_WEB_COOKIE_NAME || 'obsidian_web_session',
+    cookieDays: parseInt(process.env.OBSIDIAN_WEB_COOKIE_DAYS || '30', 10),
+  },
   bootstrap: {
     // Master switch. When false, /api/bootstrap returns { disabled: true }
     // immediately without scanning the vault. Useful for minimal deployments
