@@ -17,6 +17,7 @@ function createVaultsRouter(vaultRegistry) {
   });
 
   router.post('/move', express.json(), (req, res) => {
+    if (req.readonlyNoop) return res.json({ ok: true });
     if (!req.body || typeof req.body.oldPath !== 'string' || typeof req.body.newPath !== 'string') {
       return res.status(400).json({ ok: false, error: 'oldPath and newPath are required' });
     }
@@ -32,6 +33,7 @@ function createVaultsRouter(vaultRegistry) {
   });
 
   router.post('/remove', express.json(), (req, res) => {
+    if (req.readonlyNoop) return res.json({ ok: true });
     if (!req.body || typeof req.body.path !== 'string') {
       return res.status(400).json({ ok: false, error: 'path is required' });
     }

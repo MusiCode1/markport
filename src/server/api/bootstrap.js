@@ -102,7 +102,7 @@ const READ_BATCH = 30;
  * Extracted so the disable path (and other callers) can produce it without
  * doing a full vault FS walk inside _buildCacheEntry.
  */
-function buildElectronValues(vaultId, vaultRegistry) {
+function buildElectronValues(vaultId, vaultRegistry, authMode) {
   const vault = vaultId ? vaultRegistry.get(vaultId) : null;
   return {
     'vault':          vault ? { id: vaultId, path: VAULT_BASE } : {},
@@ -119,6 +119,7 @@ function buildElectronValues(vaultId, vaultRegistry) {
     'cli':            false,
     'disable-gpu':    false,
     'is-quitting':    false,
+    'auth-mode':      authMode || 'full',
   };
 }
 
@@ -271,23 +272,23 @@ async function walkDir(dir, root, fsCache, dirsCache, walkHidden = false, progre
  * Returns the cache entry: { response, dirMtimes, compressed }.
  * This function is used both by the HTTP handler and by the warm-up routine.
  */
-async function buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full = false) {
+async function buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full = false, authMode) {
   // Deduplicate concurrent builds for the same vault+full combination.
   const buildKey = (vaultId || '') + ':' + (full ? 'full' : 'partial');
   if (pendingBuilds.has(buildKey)) {
     return pendingBuilds.get(buildKey);
   }
-  const promise = _buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full)
+  const promise = _buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full, authMode)
     .finally(() => pendingBuilds.delete(buildKey));
   pendingBuilds.set(buildKey, promise);
   return promise;
 }
 
-async function _buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full = false) {
+async function _buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full = false, authMode) {
   const t0 = Date.now();
 
   // ── Electron IPC values ────────────────────────────────────────────
-  const electronValues = buildElectronValues(vaultId, vaultRegistry);
+  const electronValues = buildElectronValues(vaultId, vaultRegistry, authMode);
 
   // ── Cache validation ───────────────────────────────────────────────
   const cached = serverCache.get(vaultId);
@@ -447,7 +448,7 @@ async function _buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full = false)
 
 // ── router ────────────────────────────────────────────────────────────────────
 
-function createBootstrapRouter(vaultRegistry, fallbackVaultRoot, bootstrapConfig) {
+function createBootstrapRouter(vaultRegistry, fallbackVaultRoot, bootstrapConfig, authMode) {
   // Default to the global config's bootstrap block when not provided
   // (production startServer path). Tests pass an explicit override.
   const bootCfg = bootstrapConfig || config.bootstrap;
@@ -481,14 +482,13 @@ function createBootstrapRouter(vaultRegistry, fallbackVaultRoot, bootstrapConfig
   router.get('/', async (req, res) => {
     const vaultId = req.query.vault || '';
     const full = req.query.full === '1';
-
     // ── Disable path ────────────────────────────────────────────────────
     // When bootstrap is disabled by env/config, return a minimal payload
     // immediately. No FS walk, no serverCache lookup, no pre-compression.
     if (!bootCfg.enabled) {
       return res.json({
         disabled: true,
-        electron: buildElectronValues(vaultId, vaultRegistry),
+        electron: buildElectronValues(vaultId, vaultRegistry, authMode),
         fs: {},
         dirs: {},
       });
@@ -496,18 +496,17 @@ function createBootstrapRouter(vaultRegistry, fallbackVaultRoot, bootstrapConfig
 
     const vault = vaultId ? vaultRegistry.get(vaultId) : null;
     const vaultRoot = vault ? vault.path : fallbackVaultRoot;
-
     // If a full=1 build is needed but we only have a partial cache, serve
     // the partial result immediately and kick off the full build in the background.
     const existing = serverCache.get(vaultId);
     let entry;
     if (full && existing && !existing.isFull) {
       console.log(`[bootstrap] vault=${vaultId.slice(0, 8)}… serving partial while full build runs in background`);
-      buildCacheEntry(vaultId, vaultRoot, vaultRegistry, true)
+      buildCacheEntry(vaultId, vaultRoot, vaultRegistry, true, authMode)
         .catch((err) => console.warn('[bootstrap] background full build error:', err.message));
       entry = existing;
     } else {
-      entry = await buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full);
+      entry = await buildCacheEntry(vaultId, vaultRoot, vaultRegistry, full, authMode);
     }
 
     // Send the pre-compressed buffer directly, bypassing middleware
@@ -544,7 +543,7 @@ function createBootstrapRouter(vaultRegistry, fallbackVaultRoot, bootstrapConfig
  * If bootstrap is disabled (config.bootstrap.enabled === false), this is a
  * no-op — we avoid the precompute entirely.
  */
-async function warmUpBootstrapCache(vaultRegistry, fallbackVaultRoot, bootstrapConfig) {
+async function warmUpBootstrapCache(vaultRegistry, fallbackVaultRoot, bootstrapConfig, authMode) {
   const bootCfg = bootstrapConfig || config.bootstrap;
   if (!bootCfg.enabled) {
     // Bootstrap disabled — skip the precompute entirely.
@@ -559,7 +558,7 @@ async function warmUpBootstrapCache(vaultRegistry, fallbackVaultRoot, bootstrapC
   if (ids.length === 0 && fallbackVaultRoot) {
     // No registered vaults yet — warm up the fallback vault.
     try {
-      await buildCacheEntry('', fallbackVaultRoot, vaultRegistry, false);
+      await buildCacheEntry('', fallbackVaultRoot, vaultRegistry, false, authMode);
     } catch (err) {
       console.warn('[bootstrap] warm-up failed for fallback vault:', err.message);
     }
@@ -569,9 +568,9 @@ async function warmUpBootstrapCache(vaultRegistry, fallbackVaultRoot, bootstrapC
     const { path: vaultPath } = vaults[id];
     try {
       // Phase 1: fast partial build so the first request is never a cold MISS.
-      await buildCacheEntry(id, vaultPath, vaultRegistry, false);
+      await buildCacheEntry(id, vaultPath, vaultRegistry, false, authMode);
       // Phase 2: full build in background — replaces the partial entry when done.
-      buildCacheEntry(id, vaultPath, vaultRegistry, true)
+      buildCacheEntry(id, vaultPath, vaultRegistry, true, authMode)
         .catch((err) => console.warn(`[bootstrap] full warm-up failed for vault ${id}:`, err.message));
     } catch (err) {
       console.warn(`[bootstrap] warm-up failed for vault ${id}:`, err.message);

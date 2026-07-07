@@ -330,6 +330,20 @@ function createFsRouter(vaultRegistry, fallbackVaultRoot) {
   router.get('/read', async (req, res) => {
     try {
       const relPath = req.query.path || '';
+      // In readonly mode, force unauthenticated reads to see preview config.
+      if (req.authMode === 'readonly' && !req.authorized && relPath === '.obsidian/app.json') {
+        const json = JSON.stringify({
+          defaultViewMode: 'preview',
+          livePreview: false,
+          readableLineLength: true,
+          showLineNumber: false,
+          spellcheck: false,
+        }, null, 2);
+        if (encoding) {
+          return res.type('text/plain; charset=utf-8').send(json);
+        }
+        return res.type('application/json').send(json);
+      }
       const target = resolveSafe(req, relPath);
       const encoding = req.query.encoding || null;
 
@@ -402,6 +416,7 @@ function createFsRouter(vaultRegistry, fallbackVaultRoot) {
   // ?encoding=utf8 means the server treats body as utf-8 text.
   router.put('/write', express.raw({ type: '*/*', limit: '256mb' }), async (req, res) => {
     try {
+      if (req.readonlyNoop) return res.json({ ok: true });
       const relPath = req.query.path || '';
       const target = resolveSafe(req, relPath);
       const encoding = req.query.encoding || null;
@@ -442,6 +457,7 @@ function createFsRouter(vaultRegistry, fallbackVaultRoot) {
 
   router.post('/mkdir', express.json(), async (req, res) => {
     try {
+      if (req.readonlyNoop) return res.json({ ok: true });
       const target = resolveSafe(req, req.body.path || '');
       const recursive = req.body.recursive !== false;
       await fsp.mkdir(target, { recursive });
@@ -454,6 +470,7 @@ function createFsRouter(vaultRegistry, fallbackVaultRoot) {
 
   router.delete('/unlink', async (req, res) => {
     try {
+      if (req.readonlyNoop) return res.json({ ok: true });
       const target = resolveSafe(req, req.query.path || '');
       await fsp.unlink(target);
       invalidateBootstrapCache(req.query.vault);
@@ -465,6 +482,7 @@ function createFsRouter(vaultRegistry, fallbackVaultRoot) {
 
   router.delete('/rmdir', async (req, res) => {
     try {
+      if (req.readonlyNoop) return res.json({ ok: true });
       const target = resolveSafe(req, req.query.path || '');
       const recursive = req.query.recursive === '1';
       if (recursive) {
@@ -481,6 +499,7 @@ function createFsRouter(vaultRegistry, fallbackVaultRoot) {
 
   router.post('/rename', express.json(), async (req, res) => {
     try {
+      if (req.readonlyNoop) return res.json({ ok: true });
       const oldPath = resolveSafe(req, req.body.oldPath || '');
       const newPath = resolveSafe(req, req.body.newPath || '');
       await fsp.rename(oldPath, newPath);
@@ -493,6 +512,7 @@ function createFsRouter(vaultRegistry, fallbackVaultRoot) {
 
   router.post('/copy', express.json(), async (req, res) => {
     try {
+      if (req.readonlyNoop) return res.json({ ok: true });
       const src = resolveSafe(req, req.body.src || '');
       const dest = resolveSafe(req, req.body.dest || '');
       await fsp.copyFile(src, dest);

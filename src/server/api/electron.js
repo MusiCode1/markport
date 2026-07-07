@@ -53,6 +53,7 @@ function createElectronRouter(vaultRegistry, fallbackVaultRoot) {
   // For now we just delete; later we can move to ~/.local/share/Trash.
   router.post('/trash', express.json(), async (req, res) => {
     try {
+      if (req.readonlyNoop) return res.json({ ok: true });
       const rel = req.body.path;
       const vaultRoot = getVaultRoot(req);
       const absolute = path.resolve(vaultRoot, '.' + path.sep + rel);

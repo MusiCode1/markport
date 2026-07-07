@@ -114,10 +114,36 @@ function createApp(appConfig = {}) {
     return constantTimeEqual(user, username || '') && constantTimeEqual(pass, password);
   }
 
+  function isReadOperation(req) {
+    if (req.method === 'GET' || req.method === 'HEAD') return true;
+    if (req.path.startsWith('/api/electron/')) {
+      if (['/api/electron/vault-remove', '/api/electron/vault-move', '/api/electron/trash'].includes(req.path)) return false;
+      return true;
+    }
+    if (req.path.startsWith('/api/vaults/')) {
+      if (req.path === '/api/vaults/list' || req.path === '/api/vaults/open') return true;
+      return false;
+    }
+    if (req.path.startsWith('/api/proxy-request')) return false;
+    return false;
+  }
+
   function requireAuth(req, res, next) {
-    if (isAuthorized(req)) return next();
-    res.status(302).setHeader('Location', '/login');
-    res.end();
+    if (req.authorized) return next();
+
+    if (req.authMode === 'readonly') {
+      if (!isReadOperation(req)) {
+        req.readonlyNoop = true;
+      }
+      return next();
+    }
+
+    if (req.path.startsWith('/api/')) {
+      res.status(401).json({ error: 'Authentication required', code: 'EACCES' });
+    } else {
+      res.status(302).setHeader('Location', '/login');
+      res.end();
+    }
   }
 
   app.get('/login', (req, res) => {
@@ -140,6 +166,13 @@ function createApp(appConfig = {}) {
   app.all('/logout', (req, res) => {
     clearSession(res);
     res.redirect('/login');
+  });
+
+  // Auth state — sets req.authorized and req.authMode for all downstream routes.
+  app.use((req, res, next) => {
+    req.authorized = isAuthorized(req);
+    req.authMode = appConfig.auth.mode || 'full';
+    next();
   });
 
   // Compression — critical for /api/bootstrap (38MB uncompressed → ~6MB).
@@ -168,13 +201,15 @@ function createApp(appConfig = {}) {
   // changes automatically. The bust value is recomputed at server startup from
   // client/ and client-mobile/ file mtimes — no manual ?v=N bump needed.
   const cacheBust = appConfig.clientCacheBust || 'dev';
-  async function sendHtmlWithCacheBust(res, filePath) {
+  async function sendHtmlWithCacheBust(req, res, filePath) {
     try {
       let html = await fsp.readFile(filePath, 'utf8');
       // Inject (or replace) ?v=<bust> on all /client/ and /client-mobile/ script and link tags.
       // Handles both: existing ?v=3 and paths without any query string.
       html = html.replace(/((?:src|href)="\/client(?:-mobile)?\/[^"]*?)(\?v=[^"&]*)?"(?=[^>]*>)/g,
         (_, prefix) => `${prefix}?v=${cacheBust}"`);
+      // Inject auth state before </head> for client-side readonly guards.
+      html = html.replace('</head>', `<script>window.__owAuth=${JSON.stringify({ mode: req.authMode, authorized: req.authorized })};</script></head>`);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
       res.send(html);
@@ -185,16 +220,16 @@ function createApp(appConfig = {}) {
 
   // Custom entry point - our index.html, not Obsidian's.
   app.get('/', (req, res) => {
-    sendHtmlWithCacheBust(res, path.join(appConfig.clientPath, 'index.html'));
+    sendHtmlWithCacheBust(req, res, path.join(appConfig.clientPath, 'index.html'));
   });
 
   app.get(['/starter', '/starter.html'], (req, res) => {
-    sendHtmlWithCacheBust(res, path.join(appConfig.clientPath, 'starter.html'));
+    sendHtmlWithCacheBust(req, res, path.join(appConfig.clientPath, 'starter.html'));
   });
 
   // Mobile client entry point.
   app.get('/mobile', (req, res) => {
-    sendHtmlWithCacheBust(res, path.join(appConfig.clientMobilePath, 'index.html'));
+    sendHtmlWithCacheBust(req, res, path.join(appConfig.clientMobilePath, 'index.html'));
   });
 
   // Static files - order matters: client/ first, then obsidian/.
@@ -239,7 +274,7 @@ function createApp(appConfig = {}) {
   }
 
   // API routes.
-  app.use('/api/bootstrap', createBootstrapRouter(vaultRegistry, appConfig.vaultPath, appConfig.bootstrap));
+  app.use('/api/bootstrap', createBootstrapRouter(vaultRegistry, appConfig.vaultPath, appConfig.bootstrap, appConfig.auth.mode));
   app.use('/api/proxy-request', createProxyRouter());
   app.use('/api/vaults', createVaultsRouter(vaultRegistry));
   app.use('/api/fs', createFsRouter(vaultRegistry, appConfig.vaultPath));
@@ -270,7 +305,7 @@ function startServer(appConfig = config) {
     // Pre-build the bootstrap cache in the background so the first browser
     // request is a cache HIT instead of a cold build.
     setImmediate(() => {
-      warmUpBootstrapCache(app.locals.vaultRegistry, appConfig.vaultPath, appConfig.bootstrap)
+      warmUpBootstrapCache(app.locals.vaultRegistry, appConfig.vaultPath, appConfig.bootstrap, appConfig.auth.mode)
         .catch((err) => console.warn('[bootstrap] warm-up error:', err.message));
     });
   });

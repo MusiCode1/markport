@@ -86,16 +86,31 @@ server folder path as a vault.
 
 ### Authentication
 
-The Node server now supports a simple browser login flow for private vaults:
+The Node server supports three access modes controlled by the `AUTH_MODE` env var:
 
+| Mode | Auth Required | Read Access | Write Access | Use Case |
+|------|--------------|-------------|-------------|----------|
+| `full` (default) | Password | Authenticated only | Authenticated only | Private vault |
+| `readonly` | Password | Anyone | Authenticated only (no-oped) | Public read, private write |
+| `disabled` | No | Anyone | Anyone | Fully open |
+
+**Full mode** (`AUTH_MODE=full`, the default):
 - `GET /login` shows a normal sign-in form
 - `POST /login` creates an HttpOnly cookie session
 - `GET /logout` clears the session cookie
 - `GET /` and the app routes redirect to `/login` until signed in
 - If `OBSIDIAN_WEB_PASSWORD` is unset, auth stays off
 
-Set these environment variables to enable it:
+**Readonly mode** (`AUTH_MODE=readonly`):
+- Anyone can view and navigate the vault without signing in
+- Edit controls are hidden and edit-mode keyboard shortcuts (Ctrl+E) are blocked
+- Writes (save, create, rename, delete) are silently accepted but not persisted — the vault stays pristine
+- Signing in with valid credentials enables full read/write access
+- Requires `OBSIDIAN_WEB_PASSWORD` to be set
 
+Set these environment variables to configure auth:
+
+- `AUTH_MODE` — access mode: `full`, `readonly`, or `disabled` (default `full`)
 - `OBSIDIAN_WEB_USERNAME` — login username, default `ethan`
 - `OBSIDIAN_WEB_PASSWORD` — login password; leave empty to disable auth
 - `OBSIDIAN_WEB_REALM` — HTTP auth realm shown by the browser, default `Obsidian Web`
@@ -154,6 +169,7 @@ Server environment variables:
 - `HOST`: bind address, default `127.0.0.1`.
 - `VAULT_PATH`: vault path relative to the project root or absolute, default `user-data/demo-vault`.
 - `VAULT_REGISTRY`: recent-vault registry JSON path, default `user-data/registry.json`.
+- `AUTH_MODE`: access mode — `full`, `readonly`, or `disabled` (default `full`). See "Authentication" above.
 - `OBSIDIAN_WEB_USERNAME`: login username for private deployments, default `ethan`.
 - `OBSIDIAN_WEB_PASSWORD`: login password; leave empty to disable auth.
 - `OBSIDIAN_WEB_REALM`: browser auth realm label, default `Obsidian Web`.

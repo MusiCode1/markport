@@ -85,6 +85,7 @@ module.exports = {
     ? parseInt(process.env.WATCH_POLL_INTERVAL, 10)
     : 3000,
   auth: {
+    mode: process.env.AUTH_MODE || 'full',
     username: process.env.OBSIDIAN_WEB_USERNAME || 'ethan',
     password: process.env.OBSIDIAN_WEB_PASSWORD || '',
     realm: process.env.OBSIDIAN_WEB_REALM || 'Obsidian Web',

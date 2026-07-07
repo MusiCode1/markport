@@ -388,8 +388,34 @@ const OBSIDIAN_SCRIPTS = [
           return;
         }
         window.__owBootstrapCache = data;
+        window.__owAuthMode = data.electron && data.electron['auth-mode'];
         if (statusEl) statusEl.textContent = 'Loading Obsidian...';
         console.log('[obsidian-web] bootstrap loaded: ' + Object.keys(data.fs).length + ' files pre-cached');
+
+        // Readonly mode: inject CSS and keyboard guards for unauthenticated users.
+        // These hide editing UI and block the Ctrl+E / Cmd+E toggle shortcut.
+        if (window.__owAuth && window.__owAuth.mode === 'readonly' && !window.__owAuth.authorized) {
+          var gStyle = document.createElement('style');
+          gStyle.setAttribute('data-ow-readonly', '');
+          gStyle.textContent = [
+            '.view-action[aria-label="Edit"] { display: none !important; }',
+            '.view-action[aria-label="Source mode"] { display: none !important; }',
+            '.view-action[aria-label="Enter edit mode"] { display: none !important; }',
+            '.cm-editor { display: none !important; }',
+            '.markdown-source-view { display: none !important; }',
+            '.workspace-leaf-content[data-type="markdown"] .view-content .cm-s-obsidian { display: none !important; }',
+            '#ow-logout { display: none !important; }',
+            '.nav-action-button[aria-label="New note"] { display: none !important; }',
+            '.side-dock-ribbon-action[aria-label="Open today\'s note"] { display: none !important; }',
+          ].join('\n');
+          document.head.appendChild(gStyle);
+          document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }, true);
+        }
 
         // Inject Obsidian's scripts in order. async=false preserves execution
         // order while allowing parallel download.
