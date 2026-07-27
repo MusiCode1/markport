@@ -707,3 +707,31 @@ OPFS (`0000demo0000demo`, נוצרת lazy דרך `/vault/0000demo0000demo`).
 ### חריגות
 
 - אין.
+
+## 2026-07-27 — slice/docs-truth-final — Commit 1: גילוי הפרוקסי בארבעת האתרים (§1)
+
+### מה בוצע?
+
+- **`src/deployments/cloudflare/template.js`** — `Welcome.md` (שני האתרים): אחרי
+  "never sent to a server" הראשון (שורה 57 בגרסה הקודמת) נוסף פסקה שמסבירה שרק
+  בקשות ל-`github.com`/`githubusercontent.com`/`obsidian.md` (התקנת פלאגין קהילתי, וגם
+  קריאה אוטומטית אחת בטעינת כספת ל-deprecated-plugins) עוברות דרך פרוקסי בשרת; ליד
+  ה"Note" השני (הישן: שורה 83) נוסף משפט-הפניה קצר לפסקה הזו. `How It Works.md`
+  (שורה 119 בגרסה הקודמת, טבלת ה-Worker) — הוחלף מסגור "can reach GitHub" בתיאור
+  מדויק של שלוש התבניות + הקריאה האוטומטית, ותוספת שסנכרון/מארחים-אישיים לא עוברים
+  בפרוקסי.
+- **`README.md:47`** — טבלת "Two deployment modes", שורת Sharing: הוחלף "never sent
+  anywhere" בתיאור שמפנה ל"Cloudflare (client-only) deployment" למטה, עם אותה
+  התניה (GitHub/obsidian.md + הקריאה האוטומטית).
+
+### מדדתי
+
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (baseline נשמר, שינויי-תיעוד
+  בלבד ולא נגעו בקבצי client-mobile).
+- אין להעתיק את רשימת-7 המארחים של `proxy-worker.js` (הרשאה-בשרת) — הניסוח בכל
+  ארבעת האתרים מתאר את שלוש התבניות ש-`capacitor-shim.js:802` באמת מנתב (§1ג/§1ד).
+- לא נכתב "רק בעת ההתקנה" באף אחד מהאתרים (§1א).
+
+### חריגות
+
+- אין.

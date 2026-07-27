@@ -44,7 +44,7 @@ The client-only deployment (and local/folder vaults on the Node server) are back
 | Path | `src/runtime-server/server/` | `src/deployments/cloudflare/` |
 | Storage | Real filesystem, via `/api/fs` | OPFS — entirely inside your browser |
 | Persistence | Full | Until you clear this site's browsing data |
-| Sharing | Whoever can reach the server/port | Nobody — private to your browser, never sent anywhere |
+| Sharing | Whoever can reach the server/port | Nobody — your vault stays private to your browser; only GitHub/obsidian.md requests (plugin installs, plus one automatic check on vault load) pass through a small proxy, see "Cloudflare (client-only) deployment" below |
 | Use case | Personal use, self-hosted | Public demo, zero-maintenance, no server-side vault storage |
 | URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) |
 
