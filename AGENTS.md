@@ -44,7 +44,20 @@ See `docs/architecture.md` for the full picture.
 
 ## Before you touch the bundle
 
-`vendor/obsidian-mobile/app.js` is Obsidian's proprietary code. We apply a small,
-documented set of patches to the **local** copy. Keep that set as small as
-possible, and prefer a shim over a patch whenever the same result is reachable
-through a platform API.
+`vendor/obsidian-mobile/app.js` is Obsidian's proprietary code. As of
+`docs/plans/zero-patches.md`, we apply **zero** build-time patches to the
+**local** copy — the extracted bundle is byte-identical to Obsidian's own
+APK. `scripts/patch-obsidian-mobile.js` still exists as infrastructure
+(an empty `PATCHES` list) for a future Obsidian version that might need one;
+keep that list as small as possible, and prefer a runtime shim over a patch
+whenever the same result is reachable through a platform API.
+
+**Precedent**: `docs/plans/runtime-platform-descriptors.md` replaced 3 of the
+4 patches that used to exist with a runtime shim
+(`src/client-mobile/platform-bridge.js`, which intercepts
+`Object.defineProperty` to capture Obsidian's own `Platform` object instead
+of rewriting app.js's byte-for-byte source); `docs/plans/zero-patches.md`
+removed the 4th and last one (`vault-profile-on-desktop-layout`) outright,
+once measurement showed `platform-bridge.js`'s existing `isDesktopApp`
+locking already covers what it used to patch. Read both before adding a new
+patch.

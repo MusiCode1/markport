@@ -675,6 +675,29 @@
     get: function (_t, prop) {
       const b = fsBackend();
       const v = b[prop];
+      // readFile — EISDIR at the vault root (docs/plans/
+      // electron-shim-foundation.md §3.3): the desktop-only
+      // `Vault.readRaw("")` empty-vault probe reads the vault root AS A
+      // FILE, and branches specifically on error CODE ("ENOENT" → vault
+      // discarded entirely, `this.vault=null,this.openVaultChooser(!0)`;
+      // anything else → treated as a harmless non-issue and ignored). A
+      // real filesystem answers "read a directory as a file" with EISDIR,
+      // not ENOENT — both backends' readFile would otherwise surface
+      // whatever their own 404/ENOENT path produces, which wrongly nukes a
+      // perfectly good, non-empty vault. Intercepted HERE (the Proxy's own
+      // get trap), not inside either backend, so it protects local AND
+      // folder AND server vaults with one check regardless of which
+      // backend fsBackend() picks — see vault-root-path.js for why
+      // `path === ''` alone doesn't catch every shape this can arrive in.
+      if (prop === 'readFile') {
+        return function (opts) {
+          const p = fullPath(opts || {});
+          if (window.__owVaultRootPath && window.__owVaultRootPath.isVaultRootPath(p)) {
+            return Promise.reject(capError('EISDIR', 'illegal operation on a directory, read'));
+          }
+          return v.call(b, opts);
+        };
+      }
       // bind is mandatory, not optional (avigail fix): OpfsStore.trash does
       // `return this.deleteFile(opts)` (opfs-store.js:331) — it relies on
       // `this`. Without bind, a destructured call (`const {trash}=Filesystem`)
@@ -725,7 +748,12 @@
   };
 
   const App = {
-    getInfo:              () => Promise.resolve({ name: 'Obsidian', id: 'md.obsidian', build: '0', version: '1.12.7' }),
+    // version — read lazily (inside the function body, not at module-eval
+    // time) from window.__owObsidianVersion, the single source of truth
+    // written by scripts/update-obsidian-mobile.js (docs/plans/
+    // electron-shim-foundation.md §3.0). The '1.12.7' fallback only matters
+    // if obsidian-version.js somehow failed to load before this is called.
+    getInfo:              () => Promise.resolve({ name: 'Obsidian', id: 'md.obsidian', build: '0', version: (window.__owObsidianVersion || '1.12.7') }),
     getState:             () => Promise.resolve({ isActive: true }),
     getLaunchUrl:         () => Promise.resolve(null),
     addListener:          (opts) => Promise.resolve({ remove: noop }),

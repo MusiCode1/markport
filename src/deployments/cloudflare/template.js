@@ -89,7 +89,7 @@ This is a live demo of **obsidian-web**, an open-source project that runs Obsidi
 
   ['How It Works.md', `# How It Works
 
-**obsidian-web** runs Obsidian's original renderer code (\`app.js\`) completely unmodified. Instead of forking Obsidian, we replace the Node.js and Electron APIs it depends on with browser-compatible shims.
+**obsidian-web** runs Obsidian's original renderer code (\`app.js\`) completely unmodified — byte-for-byte identical to Obsidian's own Android bundle, zero build-time patches. Instead of forking Obsidian, we replace the Node.js and Electron APIs it depends on with browser-compatible shims, and adjust platform behaviour (mobile vs. desktop layout) at runtime via \`client-mobile/platform-bridge.js\`, which intercepts \`Object.defineProperty\` instead of touching a single byte of \`app.js\`.
 
 ## Architecture
 

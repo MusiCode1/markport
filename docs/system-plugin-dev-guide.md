@@ -76,6 +76,12 @@ class MyPlugin extends obsidian.Plugin {
     // Detect that we are running inside obsidian-web before doing anything
     // that depends on our globals. On real Obsidian (desktop/mobile app),
     // __owPlatform doesn't exist — keep the plugin a no-op there.
+    // Caveat (docs/plans/runtime-platform-descriptors.md §3.1a): __owPlatform
+    // is now set at RUNTIME by intercepting Object.defineProperty as
+    // Obsidian's own bundle loads, not injected into the bundle at build
+    // time — so this check can also be undefined ON obsidian-web itself, for
+    // a few seconds, while app.js is still downloading. Don't gate anything
+    // that must run before the vault is up on this check alone.
     if (typeof window.__owPlatform === 'undefined') {
       console.log('[obsidian-web-<name>] not running on obsidian-web, skipping');
       return;
@@ -104,6 +110,10 @@ module.exports = MyPlugin;
 **מה קיים בסביבה?**
 - `require('obsidian')` — ה-API הרגיל של Obsidian (`Plugin`, `Notice`, `Modal`, `Setting`, `TFile`, ...). זמין דרך ה-runtime — אין `require` של Node.js, יש את ה-`require` של Obsidian.
 - `window.__owPlatform` — קיים רק על obsidian-web. השתמש כ-feature detection. ראה [`docs/investigations.md` → `__owPlatform` runtime API](./investigations.md#owplatform-api).
+  **הערה**: הוא נחשף ב**זמן ריצה** (יירוט `Object.defineProperty`, לא הזרקה בזמן build —
+  ראה `docs/plans/runtime-platform-descriptors.md` §3.1a), ולכן הוא יכול להיות `undefined`
+  זמנית **גם על obsidian-web עצמו**, למשך כמה שניות, בזמן ש-`app.js` עדיין נטען. אל תבסס
+  עליו לוגיקה שחייבת לרוץ לפני עליית הכספת.
 - `window.app` — האפליקציה (זמין אחרי `onload`).
 - `localStorage` — נורמלי. שמירת state ב-`obsidian-web:<plugin-id>:*` keys היא הconvention.
 
@@ -163,8 +173,9 @@ app.plugins.enablePlugin('obsidian-web-<name>');
 
 `plugins/obsidian-web-layout/` הוא ה-system plugin הראשון, מימוש מינימלי טוב:
 
-- ~95 שורות.
-- מוסיף ribbon icon + 3 commands.
+- ~140 שורות.
+- מוסיף ribbon icon + 3 commands — משתיק את שניהם ויזואלית כש-`localStorage.EmulateMobile`
+  פעיל (`docs/plans/runtime-platform-descriptors.md` §3.5), במקום להישאר "פעיל אך חסר-אפקט".
 - קורא/כותב ל-`localStorage` (אין `data.json` settings).
 - עושה feature detection על `window.__owPlatform`.
 

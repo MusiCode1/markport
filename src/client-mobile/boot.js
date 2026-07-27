@@ -7,9 +7,13 @@
  *  3. הגדרת window.require לפלאגינים
  *  4. async: אימות vault → הזרקה דינמית של scripts → הסרת ספינר
  *
- * הפריסה (mobile/desktop) נקבעת ב-build-time patches על
- * obsidian-mobile/app.js — ראה scripts/patch-obsidian-mobile.js.
- * כאן רק קובעים את ה-overrides שה-IIFE של הbundle יקרא.
+ * הפריסה (mobile/desktop) נקבעת ב-client-mobile/platform-bridge.js —
+ * יירוט Object.defineProperty בזמן ריצה שקורא את ה-overrides שנקבעים כאן
+ * (ראה docs/plans/runtime-platform-descriptors.md). אפס build-time patches
+ * על vendor/obsidian-mobile/app.js (docs/plans/zero-patches.md) — כל
+ * התנהגות-הפלטפורמה, כולל פאנל ה-vault-profile, מותאמת ברמת-ריצה, לא ע"י
+ * עריכת app.js. כאן רק קובעים את ה-overrides ש-platform-bridge.js יקרא
+ * בעצלתיים בזמן ה-install.
  */
 
 // רשימת הscripts של Obsidian Mobile — מוזרקים דינמית אחרי האימות.
@@ -205,9 +209,10 @@ const MOBILE_SCRIPTS = [
   }
 
   // ── Platform overrides — applied BEFORE app.js loads ──────────────────────
-  // הbundle עבר 3 patches (ראה scripts/patch-obsidian-mobile.js) שגורמים
-  // ל-IIFE שלו למזג את האובייקט הזה לתוך דגלי ה-Platform עם Object.assign,
-  // אחרי ברירות המחדל. מה שמוגדר כאן מנצח.
+  // client-mobile/platform-bridge.js קורא את האובייקט הזה בעצלתיים, בזמן
+  // שהוא לוכד את ה-Platform האמיתי דרך יירוט Object.defineProperty (לא
+  // build-time patch — ראה docs/plans/runtime-platform-descriptors.md).
+  // מה שמוגדר כאן מנצח.
   //
   // המצב נשמר ב-localStorage תחת המפתח 'obsidian-web:layout-mode'.
   // deploy-config.md §3(ג): layout.default הוא ה-fallback כשאין עדיין
@@ -232,15 +237,25 @@ const MOBILE_SCRIPTS = [
   //    מותאם למצב. הערה: מסך-הסטארטר עצמו (onboarding מול chooser) נבחר ב-bundle
   //    לפי *קיום-vault* (אין vaults=onboarding, יש=chooser), לא לפי הרוחב —
   //    הרוחב קובע רק את ה-layout *בתוך* אותו מסך.
-  //  • isDesktopApp:false — הריצה *תמיד* דפדפן (אין Node/Electron), גם במצב
-  //    desktop-layout → ה-bundle חוסם פלאגינים desktop-only (Terminal וכו',
-  //    isDesktopOnly) עם warning ומונע התקנה. isMobileApp:true (יש androidBridge).
+  //  • isDesktopApp — ⚠️ הופך שקרי כאן (docs/plans/desktop-layout-now.md §1ג,
+  //    אותה מחלקה כמו ההערה שליד LOCKED_FLAGS ב-platform-bridge.js): עד
+  //    לסלייס הזה הריצה הייתה *תמיד* דפדפן-בלבד (אין Node/Electron), וההערה
+  //    הקודמת כאן (isDesktopApp:false קבוע, גם במצב desktop-layout — הנימוק
+  //    היה שער isDesktopOnly) תיארה את זה נכון. עכשיו יש shim ל-window.electron
+  //    (src/client-mobile/shims/electron.js) ⇒ הדגל **כן** נדלק במצב
+  //    desktop-layout, עקבי עם isDesktop. platform-bridge.js's computeWant()
+  //    הוא זה שבפועל נועל את הדגל (מגזרת isDesktop, לא נקרא מהשדה הזה
+  //    ישירות) — הערך כאן נשאר לקריאוּת/עקביות עם שאר האובייקט, לא בגלל
+  //    שמישהו קורא אותו ישירות.
+  //    ⚠️ שער isDesktopOnly עצמו עדיין נפתח (פלאגיני desktop-only הופכים
+  //    ניתנים-להתקנה) — נמדד ותועד, לא נחסם ידנית (docs/plans/
+  //    desktop-shell-shim.md §2.5, §9 בבריף).
   window.__owPlatformOverrides = {
     isMobile:     layout.isMobile,
     isPhone:      layout.isMobile,
     isTablet:     false,
     isDesktop:    !layout.isMobile,
-    isDesktopApp: false,
+    isDesktopApp: !layout.isMobile,
     isMobileApp:  true,
   };
   console.log('[obsidian-web] platform overrides:', layout);
@@ -258,6 +273,13 @@ const MOBILE_SCRIPTS = [
     'buffer':        { Buffer: window.Buffer },
     'process':       window.process,
     'child_process': makeChildProcessStub(),
+    // docs/plans/electron-shim-foundation.md §3.1 — window.electron is set
+    // by shims/electron.js, loaded (index.html) BEFORE this script. Note
+    // this registers unconditionally (no isDesktopApp check — the gate that
+    // matters is the `emulate-mobile` body class the bundle itself checks
+    // before it ever calls window.require('electron'), see brief §3.6),
+    // exactly like every other entry in this map.
+    'electron':      window.electron,
   };
 
   function makeChildProcessStub() {
@@ -359,7 +381,13 @@ const MOBILE_SCRIPTS = [
 
   window.process = window.process || {
     platform: 'linux', arch: 'x64',
-    versions: { node: '0.0.0' }, env: {},
+    // electron: '30.0.0' — docs/plans/electron-shim-foundation.md §3.0: a
+    // WEIGHT-BEARING literal, not a "for example" placeholder. Derived
+    // (Tn/Pn/Ln) values must satisfy THREE measured constraints at once —
+    // major>=13, string>="28.2.3", major<40 — or the bundle throws an
+    // "upgrade your installer" error at boot, or picks the wrong clipboard
+    // API branch. '30.0.0' is the smallest version that clears all three.
+    versions: { node: '0.0.0', electron: '30.0.0' }, env: {},
     cwd: function(){ return '/'; },
     nextTick: function(fn){ return Promise.resolve().then(fn); },
   };
@@ -391,11 +419,50 @@ const MOBILE_SCRIPTS = [
     if (statusEl) statusEl.textContent = text;
   }
 
+  // אלמנט נפרד מ-#ow-loading/#ow-status (calev, סבב-תיקון שלישי, ממצא 3):
+  // #ow-status נמחק/נדרס לפני שהמשתמש מספיק לקרוא אותו בתרחיש-הכשל הריאלי —
+  // נמדד: ההודעה מופיעה, נדרסת ע"י ה-onload הבא ("Loading Obsidian mobile
+  // (14/14)") ואז #ow-loading כולו מוסר לגמרי כש-.workspace מתרנדר, עוד לפני
+  // שהמשתמש קרא משהו. הבאנר הזה הוא אלמנט **עצמאי**, ילד ישיר של <body> ולא
+  // של #ow-loading — removeLoadingOverlayWhen() (למטה) לעולם לא נוגע בו,
+  // ושום setStatus() עתידי לא כותב לתוכו. נוצר lazily (רק בכשל ראשון) כדי
+  // שלא יתווסף DOM מיותר במסלול-ההצלחה הרגיל.
+  var platformWarningEl = null;
+  function showPlatformFailureBanner(text) {
+    if (!platformWarningEl) {
+      platformWarningEl = document.createElement('div');
+      platformWarningEl.id = 'ow-platform-warning';
+      platformWarningEl.style.cssText = [
+        'position:fixed', 'left:0', 'right:0', 'bottom:0',
+        'background:#5a1e1e', 'color:#fff', 'padding:10px 16px',
+        'font:13px -apple-system, BlinkMacSystemFont, sans-serif',
+        'z-index:100000', 'box-shadow:0 -1px 6px rgba(0,0,0,0.4)',
+      ].join(';');
+      document.body.appendChild(platformWarningEl);
+    }
+    platformWarningEl.textContent = text;
+  }
+
+  // חשוף עבור platform-bridge.js (נטען לפני script זה — index.html) — קו-
+  // 3.1א בבריף: אם ה-bridge בסופו-של-דבר מוותר על לכידת Platform, אזהרת
+  // console בלבד בלתי-נראית למשתמש. שורה זו רצה מוקדם וסינכרונית, הרבה לפני
+  // ש-app.js אפילו מוזרק — עד שה-bridge יכול לקרוא לזה בכלל (רק אחרי ש-app.js
+  // נטען, או אחרי רשת-הביטחון הארוכה), ה-hook כבר קיים.
+  //
+  // כותב לשני מקומות: setStatus() (עדיין מועיל בזמן שהספינר גלוי) וגם
+  // showPlatformFailureBanner() — זה מה ש**שורד** אחרי ש-#ow-loading מוסר
+  // ואחרי onload-ים מאוחרים יותר שדורסים את #ow-status (calev ממצא 3).
+  window.__owReportPlatformFailure = function (msg) {
+    setStatus(msg);
+    showPlatformFailureBanner(msg);
+  };
+
   // הזרקה דינמית — browser מוריד במקביל, מריץ לפי סדר (async=false).
   // חולצה מ-for-loop inline (היה כאן במקור) לפונקציה נגישה גם לזרימת
   // ה-no-vault (מסך-הפתיחה הנייטיב, למטה) וגם לזרימת ה-VAULT_ID הרגילה.
   function injectMobileScripts() {
     var loaded = 0;
+    var appJsSrc = MOBILE_SCRIPTS[MOBILE_SCRIPTS.length - 1]; // app.js — תמיד אחרון (globals שהוא צריך חייבים לפניו)
     for (var i = 0; i < MOBILE_SCRIPTS.length; i++) {
       (function (src) {
         var s = document.createElement('script');
@@ -404,10 +471,26 @@ const MOBILE_SCRIPTS = [
         s.onload = function () {
           loaded++;
           setStatus('Loading Obsidian mobile (' + loaded + '/' + MOBILE_SCRIPTS.length + ')');
+          // עוגן חלון-הלכידה של platform-bridge.js (docs/plans/
+          // runtime-platform-descriptors.md §3.1a) — ה-`load` הנייטיבי של
+          // app.js עצמו, לא דדליין שרירותי שסופר את זמן-ההורדה שלו.
+          if (src === appJsSrc && window.__owPlatformBridge &&
+              typeof window.__owPlatformBridge.notifyAppJsLoaded === 'function') {
+            window.__owPlatformBridge.notifyAppJsLoaded();
+          }
         };
         s.onerror = function () {
           console.error('[obsidian-web] failed to load: ' + src);
           setStatus('Error loading ' + src.split('/').pop());
+          // עוגן שני-ל-חלון-הלכידה (docs/plans/runtime-platform-descriptors.md
+          // §3.1a, סבב-תיקון שלישי) — אם app.js עצמו נכשל ברשת (`error`, לא
+          // `load`), ל-platform-bridge.js אין דרך אחרת לדעת שהקוד הסינכרוני
+          // שלו לעולם לא ירוץ; בלי זה הלכידה הייתה תלויה ב-crash-guard
+          // (5 דקות) בלבד לתרחיש הזה בדיוק.
+          if (src === appJsSrc && window.__owPlatformBridge &&
+              typeof window.__owPlatformBridge.notifyAppJsFailed === 'function') {
+            window.__owPlatformBridge.notifyAppJsFailed();
+          }
         };
         document.head.appendChild(s);
       })(MOBILE_SCRIPTS[i]);
@@ -457,9 +540,13 @@ const MOBILE_SCRIPTS = [
   // בערך באותו טיימינג שבו window.app הופך זמין, לפני שה-poll שלנו מתפענח).
   // לכן תמיד קובעים textContent ישירות בנוסף ל-override. finding אביגיל 3
   // (קריטי): הטרגט הוא ה-**child** `.workspace-drawer-vault-name` — לא
-  // `.workspace-drawer-vault-switcher` עצמו (זה ה-click-target של
-  // vault-switcher-fix, boot.js:699 למטה; דריסת textContent עליו תמחק ילדים
-  // ותשבור את ה-listener). idempotent — בטוח לקרוא שוב (reload/late-render).
+  // `.workspace-drawer-vault-switcher` עצמו — **לא** ה-click-target שלנו יותר
+  // (docs/plans/desktop-layout-now.md §6 Commit 7: חטיפת-הקליק שהייתה כאן
+  // הוסרה — הקליק על הפאנל עכשיו מגיע לנתיב הנייטיב, שהוא real עכשיו בזכות
+  // ערוצי vault/vault-list/vault-open ב-shims/electron.js). דריסת textContent
+  // על ה-switcher עצמו עדיין הייתה מוחקת ילדים ושוברת את ה-listener הנייטיב —
+  // הזהירות נשארת נכונה, רק המקור שהיא מגינה עליו השתנה.
+  // idempotent — בטוח לקרוא שוב (reload/late-render).
   // אם הפאנל עדיין לא רונדר כש-owWhenAppReady מתפענח — MutationObserver
   // קצר-מועד (עקבי עם removeLoadingOverlayWhen למעלה), מתנתק אחרי match/timeout.
   function refreshVaultProfileLabel(name) {
@@ -1217,25 +1304,6 @@ const MOBILE_SCRIPTS = [
           app.workspace.on('active-leaf-change', syncUrlFromActiveFile);
         });
       });
-
-      // ── Vault switcher click → openVaultChooser ──────────────────────────
-      // ה-mobile bundle מציג את ה-vault profile panel רק כש-Platform.isDesktopApp
-      // הוא true. ב-patch-obsidian-mobile.js שינינו את התנאי הזה ל-!isMobile כדי
-      // שהפאנל יופיע גם במצב desktop-layout. אבל ה-click handler המקורי בתוך
-      // הפאנל קורא ל-`electron.ipcRenderer.sendSync("vault" | "vault-list" |
-      // "vault-open")` — שלא קיים ב-mobile runtime (אין shim ל-window.electron
-      // ב-client-mobile/). תופסים את הקליק בשלב ה-capture, חוסמים את ה-handler
-      // המקורי, ומנווטים ישירות דרך openVaultChooser() (במקום /starter — פוסט
-      // mobile-native-polish /starter→302→/ עם mobile-selected-vault עדיין מוגדר
-      // גורם ל-resume במקום chooser, ראה docs/plans/vault-switcher-fix.md §3א).
-      document.addEventListener('click', function (e) {
-        var target = e.target && e.target.closest && e.target.closest('.workspace-drawer-vault-switcher');
-        if (!target) return;
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        if (window.app && typeof window.app.openVaultChooser === 'function') window.app.openVaultChooser();
-        else location.href = '/starter';   // fallback
-      }, true);
 
       // ── "נהל כספות" <select> → openVaultChooser (polyfill) ────────────────
       // ה-<select> "נהל כספות" (vault-switcher, תחתית-שמאל) מקבל אופציה אחת

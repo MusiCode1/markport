@@ -45,7 +45,11 @@ src/
 
 ## הבַּאנדל של Obsidian (vendor)
 - `vendor/*` gitignored, מיוצר ע"י `scripts/update-obsidian-mobile.js` (מוריד APK).
-- מותלא ע"י `scripts/patch-obsidian-mobile.js` (4 patches — ראה תיעוד-בגוף שם;
-  אומת עמיד בין 1.11.7↔1.12.7).
-- version-bump: הרץ update עם `--version <X>`, ואם patch זורק — עקוב אחר
-  בלוק ANCHOR/REBUILD של אותו patch.
+- **אפס patches** (`docs/plans/zero-patches.md`) — `vendor/obsidian-mobile/app.js` זהה-בייט
+  לרשומת ה-APK (`assets/public/app.js`). `scripts/patch-obsidian-mobile.js` נשאר קיים
+  כתשתית (`PATCHES = []`) לגרסה עתידית שתדרוש patch. כל התנהגות-הפלטפורמה (mobile/desktop
+  layout, כולל פאנל ה-vault-profile) מותאמת ב-runtime ע"י
+  `client-mobile/platform-bridge.js` (יירוט `Object.defineProperty`, לא עריכת app.js) —
+  ראה `docs/plans/runtime-platform-descriptors.md`.
+- version-bump: הרץ update עם `--version <X>`; אם ייווסף patch עתידי וזה יזרוק — עקוב אחר
+  בלוק ANCHOR/REBUILD שלו ב-`scripts/patch-obsidian-mobile.js`.

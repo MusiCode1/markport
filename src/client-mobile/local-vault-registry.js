@@ -94,6 +94,15 @@
       // milestone only clears the registry entry (see brief §9 Q2).
       return true;
     },
+    // vaultPath(id, name) — docs/plans/electron-shim-foundation.md §3.4.
+    // Two-argument signature ON PURPOSE, not "take a vault object": list()
+    // returns {id,name,...} but get(id) does NOT return id back — a caller
+    // tempted to write vaultPath(get(id)) would silently get
+    // '/ow/undefined/Demo'. Callers must carry the id themselves (they
+    // always already have it — it's how they looked the vault up).
+    vaultPath: function (id, name) {
+      return '/ow/' + id + '/' + (name || id);
+    },
   };
 
   if (typeof module !== 'undefined' && module.exports) {

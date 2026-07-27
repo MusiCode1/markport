@@ -4,7 +4,7 @@ Run Obsidian in a standard browser — no Electron, no native app needed.
 
 **[Live Demo →](https://obsidian-online.pages.dev)**
 
-obsidian-web loads Obsidian's original renderer (`app.js`) completely unmodified and replaces every Node.js / Electron dependency with lightweight HTTP shims. The result is real Obsidian running in any modern browser.
+obsidian-web loads Obsidian's original renderer (`app.js`) completely unmodified — zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle — and replaces every Node.js / Electron dependency with lightweight HTTP shims. The result is real Obsidian running in any modern browser.
 
 ### What works
 
@@ -42,7 +42,7 @@ src/                         our source code
     └── cloudflare/          Cloudflare Workers + Durable Object
 
 vendor/                      extracted Obsidian bundles (gitignored)
-├── obsidian-mobile/         mobile renderer (with build-time patches) — the only renderer in use
+├── obsidian-mobile/         mobile renderer (zero build-time patches — byte-identical to Obsidian's own APK) — the only renderer in use
 ├── obsidian-desktop/        legacy desktop renderer — vestigial, no longer served by the
 │                             server (routes removed in collapse-desktop); kept only because
 │                             scripts/update-obsidian-desktop.js still exists (see Notes)
@@ -103,7 +103,7 @@ node scripts/update-obsidian-mobile.js
 node scripts/update-obsidian-mobile.js --version 1.12.7
 ```
 
-This script downloads the official APK, unpacks the `assets/public/` tree to `vendor/obsidian-mobile/`, and **applies four build-time patches** to `vendor/obsidian-mobile/app.js` (via `scripts/patch-obsidian-mobile.js`) that expose `window.__owPlatform`, merge `window.__owPlatformOverrides`, and surface the desktop-layout vault profile panel. If a patch fails to match, the script aborts loudly — that's our signal that the Obsidian minifier changed.
+This script downloads the official APK and unpacks the `assets/public/` tree to `vendor/obsidian-mobile/` — **zero build-time patches are applied**; the extracted bundle is byte-for-byte identical to Obsidian's own Android renderer. All platform behaviour — exposing `window.__owPlatform` and merging `window.__owPlatformOverrides` into the live `Platform` flags, including the desktop-layout vault-profile panel — happens at runtime via `client-mobile/platform-bridge.js`, which intercepts `Object.defineProperty` instead of touching a single byte of app.js (see `docs/plans/runtime-platform-descriptors.md` and `docs/plans/zero-patches.md`). `scripts/patch-obsidian-mobile.js` still runs as part of the update step — its patch list is currently empty, kept as infrastructure in case a future Obsidian version needs one; if a future patch's regex fails to match, the script aborts loudly, same as before.
 
 | Runtime URL | Updater |
 |---|---|
@@ -238,8 +238,9 @@ It does **not** apply to Obsidian itself. The `vendor/` directories hold Obsidia
 proprietary bundle, are gitignored, are never redistributed by this project, and remain
 governed solely by [Dynalist Inc.'s Terms of Service](https://obsidian.md/terms). Nothing
 here grants any rights over Obsidian's code. obsidian-web does not modify Obsidian's
-source in this repository — the setup scripts download it and apply a small set of
-documented patches to **your local copy** at install time.
+source in this repository — the setup scripts download it unmodified to **your local
+copy** at install time. A patch-application step still exists as infrastructure for a
+future Obsidian version that might require one, but currently applies zero patches.
 
 ## Credits
 
