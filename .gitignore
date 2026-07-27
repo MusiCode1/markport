@@ -1,5 +1,12 @@
 # Vendor — extracted Obsidian bundles (regeneratable via scripts/update-obsidian.js)
+# Obsidian's own bundle — generated locally by scripts/update-obsidian-*.js.
+# BOTH patterns are required: `vendor/` matches a real directory, but NOT a
+# symlink named `vendor` (which is how every worktree points at the shared copy,
+# or at an isolated /tmp copy). Without the second line, `git add -A` commits the
+# symlink — it happened in f1153c1 and the merge then replaced dev/vendor,
+# the shared directory, with a dangling link into /tmp.
 vendor/
+vendor
 
 # Node
 node_modules/
