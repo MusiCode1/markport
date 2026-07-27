@@ -117,14 +117,15 @@ npm start
 ```
 
 Open `http://127.0.0.1:3000`. `/mobile` also works (backwards-compatible alias, same page).
-`/starter` (the old desktop vault picker) redirects to `/` on the Node server — it no longer
-serves a page of its own, but existing bookmarks/links still land you on the app instead of a
-404. The client-only Cloudflare deployment serves `/starter` too, via its own Worker route
-(`index.js`) that returns the same app shell — see "Cloudflare (client-only) deployment" below;
-that deployment is not a plain static host.
+`/starter` (the old desktop vault picker) returns the same app shell as `/` on the Node
+server — `GET /starter` is a 200, not a redirect — so existing bookmarks/links still land
+you on the app instead of a 404. The client-only Cloudflare deployment serves `/starter`
+too, via its own Worker route (`index.js`) that returns the same app shell — see
+"Cloudflare (client-only) deployment" below; that deployment is not a plain static host.
 
 `/mobile` is **not** part of the Cloudflare (client-only) deployment — it's a route this Node
-server adds; the static deployment only serves `/`.
+server adds; the static deployment's Worker serves `/`, `/starter`, `/vault/*`, and
+`/api/proxy-request` (see "Cloudflare (client-only) deployment" below), but not `/mobile`.
 
 ## Obsidian Version
 

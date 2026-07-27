@@ -735,3 +735,35 @@ OPFS (`0000demo0000demo`, נוצרת lazy דרך `/vault/0000demo0000demo`).
 ### חריגות
 
 - אין.
+
+## 2026-07-27 — slice/docs-truth-final — Commit 2: §2א+§2ב+§2ג — שלוש ההצהרות שנמדדו כשגויות
+
+### מה בוצע?
+
+- **§2א — `README.md:120`** — נמדד חי (שרת מקומי, port 3710): `GET /starter` → `200`,
+  ללא `Location` header, גוף מלא (11600 bytes). הוחלף "redirects to `/`" ב-"returns the
+  same app shell as `/` ... is a 200, not a redirect".
+- **§2ב — `cloudflare/README.md:12-13`** — כוון מחדש (לא בוטל): מול `boot.js:105-113`,
+  מבקר-חוזר עם `mobile-selected-vault` **כן** מקבל resume אוטומטי ל-`/vault/<id>` —
+  רק מבקר בלי כספת-זכורה מגיע ל-`/starter` (מסך-ה-onboarding הריק). תוקנו שתי
+  ההצהרות באותו bullet יחד (§2ב + סבב 4 ממצא #7): "renders onboarding" ו-"no vault
+  is opened automatically".
+- **§2ג — `README.md:127`** — "the static deployment only serves `/`" סתר את
+  `:120-126` שלוש שורות מעליו (`/starter`, `/vault/*`, `/api/proxy-request` על
+  אותו Worker). הוחלף בתיאור שמונה את מה שה-Worker כן מגיש, ומבהיר ש-`/mobile`
+  הוא היחיד שחסר.
+- **תוספת (§1ג, סבב 6 ממצא #2)**: `cloudflare/README.md:23-25` מנה את "templater's
+  unsplash endpoint" כמשהו שעובר בפרוקסי — נמדד כ-fetch ישיר
+  (`capacitor-shim.js:802` מנתב רק שלוש תבניות; `templater-unsplash-2.fly.dev`
+  מותר רק בהרשאת-השרת של `proxy-worker.js`). תוקן להבהיר את הפער בין המותר
+  לבין המנותב בפועל.
+
+### מדדתי
+
+- `GET /starter` על שרת מקומי (`PORT=3710 node src/runtime-server/server/index.js`)
+  — `HTTP/1.1 200 OK`, אין `Location`, `Content-Length: 11600`.
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי).
+
+### חריגות
+
+- אין.
