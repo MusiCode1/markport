@@ -110,6 +110,44 @@ CONFIG_PATH="$CONFIG_PATH" HTML_PATH="$PUBLIC_DIR/index.html" node -e '
   fs.writeFileSync(process.env.HTML_PATH, html.replace(marker, snippet));
 '
 
+# ── client-only signals inject (docs/plans/client-only-resilience.md §3.2 +
+# §3.4) — replaces <!-- OW_BACKEND_INJECT --> with window.__owBackend='none'
+# AND window.__owVersion=<src/config/version.json>, a channel SEPARATE from
+# __owConfigInjected above on purpose (see index.html comment: that one is
+# deepMerge'd + byte-verified by two test suites against the shared
+# deploy-config.json — folding either flag into it would land it on
+# runtime-server too). boot.js reads __owBackend to short-circuit an
+# unrecognized deep-link to a human message with ZERO /api/fs network request
+# (DoD#4), instead of the raw "Error: ... (HTTP 404)" it fetches today; it
+# reads __owVersion to display "obsidian-web <version> · Obsidian 1.12.7" on
+# the onboarding footer (DoD#8). runtime-server never replaces this marker →
+# both stay undefined there — __owBackend defaults to "has a backend"
+# (unchanged), __owVersion missing means "hide our version, show only
+# Obsidian's" (boot.js handles this explicitly, see installVersionDisplay).
+#
+# ⚠️ Bare command, NOT inside `if` — same lesson already documented at the
+# LiveSync step below (`if node ...; then` swallows exit(1) under `set -e`).
+# A missing marker must fail the build LOUDLY (DoD#11), never silently ship a
+# client-only build without these globals.
+VERSION_PATH="$MAIN_DIR/src/config/version.json"
+if [[ ! -f "$VERSION_PATH" ]]; then
+  echo ""
+  echo "ERROR: $VERSION_PATH not found — required for window.__owVersion."
+  exit 1
+fi
+echo "  injecting client-only signals (window.__owBackend, window.__owVersion)..."
+VERSION_PATH="$VERSION_PATH" HTML_PATH="$PUBLIC_DIR/index.html" node -e '
+  const fs = require("fs");
+  const version = JSON.parse(fs.readFileSync(process.env.VERSION_PATH, "utf8")).version;
+  const html = fs.readFileSync(process.env.HTML_PATH, "utf8");
+  const marker = "<!-- OW_BACKEND_INJECT -->";
+  if (!html.includes(marker)) {
+    throw new Error("OW_BACKEND_INJECT marker not found in " + process.env.HTML_PATH);
+  }
+  const snippet = "<script>window.__owBackend=\"none\";window.__owVersion=" + JSON.stringify(version) + ";</script>";
+  fs.writeFileSync(process.env.HTML_PATH, html.replace(marker, snippet));
+'
+
 # ── Service Worker (offline + asset-cache — docs/plans/service-worker-offline.md
 # §3ד) — copied to the public root so its scope covers the whole app. BUST is
 # the same timestamp already used for ?v= above, so a new deploy = a new SW
