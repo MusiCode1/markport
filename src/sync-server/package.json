@@ -1,6 +1,6 @@
 {
   "name": "obsidian-sync-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "GPL-3.0-only",
   "description": "Lean pull-sync server for obsidian-web — /sync/v1 hash-based protocol (manifest + blob) behind DDoS-resistant Bearer auth. Separate package from runtime-server (see the sync-server brief §0).",
   "main": "index.js",
