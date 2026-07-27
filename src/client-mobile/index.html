@@ -125,6 +125,22 @@
        §3ג. חייב לפני boot.js כדי ש-window.__owSeedExampleVault יהיה קיים. -->
   <script src="/client-mobile/seed-example-vault.js?v=1"></script>
 
+  <!-- 3c2. Client-only signals (docs/plans/client-only-resilience.md §3.2/§3.4)
+       — window.__owBackend + window.__owVersion, injected by the CF build
+       ONLY (scripts/build-assets.sh replaces the marker below with a literal
+       <script>window.__owBackend="none";window.__owVersion="...";</script>,
+       BEFORE deploy-config.js so boot.js sees it). A channel SEPARATE from
+       __owConfigInjected on purpose: that one is deepMerge'd with DEFAULTS
+       and byte-verified (raw deploy-config.json, word-for-word) by TWO test
+       suites (deploy-config-inject.test.js ×2, build-assets.test.js) —
+       folding either flag into it would land window.__owBackend='none' on
+       runtime-server too (shared config file) and break both suites.
+       runtime-server never replaces this marker → both globals stay
+       undefined there (= "has a backend", today's unchanged default; boot.js
+       and the onboarding version display both treat a missing value as
+       "behave like before" / "hide our version, show Obsidian's only"). -->
+  <!-- OW_BACKEND_INJECT -->
+
   <!-- 3d. Deploy-config (docs/plans/deploy-config.md §3) — deploy-time config
        (seedExampleContent/layout/plugins), loaded BEFORE boot.js so
        window.__owConfig is ready when boot.js reads it. The marker below is

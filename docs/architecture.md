@@ -15,8 +15,18 @@ collapse יש **core אחד** (client-mobile) עם **backend מתחלף**, לא 
 | **server** | חי, אופציה 2 | קבצים אמיתיים דרך `/api/fs` | `deployments/server/` (Docker או node) |
 | **desktop** | נשמר, עתיד פתוח | — | `vendor/obsidian-desktop` (מקביל ל-mobile) |
 
-**הטריגר בין serverless↔server**: קיום השרת. `/api/fs` מחזיר 404 בפריסה static
-→ הלקוח נופל ל-OPFS; שרת מספק `/api/fs` → HTTP backend. אין דגל ידני.
+**הטריגר בין serverless↔server**: **לא** probe / capability-detection על `/api/fs` — אין
+כזה. הטריגר הוא **רישום מקומי** (`window.__owLocalVaults`, נטען סינכרונית ב-`<script>`
+לפני `boot.js`, ראה סדר-הטעינה ב-`index.html`): אם ה-vault-id מופיע ברישום, ה-`type`
+הרשום שלו (`'local'` / `'folder'`) קובע OPFS; **אחרת** ברירת-המחדל היא `'server'` — **גם
+בפריסה סטטית בלי שרת בכלל** (`boot.js:149-151`):
+```js
+var __owV = window.__owLocalVaults && window.__owLocalVaults.get(VAULT_ID);
+var VAULT_TYPE = __owV ? (__owV.type || 'local') : 'server';
+```
+כלומר: vault-id שלא נוצר/נפתח מקומית (ולכן לא ברישום) ינסה `'server'` גם על CF —
+אין נפילה-אוטומטית ל-OPFS למי שלא ברישום. ההשלכה ההתנהגותית (מה קורה בפועל כש-
+`'server'` נבחר בלי שרת) מטופלת בסלייס `client-only-resilience` (גל 2ב), לא כאן.
 
 ## מבנה תיקיות (יעד)
 ```

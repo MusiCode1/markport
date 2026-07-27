@@ -666,18 +666,55 @@ const MOBILE_SCRIPTS = [
       var btn = e.target && e.target.closest &&
         e.target.closest('.mobile-onboarding button.mod-cta, .mobile-vault-chooser-screen button.mod-cta');
       if (!btn) return;
-      var btnText = (btn.textContent || '').trim();
-      if (btnText !== 'Create a vault' && btnText !== 'Create') return;   // לא זה כפתור ה-Create (למשל "Continue without sync")
 
-      // הטקסט "Create a vault" מופיע גם בכפתור-ה-mod-cta של מסך-הפתיחה
-      // הראשוני (welcome screen, "Your thoughts are yours") — שמוביל לצעד
-      // הבא (sync-intro) ולא ליצירה בפועל. הצעד היחיד שבו יש input[type=text]
-      // בתוך אותו container הוא המסך האמיתי ("Configure your new vault" /
-      // מודל "Create new vault") — היעדרו מסמן שזה עדיין לא צעד היצירה,
-      // לא DOM שביר; מניחים לnative handler לרוץ כרגיל (ללא interception).
+      // §3.6 (calev-heavy NO-GO round 2, ממצא 2): כפתור-הדמו שלנו
+      // (installDemoVaultButton) חי בתוך `.mobile-onboarding` ונושא
+      // `mod-cta` ⇒ תואם את ה-selector למעלה ונחטף. זיהוי-לפי-class/מיקום
+      // יישבר שוב ברגע שכפתור-שלנו נוסף/משתנה (זו הפעם השנייה שבורר-לפי-
+      // מראה נשבר בסלייס הזה) — הפתרון הנכון הוא לסמן במפורש כל כפתור
+      // שאנחנו מזריקים (`data-ow-injected`, ראה installDemoVaultButton
+      // וגם showGrantScreen למטה) ולדלג עליו כאן, לפני כל בדיקה אחרת.
+      if (btn.hasAttribute('data-ow-injected')) return;
+
+      // §3.5ב (calev PARTIAL, ממצא 1 — DoD#13): היה כאן גם התאמת-טקסט
+      // (btnText === 'Create a vault' || 'Create') לפני הבדיקה למטה — טקסט
+      // מתורגם ⇒ ב-43 מתוך 44 השפות ב-language-dropdown (המסך הראשון של
+      // ה-onboarding) ההתאמה נכשלת, ה-interceptor לא רץ בכלל, ה-onCreateVault
+      // הנייטיב מנסה Filesystem.mkdir → 405 (אין /api/fs) → הכפתור הופך
+      // no-op מוחלט: אין כספת, אין ניווט, אין Notice. הוסר — הבדיקה למטה
+      // (input[type=text] קיים באותו screen) כבר מספקת את אותו סינון בלי
+      // תלות-שפה:
+      // הטקסט המתורגם "Create a vault"/"Configure your new vault"'s
+      // equivalent מופיע גם בכפתור-ה-mod-cta של מסך-הפתיחה הראשוני (welcome
+      // screen, "Your thoughts are yours") — שמוביל לצעד הבא (sync-intro)
+      // ולא ליצירה בפועל, ושל מסך "other sync" (מוביל לאותו צעד-configure).
+      //
+      // §3.6 (calev-heavy NO-GO round 2, ממצא 1 — DoD#17): "יש input[type=text]
+      // באותו screen" **לבדו** התברר לא-מספיק כדיסקרימינטור — מסך "Sign in to
+      // your Obsidian account" (`Use my existing vault → Obsidian Sync →
+      // Connect → Sign in`) מרנדר גם הוא input[type=text] (השדה המוסתר של
+      // קוד-האימות בן-6-הספרות, `offsetParent===null`, `autocomplete=
+      // one-time-code`) — אומת ב-vendor/obsidian-mobile/app.js (הפונקציה
+      // `yte`). לחיצה על Sign in נחטפה ⇒ יצרה כספת-זבל "Untitled" וניווטה,
+      // וההתחברות הפכה בלתי-אפשרית. דיסקרימינטור **חיובי** נוסף: קבוצת-הרדיו
+      // של מיקום-האחסון (`.mobile-onboarding-radio-option`) היא הסימן הייחודי
+      // של מסך-יצירת-הכספת. אומת מול הבאנדל: מסך ה-Sign-in (`yte`) אינו
+      // בונה `ste` (radio-group) כלל — רק שלושה שדות `ate` (email/password/
+      // mfa); שתי המסכים היחידים שמרנדרים גם input[type=text] וגם
+      // .mobile-onboarding-radio-option **באותו screen** הם "Configure your
+      // new vault" (`hte`) ומודל "Create new vault" (`w`) — שניהם בונים
+      // .formEl עם addText+radio-group יחד. מסכי-ביניים אחרים שיש בהם
+      // radio-group (הצפנה, בחירת-שיטת-סנכרון, "Connect to...") אין להם
+      // input[type=text] כלל (רק type=password, או שום שדה-טקסט) — אומת
+      // ידנית, לא רק בקוד הזה.
+      // ה-controller מ-detach()-ט את המסך הקודם בכל goTo() (previousScreens.
+      // push + contentEl.detach()) ⇒ תמיד רק מסך אחד מחובר ל-DOM בפועל תחת
+      // השורש — querySelector כאן לא "רואה" input/radio ממסכים קודמים/
+      // מנותקים. עוגן ב-DOM/מבנה, לא בטקסט (§3.5ב, עדיין תקף).
       var screen = btn.closest('.mobile-onboarding, .mobile-vault-chooser-screen');
       var nameInput = screen && screen.querySelector('input[type="text"]');
-      if (!screen || !nameInput) return;
+      var hasLocationRadio = screen && screen.querySelector('.mobile-onboarding-radio-option');
+      if (!screen || !nameInput || !hasLocationRadio) return;
 
       e.preventDefault();
       e.stopImmediatePropagation();   // עוצר את onCreateVault הנייטיב (מונע את ה-mkdir הנכשל)
@@ -691,11 +728,25 @@ const MOBILE_SCRIPTS = [
       var name = nameInput.value.trim() || 'Untitled';
       var selectedRadio = screen.querySelector('.mobile-onboarding-radio-option.is-selected');
       var location_ = 'app';   // ברירת-מחדל בטוחה — לא דורש directory picker/permission
-      if (selectedRadio) {
-        var titleEl = selectedRadio.querySelector('.mobile-onboarding-radio-option-title');
-        var title = (titleEl && titleEl.textContent) || '';
-        location_ = /app storage/i.test(title) ? 'app' : 'external';
+      // §3.5ב (calev PARTIAL, ממצא 1 — DoD#13): זה היה עדיין /app storage/i
+      // על הכותרת המרונדרת — נשכח באותה מכה כמו btnText למעלה, ונופל לאותה
+      // מלכודת: בעברית ("אחסון האפליקציה") ה-regex האנגלי לא תואם ⇒ location_
+      // היה יוצא 'external' גם כש-"App storage" נבחר בפועל. תוקן לאותו עוגן
+      // מבני שהגידור למטה (installExternalStorageGate) כבר משתמש בו: סדר
+      // ה-DOM שקבוע ע"י addOption('external').addOption('app') בבאנדל, לא
+      // הטקסט — index 0 בקבוצת האחים = external, index 1 = app.
+      if (selectedRadio && selectedRadio.parentNode) {
+        var siblings = selectedRadio.parentNode.querySelectorAll('.mobile-onboarding-radio-option');
+        location_ = (siblings[0] === selectedRadio) ? 'external' : 'app';
       }
+      // §3.1ב layer 1 (logic, mandatory) — the "Device storage" radio option
+      // renders already-selected (bundle default `.setValue('external')`,
+      // before any of our DOM hiding runs — installExternalStorageGate below
+      // is a MutationObserver, not synchronous). Firefox/Safari have no
+      // showDirectoryPicker at all, so DOM state must NEVER decide 'external'
+      // there — this override is what actually prevents the silent failure,
+      // independent of whether the visual gate has applied yet.
+      if (!('showDirectoryPicker' in window)) location_ = 'app';
 
       if (location_ === 'external') {
         // folder vault — choose()=showDirectoryPicker (opfs-ux) יוצר registry
@@ -711,6 +762,32 @@ const MOBILE_SCRIPTS = [
           .catch(function (err) {
             // picker בוטל/נכשל — כמו הנייטיב, שקט (canceled) או log בלבד.
             console.warn('[obsidian-web] Create vault (external) failed:', err && err.message || err);
+            // §3.1א — the real bug: this catch used to never reset the
+            // guard (capacitor-shim.js:311/312 resets it on ITS OWN mkdir
+            // fallback path, but that's a different call site). Two routes
+            // land here: CANCELED (Chromium — user dismissed the picker,
+            // capacitor-shim.js:479, the common one) and UNSUPPORTED
+            // (Firefox/Safari, :474 — should be unreachable now that the
+            // logic gate above forces 'app', but the visual gate is a
+            // MutationObserver and could theoretically still race it once).
+            // §3.5ג (calev PARTIAL, ממצא 2 — DoD#14): the user-facing Notice
+            // for UNSUPPORTED used to live only here — but this .catch only
+            // covers OUR OWN call to Filesystem.choose() (the branch above).
+            // The bundle's own "Use my existing vault" → "On this device" →
+            // choose-folder handler (vendor/obsidian-mobile/app.js, the kte
+            // screen) calls the SAME shim method directly, with no .catch of
+            // its own — that rejection landed in the console only, a silent
+            // dead end one click away from this one. Moved the Notice into
+            // shims/capacitor-shim.js's choose() itself, the single shared
+            // entry point for every caller (ours AND the bundle's) — see
+            // there. CANCELED (normal Escape) still gets no Notice, only the
+            // guard reset below.
+            // Naive immediate reset re-opens the guard DURING the same
+            // physical click's pointerdown/mousedown/click trio (line ~648)
+            // when the throw is synchronous (UNSUPPORTED) — that would fire
+            // the Notice above up to 3×. setTimeout(...,0) resets after this
+            // tick's event trio has already run.
+            setTimeout(function () { window.__owCreatingVault = false; }, 0);
           });
       } else {
         var id2 = window.__owLocalVaults.create(name).id;   // OPFS (type ברירת-מחדל 'local')
@@ -725,6 +802,70 @@ const MOBILE_SCRIPTS = [
     ['pointerdown', 'mousedown', 'click'].forEach(function (evt) {
       document.addEventListener(evt, handler, true);
     });
+  }
+
+  // ── "אחסון חיצוני" gating בדפדפנים ללא showDirectoryPicker (§3.1ב, שכבה
+  // ויזואלית — משלימה, לא מחליפה, את התיקון הלוגי ב-installCreateVaultInterceptor
+  // למעלה) ───────────────────────────────────────────────────────────────────
+  // הבאנדל מרנדר את הרדיו "Device storage"/"App storage" עם `.setValue('external')`
+  // כברירת-מחדל — ללא קשר לדפדפן — ⇒ Firefox/Safari מציגים אפשרות **נבחרת**
+  // שלעולם לא יכולה לעבוד. הסתרה בלבד הייתה משאירה כשל-שקט אם מישהו איכשהו
+  // מגיע ל-external בכל זאת; הבחירה בפועל מועברת ל-"App storage" (קליק תכנותי
+  // דרך ה-listener הקיים של הבאנדל — ste.addOption רושם click→setValue).
+  // MutationObserver (לא DOM סטטי, כמו installDemoVaultButton למעלה): הרדיו
+  // הזה מרונדר גם במסך ה-onboarding הראשוני וגם במודל "Create new vault" —
+  // וכל שלב-אשף עשוי לרנדר-מחדש. לא רץ בכלל ב-Chromium (return מוקדם) — שם
+  // showDirectoryPicker עובד, אין מה לגדר.
+  // §3.5ב (calev PARTIAL, ממצא 1 — DoD#13): הגרסה הקודמת זיהתה את שתי
+  // האפשרויות לפי טקסט מרונדר (/device storage/i, /app storage/i) — טקסט
+  // מתורגם ⇒ בכל locale שאינו אנגלית (43 מתוך 44 בבורר-השפה, שיושב על המסך
+  // הראשון) הגידור **לא חל בכלל**: "אחסון במכשיר" נשאר גלוי ונבחר, בדיוק
+  // הכשל השקט ש-DoD#1 נועד למנוע. עוגן חדש: **סדר-DOM**, לא טקסט.
+  // vendor/obsidian-mobile/app.js בונה את קבוצת-המיקום תמיד
+  // `.addOption("external", …).addOption("app", …)` — באותו סדר בשני
+  // המימושים (מסך ה-onboarding הראשוני `hte`, ומודל "Create new vault" `w`;
+  // אומת ידנית בבאנדל, לא רק בטקסט-מתורגם) — כך שהילד-הראשון של
+  // `.mobile-onboarding-radio-group` הוא תמיד "Device storage" והשני תמיד
+  // "App storage", ללא קשר לשפה. קבוצת-רדיו אחרת עם אותה מחלקה (למשל מסך
+  // ההצפנה custom/managed) יכולה תיאורטית "להזדמן" לאותו class name — כדי
+  // לא לפגוע בה בטעות, מגבילים את החיפוש ל-radio-group שנמצא **באותו screen**
+  // שגם מרנדר input[type=text] (שם ה-vault) — בדיוק אותו עוגן-מבנה
+  // ש-installCreateVaultInterceptor למעלה משתמש בו לזהות את מסך היצירה
+  // האמיתי, ומאותה סיבה (ה-controller מנתק (detach) כל מסך קודם ב-goTo(),
+  // כך שרק מסך אחד מחובר בפועל בכל רגע — אין דליפה בין שלבים).
+  function installExternalStorageGate() {
+    if ('showDirectoryPicker' in window) return;
+    function gate() {
+      var screens = document.querySelectorAll('.mobile-onboarding, .mobile-vault-chooser-screen');
+      for (var s = 0; s < screens.length; s++) {
+        var screen = screens[s];
+        if (!screen.querySelector('input[type="text"]')) continue;   // לא מסך-הגדרת-vault
+        var groups = screen.querySelectorAll('.mobile-onboarding-radio-group');
+        for (var g = 0; g < groups.length; g++) {
+          var options = groups[g].querySelectorAll('.mobile-onboarding-radio-option');
+          if (options.length < 2) continue;   // לא קבוצת device/app storage (2 אפשרויות תמיד)
+          var externalOpt = options[0], appOpt = options[1];   // סדר addOption() בבאנדל — לא טקסט
+          if (externalOpt.__owGated) continue;   // idempotent — כבר טופל
+          externalOpt.__owGated = true;
+          var wasSelected = externalOpt.classList.contains('is-selected');
+          externalOpt.style.display = 'none';
+          if (wasSelected) appOpt.click();   // מפעיל את ste.setValue הנייטיב
+          // הסבר (DoD#1: "מוסתרת... עם הסבר") — פעם אחת פר radio-group.
+          // §3.5א: אנגלית — הקהל (§0) הוא r/ObsidianMD, ממשק אנגלי.
+          var group = groups[g];
+          if (group.parentNode && !group.parentNode.querySelector('.ow-external-gate-note')) {
+            var note = document.createElement('div');
+            note.className = 'ow-external-gate-note';
+            note.style.cssText = 'font-size:12px;opacity:.7;margin:4px 0 0;';
+            note.textContent = 'External storage isn\'t available in this browser — using internal storage instead.';
+            group.parentNode.insertBefore(note, group.nextSibling);
+          }
+        }
+      }
+    }
+    gate();
+    var obs = new MutationObserver(gate);
+    obs.observe(document.body, { childList: true, subtree: true });
   }
 
   // ── מסך-פתיחה נייטיב (no-vault) — כפתור "כספת דמו" (seed-demo §3ד) ─────────
@@ -747,10 +888,28 @@ const MOBILE_SCRIPTS = [
       if (!root || root.querySelector('.ow-demo-vault-btn')) return;
       var btn = document.createElement('button');
       btn.className = 'ow-demo-vault-btn mod-cta';
+      // §3.6 (calev-heavy NO-GO round 2, ממצא 2 — DoD#18): זה הכפתור שנחטף
+      // ע"י installCreateVaultInterceptor — הוא `button.mod-cta` בתוך
+      // `.mobile-onboarding`, בדיוק ה-selector של ה-interceptor, ועל מסך
+      // "Configure your new vault" גם `input[type=text]` (שדה השם) וגם
+      // הרדיו קיימים ⇒ הדיסקרימינטור החדש למעלה לא היה מספיק להוציא אותו.
+      // הפתרון: לסמן, לא לזהות. כל כפתור שאנחנו מזריקים נושא
+      // `data-ow-injected` וה-interceptor מדלג עליו במפורש (למעלה, השורה
+      // הראשונה ב-handler) — זיהוי-לפי-class/מיקום כבר נשבר פעמיים בסלייס
+      // הזה, לא עוד ניחוש שלישי.
+      btn.setAttribute('data-ow-injected', 'demo-vault');
       btn.type = 'button';
       btn.textContent = 'כספת דמו';
-      btn.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:9999;' +
-        'padding:8px 16px;border:none;border-radius:4px;background:#7f6df2;' +
+      // §3.6ג (calev-heavy NO-GO round 2, ממצא 5): ב-390×844 (mobile) ה-footer
+      // (`.mod-version`, §3.4) יושב קבוע ב-y≈787 מתוך גובה-viewport 844 — נמדד
+      // ישירות (boundingBox) בכל שלבי-האשף, לא רק "לפעמים נמוך יותר". הכפתור
+      // ב-bottom:16px (גובה 44) חופף אותו (y 784-828 מול 787-804). בדסקטופ
+      // (1280×800, נמדד) אין שום חפיפה — הטקסט מתחיל ב-x=410, הכפתור מסתיים
+      // ב-x≈104. bottom גבוה יותר על viewport צר בלבד (heuristic על רוחב,
+      // לא UA-sniffing) מרים את הכפתור מעל שורת-הגרסה בלי לגעת בדסקטופ.
+      var narrowViewport = window.innerWidth <= 480;
+      btn.style.cssText = 'position:fixed;left:16px;bottom:' + (narrowViewport ? '68px' : '16px') +
+        ';z-index:9999;padding:8px 16px;border:none;border-radius:4px;background:#7f6df2;' +
         'color:#fff;cursor:pointer;font:13px -apple-system,BlinkMacSystemFont,sans-serif;';
       btn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -765,6 +924,31 @@ const MOBILE_SCRIPTS = [
     obs.observe(document.body, { childList: true, subtree: true });
   }
 
+  // ── מספר-גרסה (§3.4) — לצד רכיב-הגרסה הקיים בכותרת-התחתונה של ה-onboarding ──
+  // window.__owVersion מוזרק רק ע"י בניית ה-CF (אותו ערוץ נפרד של __owBackend,
+  // §3.2) — בפריסת runtime-server הוא לעולם לא מוגדר ⇒ מציגים רק את הגרסה של
+  // Obsidian (הקיימת, ללא שינוי), לא "undefined". ה-footer (`.mod-version`)
+  // מרונדר ע"י מחלקת-הבסיס של מסכי ה-onboarding — לכל שלב-אשף יש instance
+  // משלו (הבקר שומר previousScreens) ⇒ MutationObserver מחיל מחדש בכל מסך,
+  // לא פעם אחת. הטקסט הקיים (`1.12.7`, קבוע בבאנדל) נקרא מה-DOM ולא מוכפל
+  // כליטרל חדש — נמנעים מהכפילות השישית (הבריף מזהה 4 כפילויות פונקציונליות
+  // קיימות + אזהרה מפורשת לא להוסיף עוד אחת).
+  function installVersionDisplay() {
+    if (!window.__owVersion) return;   // runtime-server / no-config → כלום, רק Obsidian
+    function apply() {
+      var els = document.querySelectorAll('.mobile-onboarding .mobile-onboarding-screen > footer > .mod-version');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.__owVersioned) continue;   // idempotent — פר-instance, לא re-prefix על מוטציה חוזרת
+        el.__owVersioned = true;
+        el.textContent = 'obsidian-web ' + window.__owVersion + ' · Obsidian ' + el.textContent;
+      }
+    }
+    apply();
+    var obs = new MutationObserver(apply);
+    obs.observe(document.body, { childList: true, subtree: true });
+  }
+
   // ── מסך-פתיחה נייטיב (no-vault) ─────────────────────────────────────────────
   // אין VAULT_ID תקף (לא ב-/vault/<id> path, forceStarter, או שה-entry redirect
   // למעלה כבר קבע שאין כספת-אחרונה — ראה למעלה). ה-shims כבר מותקנים (require/capacitor) — מזריקים
@@ -776,7 +960,9 @@ const MOBILE_SCRIPTS = [
     setStatus('Loading Obsidian mobile...');
     installNativeVaultOpenBridge();
     installCreateVaultInterceptor();
+    installExternalStorageGate();
     installDemoVaultButton();
+    installVersionDisplay();
     seedNativeVaultList()
       .catch(function (err) { console.warn('[obsidian-web] seedNativeVaultList failed:', err); })
       .then(function () {
@@ -796,6 +982,13 @@ const MOBILE_SCRIPTS = [
       var overlay = document.getElementById('ow-loading');
       setStatus('Access to "' + handle.name + '" is needed to continue.');
       var btn = document.createElement('button');
+      // §3.6: same marking convention as installDemoVaultButton — this one
+      // lives in `#ow-loading` (not under `.mobile-onboarding`/
+      // `.mobile-vault-chooser-screen`) so installCreateVaultInterceptor's
+      // selector can never match it today, but "every button we inject gets
+      // marked" is the rule going forward, not "every button we've checked
+      // doesn't currently collide."
+      btn.setAttribute('data-ow-injected', 'grant-access');
       btn.textContent = 'Grant access to ' + handle.name;
       btn.style.cssText = 'margin-top:8px;padding:8px 16px;background:#7f6df2;color:#fff;' +
         'border:none;border-radius:4px;cursor:pointer;font:13px -apple-system,BlinkMacSystemFont,sans-serif;';
@@ -1088,6 +1281,25 @@ const MOBILE_SCRIPTS = [
       window.__owFolderRoot = h;                                 // רק אחרי granted
       return { isDirectory: true };
     })();
+  } else if (window.__owBackend === 'none') {
+    // §3.2 — VAULT_TYPE fell back to 'server' because VAULT_ID isn't in the
+    // local registry: an unrecognized deep-link (shared link, wiped
+    // storage, different device — exactly the r/ObsidianMD scenario, §0).
+    // window.__owBackend==='none' is a client-only BUILD (injected only by
+    // the CF build, see index.html/build-assets.sh) — there is no /api/fs to
+    // ask, so skip the fetch entirely (DoD#4: zero network request) and fail
+    // with a human message (DoD#3) instead of the raw "Error: ... (HTTP
+    // 404)" below. err.owHuman marks this for the shared .catch handler
+    // (below) so ONLY this message skips the generic "Error: " prefix —
+    // every other verify failure (local/folder/real-server 404) is
+    // untouched, no regression (DoD#5: runtime-server never sets
+    // __owBackend, so this branch is unreachable there).
+    // §3.5א (calev PARTIAL, ממצא 3): §3.2 המקורי הכתיב את הנוסח בעברית —
+    // טעות, שכן זו בדיוק ההודעה שמבקר-r/ObsidianMD (§0, ממשק אנגלי) רואה
+    // אחרי לחיצה על לינק משותף. §3.5א גובר.
+    var humanErr = new Error('This vault isn\'t on this device — vaults are stored locally in the browser.');
+    humanErr.owHuman = true;
+    verifyPromise = Promise.reject(humanErr);
   } else {
     verifyPromise = fetch('/api/fs/stat?vault=' + encodeURIComponent(VAULT_ID) + '&path=')
       .then(function (res) {
@@ -1335,7 +1547,11 @@ const MOBILE_SCRIPTS = [
     })
     .catch(function(err) {
       console.warn('[obsidian-web] vault check failed:', err.message);
-      setStatus('Error: ' + err.message);
+      // §3.2 DoD#3: the unrecognized-deep-link message (owHuman, above) is
+      // already a full human sentence — no "Error: (HTTP ...)" framing.
+      // Every other verify failure (local/folder/real-server 404) keeps the
+      // existing "Error: <message>" wording unchanged — no regression.
+      setStatus(err.owHuman ? err.message : ('Error: ' + err.message));
       localStorage.removeItem('obsidian-web:lastVaultId');
       setTimeout(function(){ location.href = '/starter'; }, 2000);
     });

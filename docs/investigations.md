@@ -59,7 +59,6 @@ LiveSync (Obsidian plugin) מעולם לא יודע ש-Filesystem (Capacitor plu
 שני runtimes צורכים את `/api/bootstrap` ל-cold boot מהיר. ה-mobile shim בודק את `window.__owBootstrapCache` לפני HTTP על כל `readFile`/`stat`/`readdir` (88% hit rate). שלושה env vars לדפלוייר: `BOOTSTRAP_DISABLED`, `BOOTSTRAP_MAX_FILE_KB`, `BOOTSTRAP_MAX_TOTAL_MB`. מגבלות ידועות: [Workers לא רואים את ה-cache](#mobile-bootstrap-cache-workers), [watch-event firehose ב-LiveSync](#mobile-bootstrap-cache-firehose).
 
 **מקורות מידע משלימים:**
-- `PLAN.md` — סטטוס, roadmap, ו-LiveSync integration plan.
 - `docs/system-plugin-dev-guide.md` — איך להוסיף system plugin חדש.
 
 ---
@@ -982,7 +981,7 @@ function pm(name) { return { name, rtype: 'promise' }; }
 
 | Plugin.method | מצב | מה צריך |
 |---|---|---|
-| `App.requestUrl` | מחזיר `{}` (no-op) | implementation אמיתי דרך `fetch()` — נדרש עבור LiveSync (CouchDB calls). ראה PLAN.md "Updated approach (2026-05-11): direct fetch + CORS". |
+| `App.requestUrl` | מחזיר `{}` (no-op) | implementation אמיתי דרך `fetch()` — נדרש עבור LiveSync (CouchDB calls). ר' "Updated approach (2026-05-11): direct fetch + CORS" (capacitor-shim.js, תיעוד-בגוף). |
 
 ### Call flow
 
@@ -1198,7 +1197,7 @@ GET /api/fs/readdir?path=.obsidian/plugins
 
 ### Use cases עתידיים
 
-- **system plugin של LiveSync** — תוסף `obsidian-livesync` מוזרק לכל vault, מוגדר דרך `data.json` per-vault. ראה PLAN.md "Updated approach (2026-05-11): direct fetch + CORS" ו-Gap 15 לגבי opt-in via env var ל-CF demo.
+- **system plugin של LiveSync** — תוסף `obsidian-livesync` מוזרק לכל vault, מוגדר דרך `data.json` per-vault. ר' "Updated approach (2026-05-11): direct fetch + CORS" (capacitor-shim.js, תיעוד-בגוף) ו-Gap 15 לגבי opt-in via env var ל-CF demo.
 - **system plugin של mobile UI tweaks** — תוסף שמוסיף touch gestures חסרים ב-mobile bundle.
 
 ---

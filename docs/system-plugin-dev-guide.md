@@ -185,10 +185,10 @@ app.plugins.enablePlugin('obsidian-web-<name>');
 
 ## Future: opt-in via `SYSTEM_PLUGINS` env var
 
-לפי תוכנית עתידית (טרם מומשה — ראה `PLAN.md` תחת "CF demo deployment"), ה-server יתמוך ב-env var:
+תוכנית עתידית, **טרם מומשה** ב-`server/index.js` (אין `process.env.SYSTEM_PLUGINS` בקוד כיום):
 
 ```bash
 SYSTEM_PLUGINS=obsidian-web-layout,obsidian-livesync node server/index.js
 ```
 
-שיגביל אילו ids מ-`<repo>/plugins/` יוזרקו. שימושי ל-CF demo (שאינו רוצה את LiveSync — vault נמחק כל 4 שעות). אם תוסיף system plugin שמתאים רק לחלק מהפריסות, תיעד את זה ב-PLAN.md ו-`README.md`.
+שיגביל אילו ids מ-`<repo>/plugins/` יוזרקו. שימושי לפריסות שרוצות לצמצם אילו system plugins מוזרקים בכלל (למשל: פריסה שלא רוצה את קבצי LiveSync בפועל, לא רק disabled). אם תוסיף system plugin שמתאים רק לחלק מהפריסות, תיעד את זה ב-`README.md`.
