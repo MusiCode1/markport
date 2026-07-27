@@ -44,7 +44,7 @@ The client-only deployment (and local/folder vaults on the Node server) are back
 | Path | `src/runtime-server/server/` | `src/deployments/cloudflare/` |
 | Storage | Real filesystem, via `/api/fs` | OPFS — entirely inside your browser |
 | Persistence | Full | Until you clear this site's browsing data |
-| Sharing | Whoever can reach the server/port | Nobody — private to your browser, never sent anywhere |
+| Sharing | Whoever can reach the server/port | Nobody — your vault stays private to your browser; only GitHub/obsidian.md requests (plugin installs, plus one automatic check on vault load) pass through a small proxy, see "Cloudflare (client-only) deployment" below |
 | Use case | Personal use, self-hosted | Public demo, zero-maintenance, no server-side vault storage |
 | URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) |
 
@@ -74,10 +74,11 @@ src/                         our source code
 
 vendor/                      extracted Obsidian bundles (gitignored)
 ├── obsidian-mobile/         mobile renderer (zero build-time patches — byte-identical to Obsidian's own APK) — the only renderer in use
-├── obsidian-desktop/        legacy desktop renderer — vestigial, no longer served by the
-│                             server (routes removed in collapse-desktop); kept only because
-│                             scripts/update-obsidian-desktop.js still exists (see Notes)
-└── Obsidian.AppImage        source binary
+└── obsidian-desktop/        legacy desktop renderer — vestigial, no longer served by the
+                              server (routes removed in collapse-desktop); kept only because
+                              scripts/update-obsidian-desktop.js still exists (see Notes);
+                              extracted from a downloaded `.asar.gz` release asset, not an
+                              AppImage — no AppImage is downloaded or kept anywhere
 
 user-data/                   user-facing data
 ├── demo-vault/              example vault (tracked)
@@ -117,14 +118,15 @@ npm start
 ```
 
 Open `http://127.0.0.1:3000`. `/mobile` also works (backwards-compatible alias, same page).
-`/starter` (the old desktop vault picker) redirects to `/` on the Node server — it no longer
-serves a page of its own, but existing bookmarks/links still land you on the app instead of a
-404. The client-only Cloudflare deployment serves `/starter` too, via its own Worker route
-(`index.js`) that returns the same app shell — see "Cloudflare (client-only) deployment" below;
-that deployment is not a plain static host.
+`/starter` (the old desktop vault picker) returns the same app shell as `/` on the Node
+server — `GET /starter` is a 200, not a redirect — so existing bookmarks/links still land
+you on the app instead of a 404. The client-only Cloudflare deployment serves `/starter`
+too, via its own Worker route (`index.js`) that returns the same app shell — see
+"Cloudflare (client-only) deployment" below; that deployment is not a plain static host.
 
 `/mobile` is **not** part of the Cloudflare (client-only) deployment — it's a route this Node
-server adds; the static deployment only serves `/`.
+server adds; the static deployment's Worker serves `/`, `/starter`, `/vault/*`, and
+`/api/proxy-request` (see "Cloudflare (client-only) deployment" below), but not `/mobile`.
 
 ## Obsidian Version
 
@@ -183,8 +185,10 @@ there is **no server-side vault storage of any kind** here (the old server-side 
 store, internally called `VaultDO`, was removed). A small Worker (`index.js`) still handles two
 things a plain static host can't:
 
-- `POST /api/proxy-request` — a CORS-safe edge proxy so community-plugin installs can reach
-  GitHub/obsidian.md (they don't send CORS headers)
+- `POST /api/proxy-request` — a CORS-safe edge proxy that routes `github.com`/
+  `githubusercontent.com`/`obsidian.md` requests (community-plugin installs, plus one
+  automatic deprecated-plugins check on vault load — those hosts don't send CORS headers).
+  A sync server or any other host is never routed through it
 - `GET /starter` and `/vault/*` — SPA-fallback routes that return the same app shell as `/`, so
   deep links and bookmarks don't 404
 

@@ -9,20 +9,28 @@ previous server-side in-memory vault store (internally named `VaultDO`) has been
 ## What the Worker does now
 - Serves the **static app bundle** (`env.ASSETS`) for everything except
   `/api/proxy-request` and the `/starter`/`/vault/*` SPA-fallback routes. See `index.js`.
-- `/` renders **Obsidian's native mobile onboarding screen** ("Create a vault" /
-  "Use my existing vault") — no vault is opened automatically, the chooser starts
-  empty. It also gets a **"כספת דמו" (demo vault) button** injected
-  (`installDemoVaultButton` in `boot.js`) that creates/opens a fixed-id local
-  (OPFS) vault and seeds it with `template.js`'s example content on first open —
-  see "Example / demo vault content" below. Vault creation/writes/reads happen
-  **entirely client-side** (OpfsStore engine); 0 dependency on `/api/*` for vault
-  storage.
+- `/` runs `boot.js`'s entry-routing first (`boot.js:105-113`): if the browser already
+  has a `mobile-selected-vault` from a previous visit, it **auto-resumes that vault**
+  at `/vault/<id>` — a returning visitor's vault opens automatically, the chooser is
+  never shown. Only a visitor with no remembered vault is redirected to `/starter`,
+  which renders **Obsidian's native mobile onboarding screen** ("Create a vault" /
+  "Use my existing vault") with no vault pre-opened. That onboarding screen also gets
+  a **"כספת דמו" (demo vault) button** injected (`installDemoVaultButton` in
+  `boot.js`) that creates/opens a fixed-id local (OPFS) vault and seeds it with
+  `template.js`'s example content on first open — see "Example / demo vault content"
+  below. Vault creation/writes/reads happen **entirely client-side** (OpfsStore
+  engine); 0 dependency on `/api/*` for vault storage.
 - `vendor/obsidian-mobile/` is self-contained (own `app.js`/`worker.js`/`i18n`/
   `lib`) — `build-assets.sh` copies it (and mirrors its resource dirs at the
   bundle root) without touching `vendor/obsidian-desktop` (desktop).
 - **`POST /api/proxy-request`** — edge Worker proxy for outbound requests
   Obsidian makes that need CORS the origin doesn't send (GitHub/obsidian.md —
-  community-plugin browse/install, releases, templater's unsplash endpoint).
+  community-plugin browse/install, releases). The client only routes
+  `github.com`/`githubusercontent.com`/`obsidian.md` requests here
+  (`capacitor-shim.js:802`); `proxy-worker.js`'s own allow-list is wider (adds
+  `templater-unsplash-2.fly.dev` for a future/other client), but nothing in this
+  deployment's client code sends that host through the proxy today — Templater's
+  Unsplash requests are a direct browser `fetch`, not proxied.
   Handled entirely at the edge (`proxy-worker.js`) — **no origin server**, no
   server-side vault store, no Node process. Same allow-list + SSRF-safe manual-redirect
   handling as the Node reference (`src/runtime-server/server/api/proxy.js`), ported to the
@@ -76,7 +84,9 @@ delete `template.js`.
 ## What's included (finished)
 - OPFS vault engine on the mobile runtime (create local vault, notes, nested
   folders, reload-persistence — all client-side, verified static/no-server).
-- Native mobile onboarding/vault-chooser screen renders fully at `/`.
+- Native mobile onboarding/vault-chooser screen renders fully at `/starter` (reached from
+  `/` when there's no remembered vault to auto-resume — see "What the Worker does now"
+  above).
 - Example vault + system-plugins seed to OPFS on first visit (`cf-mobile-seed`)
   — see "Example / demo vault content" above.
 - **`POST /api/proxy-request`** — edge Worker proxy (`cf-worker-proxy`) with

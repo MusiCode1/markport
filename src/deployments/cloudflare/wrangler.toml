@@ -5,8 +5,11 @@ main = "index.js"
 # ── Browser file system (OPFS) deployment ─────────────────────────────────────
 # Vaults live ENTIRELY in the browser (OPFS). There is NO Durable Object /
 # server-side vault storage — this is a client-only static deployment. The
-# Worker only serves the static asset bundle. See index.js for the follow-up
-# (porting the proxy + system-plugin-seed routes to the Worker).
+# Worker handles POST /api/proxy-request and the /starter, /vault/* SPA-fallback
+# routes (see index.js); everything else is the static asset bundle. The
+# system-plugins seed API routes are NOT ported to the Worker — this
+# deployment serves a static public/system-plugins/manifest.json fallback
+# instead (see index.js's own FOLLOW-UP comment).
 
 # Uncomment and set your own domain:
 # routes = [
@@ -18,6 +21,6 @@ main = "index.js"
 [assets]
 directory = "../../../.tmp/deployments/cloudflare/public"
 
-# ── FOLLOW-UP env (once the proxy/seed Worker routes exist) ────────────────────
+# ── FOLLOW-UP env (once the system-plugins seed Worker routes exist) ──────────
 # [vars]
 # SYSTEM_PLUGINS_SEED_DISABLED = "obsidian-livesync"   # pre-install LiveSync, disabled

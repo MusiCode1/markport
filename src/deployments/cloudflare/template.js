@@ -56,6 +56,8 @@ This is a live demo of **obsidian-web**, an open-source project that runs Obsidi
 
 **Everything works in the browser:** edit notes, create folders, rename files. Your changes are stored **locally in your browser** (via [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)) — private to you, never sent to a server, and never reset automatically. They survive a page reload and stick around until you clear this site's browsing data.
 
+**One exception:** your notes are never involved, but requests to \`github.com\`, \`githubusercontent.com\`, and \`obsidian.md\` — installing a community plugin, or the one automatic check Obsidian itself makes for deprecated plugins when the vault loads — pass through a small proxy on our server, since the browser can't reach those hosts directly (see [[How It Works]] for the details). A sync server you connect, or any other host, is never routed through it — that traffic is a direct connection from your browser.
+
 ---
 
 ## Things to try
@@ -80,7 +82,7 @@ This is a live demo of **obsidian-web**, an open-source project that runs Obsidi
 
 ---
 
-> **Note:** this vault is **yours alone** — it lives only in this browser's local storage (OPFS), is never sent to a server, and nobody else can see it. Nothing here resets automatically; edit, delete, or recreate anything freely.
+> **Note:** this vault is **yours alone** — it lives only in this browser's local storage (OPFS), is never sent to a server, and nobody else can see it. Nothing here resets automatically; edit, delete, or recreate anything freely. (The one exception — GitHub/obsidian.md requests, not your vault content — is explained above.)
 
 ---
 
@@ -116,7 +118,7 @@ This deployment (Cloudflare Pages + a small edge Worker) does **not** store your
 
 | Component | What it does |
 |-----------|-------------|
-| **Worker** (\`index.js\`) | Serves the static app bundle. Two exceptions: \`POST /api/proxy-request\` (a CORS-safe proxy so community-plugin installs can reach GitHub) and the \`/starter\`, \`/vault/*\` SPA-fallback routes |
+| **Worker** (\`index.js\`) | Serves the static app bundle. Two exceptions: \`POST /api/proxy-request\` — a CORS-safe proxy that routes requests to \`github.com\`, \`githubusercontent.com\`, and \`obsidian.md\` (community-plugin installs, plus one automatic deprecated-plugins check on vault load) — and the \`/starter\`, \`/vault/*\` SPA-fallback routes. A sync server or any other host is never routed through the proxy |
 | **OPFS** | The [Origin Private File System](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system) — a private, sandboxed filesystem the browser gives this site. Your vault's files live there, on your device |
 | **Seed** | On first visit, this demo vault's files are copied into your own OPFS vault once (client-side, \`seed-example-vault.js\`) — after that, it's just your vault |
 

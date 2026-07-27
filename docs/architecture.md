@@ -12,7 +12,7 @@ collapse יש **core אחד** (client-mobile) עם **backend מתחלף**, לא 
 | שכבה | סטטוס | אחסון | פריסה |
 |------|-------|-------|-------|
 | **serverless** | ★ ראשי | OPFS (בדפדפן) + folder-vaults (FSA API) | CF Pages static + Worker proxy |
-| **server** | חי, אופציה 2 | קבצים אמיתיים דרך `/api/fs` | `deployments/server/` (Docker או node) |
+| **server** | חי, אופציה 2 | קבצים אמיתיים דרך `/api/fs` | `deployments/server/` (node; אין Dockerfile בריפו) |
 | **desktop** | נשמר, עתיד פתוח | — | `vendor/obsidian-desktop` (מקביל ל-mobile) |
 
 **הטריגר בין serverless↔server**: **לא** probe / capability-detection על `/api/fs` — אין
@@ -43,7 +43,7 @@ src/
      client-shims/         ענף ה-HTTP backend + shims ייחודיים-לשרת
   deployments/
      cloudflare/           serverless (static + _worker.js)   ← ברירת-מחדל
-     server/               פריסת-שרת (Docker option + node option)
+     server/               פריסת-שרת (node; אין Dockerfile בריפו כיום)
 ```
 
 ## עקרונות מנחים
