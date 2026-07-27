@@ -767,3 +767,79 @@ OPFS (`0000demo0000demo`, נוצרת lazy דרך `/vault/0000demo0000demo`).
 ### חריגות
 
 - אין.
+
+## 2026-07-27 — slice/docs-truth-final — Commit 3: §3 — סריקה-לפי-מושג + תיקון שאר האתרים
+
+### הפקודה
+
+```
+grep -rniI -E "patch|unmodified|Durable Object|4 hours|reset|shared|visible to others|\
+never sent|only serves|redirect|__owPlatform|proxy|Docker|AppImage|workerd" \
+--include="*.js" --include="*.md" --include="*.toml" --include="*.html" \
+--exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.tmp .
+```
+
+### תוצאה
+
+- **597** hits case-insensitive (`-i`), **490** case-sensitive, **38** קבצים.
+- (המספרים נעים בין סבבים לפי §3א/§3ב — נמדד עכשיו, לא צוטט מסבב קודם.)
+
+### מה בוצע?
+
+עברתי קובץ-קובץ על כל ה-`.md` (לא-יומן) עם hits, לפי כלל-הטריאז' §3ב:
+יומן היסטורי → דילוג; הווה-בזמן-הווה → בדיקה נגד הקוד; מזהה-קוד ב-`.js` → דילוג;
+ספק → תיעוד כאן בלי לנחש.
+
+**תוקן (ממצאים חדשים, לא מכוסים ע"י Commit 1/2):**
+- **`Docker`** — `docs/architecture.md:15,46` ו-`src/deployments/server/README.md`
+  טענו "Docker option"/"Node.js / Docker" — נמדד: **אין שום `Dockerfile` בריפו**
+  (`find . -iname "Dockerfile*"` → ריק) ו-`docker` לא מוזכר בשום script. תוקן
+  לציין מפורשות שאין Dockerfile היום.
+- **`AppImage`** — `README.md:80` (עץ repo layout) הציג `Obsidian.AppImage` כקובץ
+  שנוצר תחת `vendor/`. נמדד: `scripts/update-obsidian-desktop.js` מוריד
+  `.asar.gz` (asset של GitHub release) ומחלץ ASAR ישירות — אין AppImage בשום
+  שלב. תוקן.
+- **`cloudflare/README.md:87`** (נמצא **אחרי** commit 1/2, בקריאה-רציפה של
+  DoD#5) — "onboarding screen renders fully at `/`" סתר את התיקון של §2ב
+  שלוש שורות מעליו (Commit 2): מבקר-חוזר לא רואה onboarding ב-`/`, רק מבקר
+  חדש (דרך `/starter`). תוקן.
+- **`README.md:188-189` / cloudflare `README.md:26-28`** — אותה מסגרת-צרה
+  "community-plugin installs can reach GitHub/obsidian.md" (בלי הקריאה
+  האוטומטית, בלי ההבחנה 3-מול-7) כמו ב-§1 — תוקן לעקביות עם Commit 1.
+- **`wrangler.toml:6-9,21`** — ערבב טענה נכונה (אין Durable Object) עם שגויה
+  ("Worker only serves static... follow-up: porting the proxy route") —
+  `index.js` כבר מטפל ב-`/api/proxy-request` ישירות. הופרד: הפרוקסי כבר
+  מנותב; רק ה-system-plugins seed API נשאר follow-up (כמו שההערה הפנימית
+  של `index.js` עצמו כבר אומרת).
+
+**סווג כהיסטורי (לא תוקן, יומנים לפי §3א):**
+- `docs/walkthrough.md` ו-`docs/investigations.md` — רוב ה-hits (רשומות
+  מתוארכות שמתארות מצב-עבר). לא נסרקו שורה-שורה בסלייס הזה — הכלל §3א חל
+  אוטומטית (יומן היסטורי).
+
+**נמצא, תועד, לא תוקן שורה-אחר-שורה — הכרעה מפורשת (לא ניחוש):**
+- **`PLAN.md`** — מעבר ל"5 ההצהרות" שכבר תוקנו בסלייס `zero-patches` (טענות
+  patch-בלבד), נמדדו הצהרות נוספות ומהותיות שאינן מכוסות ע"י מונחי-החיפוש
+  לבד: כל סעיף "Two parallel client runtimes — `src/client/` vs
+  `src/client-mobile/`" (שורות ~38-67 בגרסה הקודמת) ו-"Files to know about"
+  (שורות ~527-539) מתארים ארכיטקטורה שהוסרה ב-`collapse-desktop`
+  (`src/client/` לא קיים יותר) וב-`zero-patches`/`client-only-resilience`
+  (Durable Object הוסר). תיקון מלא, שורה-אחר-שורה, של כל הקובץ (548 שורות,
+  כולל טבלאות ותרשימים) הוא מעבר להיקף commit אחד בסלייס complexity=4, ומעלה
+  את סיכון ההליכון (DoD#5) — לא ניסיתי. **התיקון שביצעתי**: הוספת הודעת-סטטוס
+  מפורשת בראש הקובץ (כמו הסעיף "Superseded" הפנימי שכבר קיים בו) שמכריזה על
+  המסמך כהיסטורי-לא-מקור-אמת ומפנה ל-`README.md`/`AGENTS.md`/`docs/architecture.md`.
+  **זו הכרעה שלי, לא ניחוש** — מדווחת כאן במפורש למרדכי להחלטה אם דרוש סלייס
+  ייעודי לשכתוב/פרישה של `PLAN.md`.
+
+### מדדתי
+
+- `find . -iname "Dockerfile*"` (מחוץ ל-node_modules/vendor) — ריק.
+- `grep -rn -i "docker\|asar\|appimage" scripts/*.js` — `update-obsidian-desktop.js`
+  מוריד ומחלץ `.asar.gz`, לא AppImage, לא Docker.
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי).
+
+### חריגות
+
+- `PLAN.md` — ראה "נמצא, תועד, לא תוקן" למעלה. מדווח למרדכי, לא הכרעתי בעצמי
+  שהיקף מלא נדרש/לא נדרש מעבר להוספת ההודעה.

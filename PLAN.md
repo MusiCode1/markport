@@ -1,5 +1,14 @@
 # Obsidian Web - Plan & Status
 
+> ⚠️ **היסטורי, לא מקור-אמת.** מסמך זה נכתב לפני `collapse-desktop` (הסרת
+> `src/client/` — כיום יש runtime יחיד, `src/client-mobile/`, המוגש גם ב-`/`
+> וגם ב-`/mobile`) ולפני `zero-patches`/`client-only-resilience` (הוסרו
+> ה-Durable Object ו-כל ה-patches). "Two parallel client runtimes",
+> "Files to know about" (`src/client/...`), ותיאורי Durable Object למטה
+> **אינם משקפים את `dev` כיום** — למקור-אמת ראו `README.md`, `AGENTS.md`, ו-
+> `docs/architecture.md`. נשאר כאן כרפרנס-היסטורי בלבד (כמו הסעיף
+> "Superseded" בהמשך הקובץ), לא תוקן שורה-אחר-שורה — ראה `docs/plans/docs-truth-final.md`.
+
 Live wrapper that runs Obsidian's renderer in a normal browser by replacing
 its Electron dependencies with HTTP shims. Obsidian's own code stays
 untouched so we can swap in newer versions without forking.

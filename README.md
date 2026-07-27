@@ -74,10 +74,11 @@ src/                         our source code
 
 vendor/                      extracted Obsidian bundles (gitignored)
 ├── obsidian-mobile/         mobile renderer (zero build-time patches — byte-identical to Obsidian's own APK) — the only renderer in use
-├── obsidian-desktop/        legacy desktop renderer — vestigial, no longer served by the
-│                             server (routes removed in collapse-desktop); kept only because
-│                             scripts/update-obsidian-desktop.js still exists (see Notes)
-└── Obsidian.AppImage        source binary
+└── obsidian-desktop/        legacy desktop renderer — vestigial, no longer served by the
+                              server (routes removed in collapse-desktop); kept only because
+                              scripts/update-obsidian-desktop.js still exists (see Notes);
+                              extracted from a downloaded `.asar.gz` release asset, not an
+                              AppImage — no AppImage is downloaded or kept anywhere
 
 user-data/                   user-facing data
 ├── demo-vault/              example vault (tracked)
@@ -184,8 +185,10 @@ there is **no server-side vault storage of any kind** here (the old server-side 
 store, internally called `VaultDO`, was removed). A small Worker (`index.js`) still handles two
 things a plain static host can't:
 
-- `POST /api/proxy-request` — a CORS-safe edge proxy so community-plugin installs can reach
-  GitHub/obsidian.md (they don't send CORS headers)
+- `POST /api/proxy-request` — a CORS-safe edge proxy that routes `github.com`/
+  `githubusercontent.com`/`obsidian.md` requests (community-plugin installs, plus one
+  automatic deprecated-plugins check on vault load — those hosts don't send CORS headers).
+  A sync server or any other host is never routed through it
 - `GET /starter` and `/vault/*` — SPA-fallback routes that return the same app shell as `/`, so
   deep links and bookmarks don't 404
 

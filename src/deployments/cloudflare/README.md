@@ -84,7 +84,9 @@ delete `template.js`.
 ## What's included (finished)
 - OPFS vault engine on the mobile runtime (create local vault, notes, nested
   folders, reload-persistence — all client-side, verified static/no-server).
-- Native mobile onboarding/vault-chooser screen renders fully at `/`.
+- Native mobile onboarding/vault-chooser screen renders fully at `/starter` (reached from
+  `/` when there's no remembered vault to auto-resume — see "What the Worker does now"
+  above).
 - Example vault + system-plugins seed to OPFS on first visit (`cf-mobile-seed`)
   — see "Example / demo vault content" above.
 - **`POST /api/proxy-request`** — edge Worker proxy (`cf-worker-proxy`) with
