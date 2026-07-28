@@ -1434,7 +1434,18 @@ const MOBILE_SCRIPTS = [
           && window.__owDemoContent !== localStorage.getItem('ow-demo-content')) {
         try {
           var seeded2 = await window.__owSeedExampleVault.seedExampleVault(seedStore, { force: true, cacheBust: window.__owDemoContent });
-          if (seeded2) localStorage.setItem('ow-demo-content', window.__owDemoContent);
+          if (seeded2) {
+            localStorage.setItem('ow-demo-content', window.__owDemoContent);
+          } else {
+            // calev-heavy end-of-slice verify (finding 5 —
+            // reports/obsidian-web/demo-origin-split-calev.md): a silent
+            // (non-throwing) skip — e.g. /example-vault.json fetch failed —
+            // still needs the field diagnostic the brief asks for here
+            // ("try/catch + console.warn"). The key correctly stays
+            // un-updated either way (retry next boot); this only adds the
+            // missing log line for that path.
+            console.warn('[ow] re-seed example vault (content changed): seed did not complete — will retry next boot');
+          }
         } catch (e) { console.warn('[ow] re-seed example vault (content changed) failed', e); }
       }
 
