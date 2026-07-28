@@ -2,6 +2,35 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — Commit 1: hash של תוכן הדמו מוזרק בבניה
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — בלוק "example-vault.json
+(static)" הוזז מלהיות **אחרי** בלוק ה-`OW_BACKEND_INJECT` להיות **לפניו** — ה-hash
+נגזר מתוכן `example-vault.json` אחרי שהוא נכתב לדיסק, אז חייב לרוץ אחרי. בלוק
+ה-`OW_BACKEND_INJECT` מוסיף `window.__owDemoContent=<hash>` ל-snippet הקיים —
+`sha256sum` של `example-vault.json`, 16 תווים ראשונים, מחושב לפני קריאת ה-`node -e`
+ומועבר כ-env var (`DEMO_CONTENT_HASH`). מוזרק בשתי הבניות (לא-מזיק בברירת-המחדל,
+שום דבר לא קורא אותו שם) — כך שההבדל היחיד בין הארטיפקטים נשאר קובץ הקונפיג
+(DoD#7).
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — הבדיקה הבייט-בבייט של
+ה-snippet עודכנה: מחשבת את אותו hash (`sha256sum` על `example-vault.json` שכבר
+נבנה) ומצפה לו ב-snippet.
+
+### בדיקות
+
+`bun test test/build-assets.test.js` — 3/3 ירוק. ידני: `OW_PROFILE=demo npm run build`
+→ `__owDemoContent="e0b00163a6abd341"`, זהה ל-`sha256sum example-vault.json | cut -c1-16`.
+שתי בניות רצופות (ברירת-מחדל, ללא `OW_PROFILE`) → אותו hash בשתיהן (דטרמיניסטי, לא
+תלוי ב-BUST). `bun test test/*.test.js` (34/34) ו-`client-mobile npm test` (87/87)
+נשארו ירוקים — regression-free.
+
+### חריגות
+
+אין.
+
 ## 2026-07-28 — slice/demo-origin-split — Commit 0: `OW_PROFILE` + קונפיג הדמו
 
 ### מה בוצע?

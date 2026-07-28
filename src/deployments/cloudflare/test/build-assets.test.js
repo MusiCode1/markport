@@ -72,7 +72,7 @@ test('build-assets.sh: plugins install/enabled follow config.json + index.html g
 
 const VERSION_PATH = path.join(MAIN_DIR, 'src', 'config', 'version.json');
 
-test('build-assets.sh: index.html gets window.__owBackend="none" + window.__owVersion before deploy-config.js', () => {
+test('build-assets.sh: index.html gets window.__owBackend="none" + window.__owVersion + window.__owDemoContent before deploy-config.js', () => {
   execSync('bash scripts/build-assets.sh', {
     cwd: CF_DIR,
     stdio: 'pipe',
@@ -81,9 +81,13 @@ test('build-assets.sh: index.html gets window.__owBackend="none" + window.__owVe
 
   const version = JSON.parse(fs.readFileSync(VERSION_PATH, 'utf8')).version;
   const html = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
+  const demoHash = execSync('sha256sum ' + path.join(PUBLIC_DIR, 'example-vault.json'))
+    .toString()
+    .slice(0, 16);
 
   expect(html).not.toContain('<!-- OW_BACKEND_INJECT -->');
-  const expectedSnippet = '<script>window.__owBackend="none";window.__owVersion=' + JSON.stringify(version) + ';</script>';
+  const expectedSnippet = '<script>window.__owBackend="none";window.__owVersion=' + JSON.stringify(version) +
+    ';window.__owDemoContent=' + JSON.stringify(demoHash) + ';</script>';
   expect(html).toContain(expectedSnippet);
   expect(html.indexOf(expectedSnippet)).toBeLessThan(html.indexOf('src="/client-mobile/deploy-config.js'));
 }, 120000);
