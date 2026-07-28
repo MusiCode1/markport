@@ -2,6 +2,54 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — Commit 2: פתיחה-אוטומטית של הדמו
+
+### מה בוצע?
+
+**`src/client-mobile/boot.js`** —
+1. 🔴 **אילוץ סדר (הכשל הצפוי, אביגיל)**: `DEMO_ID` הוגדר עד כה **אחרי** בלוק
+   ניתוב-הכניסה (שורה ~105 לשעבר) — שימוש בו שם היה נותן `undefined`. הגדרת
+   `DEMO_ID` הועלתה לפני הבלוק (מיד אחרי `navigateToVault`); `ensureDemo()`
+   והקריאה `if (VAULT_ID === DEMO_ID) ensureDemo();` נשארו במקומן — רק ההגדרה
+   זזה, לא הלוגיקה.
+2. בבלוק `else if (!VAULT_ID)` — הענף שהיה תמיד `/starter` כשאין כספת-אחרונה,
+   מוסיף עכשיו תנאי (ES5 guard pattern, כמו `ensureDemo`):
+   `demoVault.autoOpen === true && demoVault.enabled !== false` → הפניה
+   ל-`/vault/<DEMO_ID>` במקום ל-`/starter`. `forceStarter` (`/starter`)
+   ממשיך לעקוף הכל — נשאר דרך המילוט היחידה למסך-הפתיחה גם בדומיין הדמו.
+
+### בדיקות — ידניות (playwright-cli, שני הפרופילים)
+
+**ברירת-מחדל** (DoD#3): `/` → `/starter`, מסך "Create a vault"/"Use my existing
+vault" נקי, `find "Demo"` — אין תוצאות, `localstorage-list` — רק
+`mobile-external-vaults`/`ow-known-vault-ids` (ריקים), אין `0000demo0000demo`.
+צילום: `/tmp/demo-origin-split/phase2-default-starter.png`.
+
+**דמו** (DoD#4): `/` → הפניה אוטומטית ל-`/vault/0000demo0000demo`, אפס
+לחיצות, `Welcome.md`/`How It Works`/`Features` נמצאים ב-file-explorer (זרעו
+כבר — הבדיקה המלאה של רצף הזריעה עצמו ב-DoD#5/#6 שייכת ל-Commit 3).
+צילום: `/tmp/demo-origin-split/phase2-demo-autoopen.png`. **הערה**: המסך שנפתח
+הוא "New tab" הריק של Obsidian (אין `workspace.json` מזורע — `.obsidian/`
+מודלג במכוון, seed-example-vault.js finding 1), לא `Welcome.md` פתוח על המסך;
+הקובץ קיים וניתן לפתיחה בקליק על השם ברשימה. זו התנהגות זהה למה שהיה קורה גם
+לפני הסלייס הזה בלחיצה על כפתור "כספת דמו" הקיים (`ensureDemo`+`navigateToVault`,
+ללא לוגיקת פתיחת-קובץ) — Commit 2 לא נגע ולא היה אמור לגעת בזה (הארכיטקטורה ב-§3
+מראה יעד `/vault/<demoId>` בלבד, בלי note-path). מדווח כאן במפורש — לא הכרעתי
+בעצמי שזה בסדר, calev-heavy הסופי יבדוק את הניסוח המדויק של DoD#4.
+
+**regression** (DoD#10): `/starter` על בניית הדמו **לא** מפנה לדמו — מציג את
+מסך הבחירה הנייטיבי (במקרה הזה: vault-chooser עם ערך "Demo" קיים, כי הכספת
+כבר נוצרה בטאב אחר על אותו origin — `forceStarter` חוסם את ה-autoOpen כצפוי).
+צילום: `/tmp/demo-origin-split/phase2-demo-starter-regression.png`.
+
+`cd src/client-mobile && npm test` — 87/87 ירוק (regression-free, קובץ זה לא
+נבדק ב-node:test — DOM-only, מאומת ידנית). `bun test test/*.test.js` — 34/34
+ירוק.
+
+### חריגות
+
+ראה ההערה בסעיף "Welcome.md מרונדר" למעלה — לא תוקן, מדווח לביקורת הסופית.
+
 ## 2026-07-28 — slice/demo-origin-split — Commit 1: hash של תוכן הדמו מוזרק בבניה
 
 ### מה בוצע?

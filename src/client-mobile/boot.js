@@ -84,6 +84,13 @@ const MOBILE_SCRIPTS = [
     location.href = '/vault/' + encodeURIComponent(id);
   }
 
+  // DEMO_ID — הועלה לכאן, לפני בלוק ניתוב-הכניסה למטה (docs/plans/
+  // demo-origin-split.md §4 Commit 2, 🔴 אילוץ סדר): הבלוק הזה משתמש בו
+  // כדי להפנות ישירות לכספת הדמו כשאין VAULT_ID/כספת-אחרונה ו-autoOpen
+  // דולק. ensureDemo() והקריאה `if (VAULT_ID === DEMO_ID) ensureDemo();`
+  // (§3ג) נשארות במקומן למטה — רק ההגדרה הועלתה, לא הלוגיקה שתלויה בה.
+  var DEMO_ID = (window.__owConfig && window.__owConfig.demoVault && window.__owConfig.demoVault.id) || '0000demo0000demo';
+
   // מודל הנייטיב: 'mobile-selected-vault' = "כספת פתוחה/נבחרה" — מקור-האמת
   // (Bug 1, brief §0/§3א). היעדרו פירושו native close/"ניהול כספות" (quick
   // action 'close-vault' מוחק את המפתח ועושה reload) — כוונה מפורשת לחזור
@@ -94,9 +101,12 @@ const MOBILE_SCRIPTS = [
   //
   // path-based routing (brief §3ב): /vault/<id> כבר קבע VAULT_ID מה-path —
   // אין צורך להתייעץ עם localStorage. /starter מתעלם מ-auto-resume לגמרי
-  // (forceStarter, למטה). רק path "entry" (לא /vault/<id>, לא /starter — /,
-  // /mobile וכו') מפנה בעצמו ל-/vault/<id> (יש כספת-אחרונה) או ל-/starter
-  // (אין) — location.replace (לא push) כדי שלא ייווצר loop ב-back.
+  // (forceStarter, למטה — זו דרך-המילוט היחידה למסך-הפתיחה בדומיין הדמו,
+  // ממשיכה לעקוף גם את הפתיחה-האוטומטית למטה). רק path "entry" (לא
+  // /vault/<id>, לא /starter — /, /mobile וכו') מפנה בעצמו ל-/vault/<id> (יש
+  // כספת-אחרונה), ל-/vault/<DEMO_ID> (אין כספת-אחרונה אבל demoVault.autoOpen
+  // דולק — docs/plans/demo-origin-split.md §4 Commit 2), או ל-/starter (אף
+  // אחד מהשניים) — location.replace (לא push) כדי שלא ייווצר loop ב-back.
   if (forceStarter) {
     // מנקה מפתח-בחירה פעם-אחת (בלי reload נוסף — אין loop) כדי שהבאנדל
     // הנייטיב לא ינסה auto-open כשהוא רץ מיד למטה (מסך-הפתיחה, no-vault).
@@ -109,7 +119,17 @@ const MOBILE_SCRIPTS = [
     if (resumeId) {
       location.replace('/vault/' + encodeURIComponent(resumeId));
     } else {
-      location.replace('/starter');
+      // דמו — פתיחה-אוטומטית (§0 מטרה: מבקר בדומיין הדמו נוחת ישירות בכספת,
+      // אפס לחיצות). ES5 guard pattern (כמו ensureDemo/DEMO_ID למעלה) —
+      // demoVault.autoOpen===true במפורש (לא ייתכן "on by default" — ברירת-
+      // המחדל היא ללא-דמו, §9 שאלה 1) וגם enabled!==false (opt-out מפורש
+      // מבטל גם autoOpen).
+      var d = window.__owConfig && window.__owConfig.demoVault;
+      if (d && d.autoOpen === true && d.enabled !== false) {
+        location.replace('/vault/' + encodeURIComponent(DEMO_ID));
+      } else {
+        location.replace('/starter');
+      }
     }
     return;   // מנווטים החוצה — אין מה לעשות יותר בטיק הזה
   }
@@ -124,7 +144,8 @@ const MOBILE_SCRIPTS = [
   // in a later commit, DoD#4). Idempotent: get(DEMO_ID) truthy on repeat
   // visits → no-op (the fixed id, not a fresh uuid, is what makes this work
   // — local-vault-registry.js create() opts.id, seed-demo §3א).
-  var DEMO_ID = (window.__owConfig && window.__owConfig.demoVault && window.__owConfig.demoVault.id) || '0000demo0000demo';
+  // (DEMO_ID itself is defined earlier, before the entry-routing block —
+  // see the comment there, Commit 2 — so the routing block below can use it.)
   function ensureDemo() {
     // ES5 guard, avigail round-2 fix (precedence bug in the brief's draft
     // pseudocode `!d.enabled ?? true`, which isn't even valid without `??`):
