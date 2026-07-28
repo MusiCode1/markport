@@ -2,6 +2,34 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — סיכום סלייס
+
+**7 commits** על `slice/demo-origin-split` (`966bf04`..`31c55c2`), base `dev`
+`71e4265`: Commit 0 (`OW_PROFILE`+קונפיג-דמו) → Commit 1 (hash דמו בבניה) →
+Commit 2 (פתיחה-אוטומטית) → Commit 3 (זריעה-מחדש) → **תיקון calev-heavy
+NO-GO** (2 ממצאים אמיתיים, Commit 3 phase) → Commit 4 (קישור לראשי) →
+Commit 5 (סקריפטי פריסה + שומר). ראה רשומות מפורטות למטה, מהחדש לישן.
+
+**טסטים**: התחלנו מ-86 (client-mobile) + 34 (cloudflare) = 120. סיימנו ב-96
++ 39 = **135** (15 טסטים חדשים: 2 ב-deploy-config, 9 ב-seed-example-vault,
+5 ב-guard, 1 net לשינויי-snippet ב-build-assets). כולם ירוקים בכל commit.
+
+**Verifier-phase (§8, אחרי Commit 3)**: calev-heavy — סבב ראשון NO-GO (4
+ממצאים: 2 באגים אמיתיים + 2 הערות-ניסוח), 2 הבאגים תוקנו באותו phase
+(policy: 1-2 ממצאים → תיקון, לא escalation). דוח:
+`reports/obsidian-web/demo-origin-split-commit3-calev.md`.
+
+**סטיות מהתכנון**: ראה `docs/plans/demo-origin-split.md` §"סטיות מהתכנון"
+(מעודכן שם, לא כאן — זה יומן-ביצוע). תמצית: אין סטיות ארכיטקטוניות; שני
+תיקוני-קוד מ-calev-heavy (בטווח 1-2, לא escalation); שתי הערות-ניסוח
+(DoD#4/DoD#11) לא-קוד, מדווחות למרדכי.
+
+**DoD verifiable (§5, טבלה מלאה בבריף)**: כל 14 הפריטים אומתו ידנית לאורך
+הביצוע (ראה רשומות פר-commit למטה) — כולל ה-**הליך המדויק** של DoD#7
+(`cp -r` הצידה + `diff -r -x system-plugins`): ההבדל בין שני הארטיפקטים
+המלאים הוא **אך ורק** `index.html` (שורת הקונפיג + BUST) ו-`sw.js` (BUST) —
+בדיוק כפי שהבריף חזה.
+
 ## 2026-07-28 — slice/demo-origin-split — Commit 5: סקריפטי פריסה + שומר
 
 ### מה בוצע?
