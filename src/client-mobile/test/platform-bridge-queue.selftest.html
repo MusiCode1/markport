@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>platform-bridge queue self-test</title>
+  <style>
+    body { font: 13px/1.5 -apple-system, BlinkMacSystemFont, monospace, sans-serif; background: #1e1e1e; color: #ddd; margin: 0; padding: 16px; }
+    #summary { font-weight: bold; font-size: 16px; margin-bottom: 12px; }
+    #summary.pass { color: #4caf50; }
+    #summary.fail { color: #f44336; }
+    .pass-line { color: #4caf50; }
+    .fail-line { color: #f44336; font-weight: bold; }
+    pre#out { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h1>platform-bridge queue self-test</h1>
+  <p>
+    Covers docs/plans/runtime-platform-descriptors.md §5 DoD#12's "same-turn"
+    case, §5 DoD#13, the per-candidate tick-budget semantics of §3.1, and the
+    §3.1a post-app.js-load give-up path — all impossible to reproduce against
+    the real obsidian-mobile bundle from outside (app.js's own module-level
+    code runs the real Object.defineProperty('Platform', ...) call and its
+    own `load` event, so we can't inject a second same-turn candidate ahead
+    of it, nor control exactly when it "loads"). No app.js is loaded on this
+    page at all — each scenario runs platform-bridge.js fresh inside its own
+    iframe so state never bleeds between them; Scenarios C/D simulate app.js's
+    `load` signal by calling window.__owPlatformBridge.notifyAppJsLoaded()
+    directly, the same hook boot.js calls for real.
+  </p>
+  <p>
+    calev (round 2 of the fix pass) found two labels here that promised more
+    than the test actually proved: Scenario A's old per-candidate assertion
+    added both candidates in the SAME synchronous turn, so their tick counts
+    could never diverge — a shared/global budget would have passed the exact
+    same assertion. And the old Scenario C only exercised
+    notifyAppJsLoaded()'s OWN immediate empty-queue check, never pump()'s
+    separate post-load queue-drain branch (the one finding 2 of the previous
+    round actually added). Scenario A below now makes the real candidate join
+    the queue LATE — after the stuck sibling already has ticks of its own on
+    the books — which is the only way divergent per-candidate budgets can be
+    observed at all. Scenario D is new and drives an in-flight candidate
+    through pump()'s post-load drain branch specifically.
+  </p>
+  <div id="summary">Running…</div>
+  <pre id="out"></pre>
+
+  <script>
+    (async function () {
+      const out = document.getElementById('out');
+      const summary = document.getElementById('summary');
+      let passCount = 0;
+      let failCount = 0;
+
+      function log(ok, label) {
+        const line = document.createElement('div');
+        line.className = ok ? 'pass-line' : 'fail-line';
+        line.textContent = (ok ? 'PASS — ' : 'FAIL — ') + label;
+        out.appendChild(line);
+        if (ok) passCount++; else failCount++;
+      }
+
+      function assert(cond, label) {
+        log(!!cond, label);
+        if (!cond) console.error('[platform-bridge-queue selftest] FAIL:', label);
+      }
+
+      function makeIframe() {
+        const f = document.createElement('iframe');
+        f.style.display = 'none';
+        document.body.appendChild(f);
+        return f;
+      }
+
+      function loadScript(win, doc, src) {
+        return new Promise(function (resolve, reject) {
+          const s = doc.createElement('script');
+          s.src = src;
+          s.onload = resolve;
+          s.onerror = reject;
+          doc.head.appendChild(s);
+        });
+      }
+
+      function wait(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
+      }
+
+      try {
+        // ── Scenario A — per-candidate tick budget, proven with a LATE-joining
+        // candidate (brief §5 DoD#12 "המקרה שבגללו התור קיים" + §3.1a finding 4,
+        // SECOND calev pass on this exact assertion). The previous version added
+        // both candidates in the SAME synchronous turn — but pump() ticks every
+        // candidate present in the queue together, once per turn, so two
+        // same-turn candidates ALWAYS have identical tick counts at every point
+        // in time. That made it impossible to tell a per-candidate budget from a
+        // shared/global one: with ceiling 500 and the real candidate maturing at
+        // tick 4, a single SHARED counter would have passed the exact same
+        // assertion. The only way to actually observe independent budgets is to
+        // make one candidate join the queue LATE, after its sibling already has
+        // ticks on the books — done here by having the stuck candidate's OWN
+        // getter (a synchronous side effect, the only way to land "mid-chain":
+        // pump()'s queueMicrotask recursion drains faster than any macrotask/
+        // timer could interleave) queue the real candidate once it has ticked
+        // INSERT_AT times on its own. The real candidate then needs OWN_MATURITY
+        // more ticks of ITS OWN before resolving. Total elapsed ticks by capture
+        // time comfortably exceed CAPTURE_TICK_CEILING — only possible if each
+        // candidate's ceiling is counted from when THAT candidate joined, not
+        // from a shared start (calev proved this out-of-band with concrete
+        // numbers: 300+300=600 and 480+480=960 ticks, both captured).
+        {
+          const f = makeIframe();
+          const win = f.contentWindow;
+          const doc = win.document;
+          win.__owPlatformOverrides = { isMobile: false, isPhone: false, isTablet: false, isDesktop: true, isDesktopApp: false, isMobileApp: true };
+          const nativeDP = win.Object.defineProperty; // saved BEFORE the bridge wraps it
+
+          await loadScript(win, doc, '/client-mobile/platform-bridge.js');
+
+          const CEILING = win.__owPlatformBridge.CAPTURE_TICK_CEILING;
+          const INSERT_AT = Math.floor(CEILING * 0.6);   // stuck candidate's OWN tick count when the real one joins
+          const OWN_MATURITY = Math.floor(CEILING * 0.6); // real candidate's OWN tick count when it resolves — chosen so 2×0.6 > 1: combined ticks MUST exceed the ceiling
+
+          const realPlatform = { isMobileApp: true, canPinSidebar: true, isMobile: false, isDesktop: true, canSplit: true };
+          let stuckCalls = 0;
+          let realCalls = 0;
+          let inserted = false;
+
+          win.Object.defineProperty(win, 'Platform', {
+            get: function () {
+              stuckCalls++;
+              if (!inserted && stuckCalls === INSERT_AT) {
+                inserted = true;
+                // Queued from INSIDE the stuck candidate's own getter call —
+                // still within the same pump()-driven microtask chain, but
+                // genuinely AFTER the stuck one has accumulated INSERT_AT
+                // ticks entirely on its own. This is what "late" means here.
+                win.Object.defineProperty(win, 'Platform', {
+                  get: function () { realCalls++; return realCalls >= OWN_MATURITY ? realPlatform : undefined; },
+                  configurable: true,
+                });
+              }
+              return undefined; // never resolves on its own — ticks until ITS ceiling drops it
+            },
+            configurable: true,
+          });
+
+          await wait(200); // the whole tick chain drains in well under a millisecond of real CPU time (microtasks pre-empt the timer queue) — this just gives a macrotask a chance to run afterwards so the assertions see the settled state
+
+          assert(win.__owPlatform === realPlatform, 'Scenario A: the real candidate — queued LATE, only after the stuck sibling already had ' + INSERT_AT + ' ticks of its own — still captures');
+          assert(realCalls >= OWN_MATURITY && realCalls < CEILING, 'Scenario A: the real candidate matured within its OWN ' + CEILING + '-tick ceiling counted from when IT joined (' + realCalls + ' of its own ticks), not from a shared/global start');
+          assert(stuckCalls + realCalls > CEILING, 'Scenario A: total ticks actually elapsed across both candidates (' + (stuckCalls + realCalls) + ') exceed CAPTURE_TICK_CEILING (' + CEILING + ') — a shared/global tick budget would have given up on the WHOLE queue before the late-joining real candidate had a chance to mature; capture only succeeds with a genuinely PER-candidate budget (brief §3.1 "תקרה פר-מועמד, לא גלובלית")');
+          assert(win.Object.defineProperty === nativeDP, 'Scenario A: Object.defineProperty restored to native after capture');
+          assert(win.__owPlatform.isMobile === false, 'Scenario A: locked isMobile reflects __owPlatformOverrides (false = desktop layout)');
+        }
+
+        // ── Scenario B — §5 DoD#13 fallback: __owPlatformOverrides missing at install ──
+        // No window.__owPlatformOverrides is ever set in this iframe. Per brief §3.0,
+        // the bridge must NOT lock any flag, must NOT wrap addClass, but MUST still
+        // expose the validated reference (existing consumers like
+        // obsidian-web-layout/main.js:65 must keep working).
+        {
+          const f = makeIframe();
+          const win = f.contentWindow;
+          const doc = win.document;
+          // deliberately do NOT set win.__owPlatformOverrides
+
+          const warnings = [];
+          win.console.warn = function () { warnings.push(Array.prototype.slice.call(arguments).join(' ')); };
+
+          await loadScript(win, doc, '/client-mobile/platform-bridge.js');
+
+          const realPlatform = { isMobileApp: true, canPinSidebar: true, isMobile: true, isDesktop: false };
+          win.Object.defineProperty(win, 'Platform', { get: function () { return realPlatform; }, configurable: true });
+
+          await wait(50);
+
+          assert(win.__owPlatform === realPlatform, 'Scenario B: reference exposed even though overrides were missing (§3.0 — validated capture must still be exposed)');
+          const desc = Object.getOwnPropertyDescriptor(realPlatform, 'isMobile');
+          assert(!desc || typeof desc.get !== 'function', 'Scenario B: isMobile was NOT locked (still a plain data property, no accessor installed)');
+          assert(warnings.some(function (w) { return /overrides missing/i.test(w); }), 'Scenario B: a warning was logged for the missing-overrides fallback');
+        }
+
+        // ── Scenario C — notifyAppJsLoaded()'s OWN immediate empty-queue check
+        // (brief §3.1a, fixing finding 1). This is the case where the queue is
+        // ALREADY empty (nothing in flight) at the moment app.js's `load` fires —
+        // NOT pump()'s separate post-load queue-drain branch (that one needs a
+        // candidate still in flight when `load` fires; see Scenario D below,
+        // which exercises that branch specifically — calev, second pass, found
+        // that this scenario's own label overclaimed covering it). No real app.js
+        // exists in this synthetic page, so app.js's `load` is simulated by
+        // calling window.__owPlatformBridge.notifyAppJsLoaded() directly — the
+        // exact hook boot.js calls from app.js's own <script> `load` handler.
+        // Only an invalid-shape candidate is ever seen, and it's dropped same-tick
+        // (queue already empty) BEFORE notifyAppJsLoaded() is even called. The
+        // bridge must give up and restore Object.defineProperty SYNCHRONOUSLY (a
+        // queueMicrotask hop at most), not wait out the multi-minute crash-guard —
+        // that guard is for app.js's <script> never settling AT ALL (neither
+        // `load` nor `error`), not this case.
+        {
+          const f = makeIframe();
+          const win = f.contentWindow;
+          const doc = win.document;
+          win.__owPlatformOverrides = { isMobile: false, isDesktop: true, isMobileApp: true };
+          const nativeDP = win.Object.defineProperty;
+
+          const warnings = [];
+          win.console.warn = function () { warnings.push(Array.prototype.slice.call(arguments).join(' ')); };
+
+          await loadScript(win, doc, '/client-mobile/platform-bridge.js');
+
+          win.Object.defineProperty(win, 'Platform', { get: function () { return { nope: true }; }, configurable: true }); // never valid — dropped same-tick, queue empties immediately
+
+          await wait(0); // let the invalid-shape candidate's same-tick drop actually run before notifying
+
+          assert(typeof win.__owPlatformBridge.notifyAppJsLoaded === 'function', 'Scenario C: bridge exposes notifyAppJsLoaded() — the hook boot.js calls on app.js\'s `load` event (§3.1a)');
+          assert(typeof win.__owPlatformBridge.notifyAppJsFailed === 'function', 'Scenario C: bridge ALSO exposes notifyAppJsFailed() — the hook boot.js calls on app.js\'s `error` event (§3.1a third round, finding 2)');
+          win.__owPlatformBridge.notifyAppJsLoaded();
+
+          await wait(20); // well under the crash-guard — proves this path doesn't need it
+
+          assert(win.Object.defineProperty === nativeDP, 'Scenario C: Object.defineProperty restored promptly after notifyAppJsLoaded(), not after waiting out the wall-clock crash-guard');
+          assert(win.__owPlatform === undefined, 'Scenario C: nothing was ever captured — __owPlatform stays unset');
+          assert(warnings.some(function (w) { return /no Platform export was ever intercepted/i.test(w); }), 'Scenario C: the post-load give-up warning was logged');
+        }
+
+        // ── Scenario D — pump()'s post-load QUEUE-DRAIN branch specifically
+        // (brief §3.1a finding 2 — the branch this exact fix added, and which
+        // Scenario C above does NOT reach: there, the queue is already empty
+        // BEFORE notifyAppJsLoaded() fires, so only notifyAppJsLoaded()'s own
+        // immediate check runs, never pump()'s separate drain check). Here a
+        // candidate is still genuinely IN FLIGHT (getter returns undefined, not
+        // yet resolved) at the exact moment notifyAppJsLoaded() fires — so
+        // notifyAppJsLoaded()'s own check sees a non-empty queue and does
+        // nothing (the "a real candidate is mid-flight" comment path). The
+        // candidate is ticked by pump() a little further and THEN turns out to
+        // be foreign (invalid shape) — dropped, queue empties on a LATER pump()
+        // turn, well after appJsOutcomeSignalReceived was already set. That is
+        // the one and only way to reach the queue-drain branch (as opposed to
+        // notifyAppJsLoaded()'s own check) at all.
+        {
+          const f = makeIframe();
+          const win = f.contentWindow;
+          const doc = win.document;
+          win.__owPlatformOverrides = { isMobile: false, isDesktop: true, isMobileApp: true };
+          const nativeDP = win.Object.defineProperty;
+
+          const warnings = [];
+          win.console.warn = function () { warnings.push(Array.prototype.slice.call(arguments).join(' ')); };
+
+          await loadScript(win, doc, '/client-mobile/platform-bridge.js');
+
+          let calls = 0;
+          // Tick 1: not ready yet (undefined) — still in the queue when
+          // notifyAppJsLoaded() fires immediately after, synchronously below.
+          // Tick 2+: resolves to a Platform-shaped-but-invalid object — dropped,
+          // draining the queue to empty on THIS later pump() turn.
+          win.Object.defineProperty(win, 'Platform', {
+            get: function () { calls++; return calls === 1 ? undefined : { nope: true }; },
+            configurable: true,
+          });
+          win.__owPlatformBridge.notifyAppJsLoaded(); // fired while the candidate above is still mid-flight (queue non-empty)
+
+          await wait(50);
+
+          assert(calls >= 2, 'Scenario D: the in-flight candidate was ticked at least twice — once before notifyAppJsLoaded(), once after');
+          assert(win.Object.defineProperty === nativeDP, 'Scenario D: Object.defineProperty restored once the in-flight candidate was dropped and the queue drained post-load');
+          assert(win.__owPlatform === undefined, 'Scenario D: nothing was ever captured — the only candidate seen was invalid-shape');
+          assert(warnings.some(function (w) { return /capture queue drained with nothing captured/i.test(w); }), 'Scenario D: pump()\'s OWN post-load queue-drain warning fired — the exact branch finding 2 added, distinct from notifyAppJsLoaded()\'s immediate empty-queue check in Scenario C');
+        }
+
+      } catch (err) {
+        failCount++;
+        const line = document.createElement('div');
+        line.className = 'fail-line';
+        line.textContent = 'FAIL — unexpected exception: ' + (err && err.message || err);
+        out.appendChild(line);
+        console.error('[platform-bridge-queue selftest] unexpected exception', err);
+      }
+
+      if (failCount === 0) {
+        summary.textContent = 'ALL PASS (' + passCount + ')';
+        summary.className = 'pass';
+      } else {
+        summary.textContent = 'FAILED: ' + failCount + ' (passed ' + passCount + ')';
+        summary.className = 'fail';
+      }
+    })();
+  </script>
+</body>
+</html>

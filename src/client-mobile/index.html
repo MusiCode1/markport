@@ -67,6 +67,12 @@
   <script src="/client-mobile/storage/opfs-store.js?v=1"></script>
   <script src="/client-mobile/storage/folder-handle-store.js?v=1"></script>
 
+  <!-- 0d. Pure vault-root-path detection (docs/plans/electron-shim-foundation.md
+       §3.3) — consumed by capacitor-shim.js's Filesystem.readFile to answer
+       EISDIR instead of a raw fetch-404/ENOENT when the desktop-only
+       Vault.readRaw("") empty-vault probe reads the vault root as a file. -->
+  <script src="/client-mobile/vault-root-path.js?v=1"></script>
+
   <!-- 0b. Pull-sync engine (the pull-sync brief §2) — v1 =
        OPFS-local vaults only. Must load before boot.js so
        window.__owSync* are ready when boot.js mounts the "Sync now" button
@@ -79,6 +85,12 @@
   <script src="/client-mobile/sync/local-manifest.js?v=1"></script>
   <script src="/client-mobile/sync/remote-client.js?v=1"></script>
   <script src="/client-mobile/sync/run-pull.js?v=1"></script>
+
+  <!-- 0c. מקור-אמת יחיד לגרסת Obsidian המסופקת (docs/plans/
+       electron-shim-foundation.md §3.0) — חייב לפני capacitor-shim.js
+       (App.getInfo קורא ממנו) ולפני shims/electron.js/boot.js. GENERATED —
+       ראה obsidian-version.js עצמו. -->
+  <script src="/client-mobile/obsidian-version.js?v=1"></script>
 
   <!-- 1. Capacitor shim — חייב לפני native-bridge.js כדי שandroidBridge יהיה
        מוגדר כשהbridge מאתחל את הplatform. -->
@@ -113,6 +125,22 @@
        §3ג. חייב לפני boot.js כדי ש-window.__owSeedExampleVault יהיה קיים. -->
   <script src="/client-mobile/seed-example-vault.js?v=1"></script>
 
+  <!-- 3c2. Client-only signals (docs/plans/client-only-resilience.md §3.2/§3.4)
+       — window.__owBackend + window.__owVersion, injected by the CF build
+       ONLY (scripts/build-assets.sh replaces the marker below with a literal
+       <script>window.__owBackend="none";window.__owVersion="...";</script>,
+       BEFORE deploy-config.js so boot.js sees it). A channel SEPARATE from
+       __owConfigInjected on purpose: that one is deepMerge'd with DEFAULTS
+       and byte-verified (raw deploy-config.json, word-for-word) by TWO test
+       suites (deploy-config-inject.test.js ×2, build-assets.test.js) —
+       folding either flag into it would land window.__owBackend='none' on
+       runtime-server too (shared config file) and break both suites.
+       runtime-server never replaces this marker → both globals stay
+       undefined there (= "has a backend", today's unchanged default; boot.js
+       and the onboarding version display both treat a missing value as
+       "behave like before" / "hide our version, show Obsidian's only"). -->
+  <!-- OW_BACKEND_INJECT -->
+
   <!-- 3d. Deploy-config (docs/plans/deploy-config.md §3) — deploy-time config
        (seedExampleContent/layout/plugins), loaded BEFORE boot.js so
        window.__owConfig is ready when boot.js reads it. The marker below is
@@ -124,6 +152,28 @@
        → marker stays a no-op comment → DEFAULTS alone, zero regression. -->
   <!-- OW_CONFIG_INJECT -->
   <script src="/client-mobile/deploy-config.js?v=1"></script>
+
+  <!-- 3e. Platform bridge (docs/plans/runtime-platform-descriptors.md §2/§3) —
+       wraps Object.defineProperty to capture Obsidian's Platform object at
+       runtime. This, plus docs/plans/zero-patches.md, removed every build-time
+       patch: vendor/obsidian-mobile/app.js is byte-identical to Obsidian's own
+       APK. MUST load before boot.js: boot.js sets
+       window.__owPlatformOverrides synchronously at its top level, and the
+       bridge reads that lazily (only once it captures Platform, which
+       happens much later, after app.js is injected) — see brief §3.0 for
+       the full load-order diagram. Classic script (not type="module") —
+       index.html only supports classic scripts here (brief §3.7#9). -->
+  <script src="/client-mobile/platform-bridge.js?v=1"></script>
+
+  <!-- 3f. Electron shim (docs/plans/electron-shim-foundation.md §3.1,
+       docs/plans/desktop-layout-now.md §1-§5) — window.electron +
+       require('electron') (registered by boot.js's modules map, right
+       below). MUST load before boot.js: boot.js reads window.electron
+       synchronously when building its modules map. Reads
+       window.__owObsidianVersion lazily (only inside its sendSync/getVersion
+       handlers, never at module-eval time) — obsidian-version.js above
+       already ran by the time either is ever called. -->
+  <script src="/client-mobile/shims/electron.js?v=1"></script>
 
   <!-- 4. Boot: vault selection, window.require, desktop cleanup.
        Obsidian's scripts (i18next, enhance, i18n, app.js) are injected

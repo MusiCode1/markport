@@ -19,11 +19,17 @@ See `docs/architecture.md` for the full picture.
 
 ## Conventions — required
 
-- **bun, not node.** Run the servers and tests with `bun`. (`src/runtime-server/`
-  still has node-flavoured scripts; that inconsistency is known.)
+- **Node 18+ or Bun — depends on the package.** Most packages' scripts invoke `node`
+  (`src/client-mobile` tests, `src/runtime-server/server`, the Cloudflare deployment's
+  build script). `src/sync-server` is the one package that runs on `bun`
+  (`bun index.js` / `bun test`). The maintainer's own dev environment symlinks `node`
+  to `bun`, which is a local habit, not a repo-wide requirement — don't assume `bun`
+  works for every package.
 - **`vendor/` is gitignored.** It holds Obsidian's own bundle, generated locally by
-  `scripts/update-obsidian-*.js`. It is never committed and never redistributed —
-  each user downloads Obsidian themselves.
+  `scripts/update-obsidian-*.js`, and is never committed. This repository does not
+  contain or distribute that bundle — each user downloads Obsidian themselves via the
+  setup scripts. The public live demo deployment *does* serve the bundle to visitors'
+  browsers (see `build-assets.sh`), which is a separate thing from this repo.
 - **The bundle is minified.** Anchor any patch or edit to a **pattern / symbol
   shape**, never to a line number — line numbers move on every Obsidian release.
   See `scripts/patch-obsidian-mobile.js`, which documents this in-body.
@@ -44,7 +50,20 @@ See `docs/architecture.md` for the full picture.
 
 ## Before you touch the bundle
 
-`vendor/obsidian-mobile/app.js` is Obsidian's proprietary code. We apply a small,
-documented set of patches to the **local** copy. Keep that set as small as
-possible, and prefer a shim over a patch whenever the same result is reachable
-through a platform API.
+`vendor/obsidian-mobile/app.js` is Obsidian's proprietary code. As of
+`docs/plans/zero-patches.md`, we apply **zero** build-time patches to the
+**local** copy — the extracted bundle is byte-identical to Obsidian's own
+APK. `scripts/patch-obsidian-mobile.js` still exists as infrastructure
+(an empty `PATCHES` list) for a future Obsidian version that might need one;
+keep that list as small as possible, and prefer a runtime shim over a patch
+whenever the same result is reachable through a platform API.
+
+**Precedent**: `docs/plans/runtime-platform-descriptors.md` replaced 3 of the
+4 patches that used to exist with a runtime shim
+(`src/client-mobile/platform-bridge.js`, which intercepts
+`Object.defineProperty` to capture Obsidian's own `Platform` object instead
+of rewriting app.js's byte-for-byte source); `docs/plans/zero-patches.md`
+removed the 4th and last one (`vault-profile-on-desktop-layout`) outright,
+once measurement showed `platform-bridge.js`'s existing `isDesktopApp`
+locking already covers what it used to patch. Read both before adding a new
+patch.
