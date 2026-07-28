@@ -290,7 +290,25 @@ npm run build && npm run build   # ‏פעמיים — ‏אותו hash (‏דט
 
 ‏בבלוק ניתוב-הכניסה (‏עוגן: `} else if (!VAULT_ID) {` ‏ובתוכו `location.replace('/starter')`):
 ‏כשאין `VAULT_ID` ‏ואין כספת-אחרונה, ‏ובקונפיג `demoVault.autoOpen === true` ‏ו-`enabled !== false`
-‏— ‏הפניה ל-`/vault/<demoId>` ‏במקום ל-`/starter`.
+‏— ‏הפניה ל-**`/vault/<demoId>/Welcome`** ‏במקום ל-`/starter`.
+
+> 🔧 **‏עודכן אחרי כלב-heavy (‏ממצא 1, ‏סבב runtime-gate).** ‏הניסוח המקורי אמר
+> `/vault/<demoId>` ‏בלבד — ‏וזה בדיוק מה שנבנה. ‏אבל ‏Obsidian ‏נוחת אז על "New tab"
+> ‏ריק: ‏עץ הקבצים מלא, ‏התוכן **‏לא מרונדר**, ‏והמבקר רואה `Create new note / Go to
+> file / Close`. ‏כל מה שהסלייס קיים כדי להראות — ‏כולל הקישור לפריסה הראשית
+> (Commit 4 / DoD#13) — ‏בלתי-נראה עד לחיצה יזומה.
+>
+> ‏זו הייתה **‏סתירה פנימית בבריף**: §5 DoD#4 ‏הבטיח חוויה ("`Welcome.md` ‏מרונדר")
+> ‏ש-§4 ‏לא הנחה אף אחד לבנות. ‏ההכרעה: ‏מתקנים ‏**‏בקוד**, ‏לא מרככים את ה-DoD.
+>
+> ‏כלב מדד בדפדפן **‏נקי לחלוטין** (‏פרופיל חדש, ‏אין כספת, ‏אין `ow-demo-content`)
+> ‏ש-`/vault/<demoId>/Welcome` ‏כבר עובד היום מקצה-לקצה: ‏כספת נוצרת, ‏תוכן נזרע,
+> `Welcome.md` ‏מרונדר, ‏אפס לחיצות. ‏**‏יעד-הניתוב הוא הדבר היחיד שמשתנה** — ‏אין
+> ‏פיצ'ר חדש לבנות.
+>
+> ‏רקע שכלב מצא: ‏שני המנגנונים שהיו נותנים את זה לבד מנוטרלים **‏במכוון** —
+> `.obsidian/app.json` ‏עם `defaultViewMode: "preview"` ‏ו-`workspace.json` ‏מדולגים
+> ‏שניהם בזריעה (finding 1, ‏ובצדק). ‏ניתוב הוא הדרך היחידה שנשארה.
 
 > 🔴 **‏אילוץ סדר — ‏הכשל הצפוי בקומיט הזה.** `DEMO_ID` ‏מוגדר היום ‏**‏אחרי** ‏בלוק
 > ‏ניתוב-הכניסה (‏עוגן: `var DEMO_ID = (window.__owConfig && ...)`). ‏שימוש בו בבלוק
@@ -413,6 +431,53 @@ build:demo   OW_PROFILE=demo bash scripts/build-assets.sh
 **‏פקודות ה-`deploy` ‏עצמן ‏לא רצות בסלייס הזה** — ‏אליעזר כותב ובודק אותן ב-`--dry-run`
 ‏או בקריאת הפלט בלבד. ‏פריסה ציבורית היא החלטת מרדכי+המשתמשת אחרי merge.
 
+> ⚠️ **‏השומר מאמת כוונה, ‏לא יעד** (‏כלב-heavy ‏ממצא 4). ‏כל עוד `deploy` ‏ו-`deploy:demo`
+> ‏פונים לאותו `name` ‏ב-`wrangler.toml`, ‏ההבטחה "‏אחרי שהשומר קיים ‏הכשל הזה
+> ‏בלתי-אפשרי" ‏**‏עדיין לא מתקיימת**. ‏זה לא באג בקוד — ‏זה תנאי-קדם בטופולוגיה,
+> ‏באחריות מרדכי לפני הפריסה הציבורית. ‏ראה Commit 6.
+
+---
+
+### Commit 6 — ‏סבב runtime-gate (approach: **manual**)
+
+> ‏נוסף אחרי כלב-heavy (PARTIAL, 13/14). ‏שלושה פריטים; ‏אף אחד מהם אינו blocker,
+> ‏שניים מהם נוגעים ישירות במה שמבקר אמיתי רואה בשנייה הראשונה.
+
+**‏א. ‏יעד-הניתוב של הפתיחה-האוטומטית** — ‏ראה Commit 2 ‏המעודכן. `/vault/<demoId>/Welcome`.
+‏זה מה שסוגר את DoD#4.
+
+**‏ב. ‏הכפתור "‏כספת דמו" ‏באנגלית** — `src/client-mobile/boot.js` (‏עוגן: `ow-demo-vault-btn`,
+`btn.textContent = 'כספת דמו'`). ‏קוד **‏פרה-קיים** ‏שהסלייס הזה לא נגע בו — ‏אבל הסלייס
+‏הזה הוא מה שהופך את הדמו למקור ציבורי אנגלי-בלבד, ‏ולכן הכפתור נעשה גלוי למבקרים
+‏אמיתיים ‏וסותר את §6 ("‏כל טקסט-מבקר באנגלית"). ‏החלף ל-`Demo vault`.
+‏**‏אל תיגע בשום דבר אחר בפונקציה** — ‏המיקום/CSS/MutationObserver ‏נושאים היסטוריה של
+‏שני סבבי NO-GO ‏(‏ראה ההערות בגוף הקוד).
+
+**‏ג. `_headers` ‏לארטיפקט הדמו** — ‏קובץ בשורש ה-`public/`, ‏מיוצר **‏רק** ‏בבניית הדמו:
+
+```
+/*
+  X-Robots-Tag: index, follow
+```
+
+‏הרקע: `demo.obsidian-online.pages.dev` ‏הוא alias של ענף ⇒ Cloudflare ‏מוסיף
+`X-Robots-Tag: noindex` ‏אוטומטית. ‏**‏נמדד בפועל** (2026-07-28) ‏ש-`_headers` ‏דורס אותו:
+‏פריסת-בדיקה על `hdrtest.obsidian-online.pages.dev` ‏החזירה `x-robots-tag: index, follow`.
+‏זה מה שמאפשר פרויקט Pages **‏אחד** ‏במקום שניים.
+‏הבניה הראשית **‏לא** ‏מקבלת `_headers` — ‏היא פרודקשן וממילא מאונדקסת.
+
+**Verification**:
+
+```bash
+cd src/deployments/cloudflare
+npm run build                 && ls ../../../.tmp/deployments/cloudflare/public/_headers   # ‏מצופה: ‏לא קיים
+OW_PROFILE=demo npm run build && cat ../../../.tmp/deployments/cloudflare/public/_headers  # ‏מצופה: ‏קיים
+bun test test/*.test.js
+```
+
+> **‏שים לב**: ‏קובץ שקיים באחד הארטיפקטים ‏ולא בשני **‏משנה את DoD#7**. ‏עדכן את
+> ‏הציפייה שם: `_headers` ‏מצטרף ל-`index.html` ‏ול-`sw.js` ‏כהבדל **‏צפוי**.
+
 ---
 
 ## §5 — DoD verifiable
@@ -429,10 +494,12 @@ build:demo   OW_PROFILE=demo bash scripts/build-assets.sh
 | 8 | ‏השומר חוסם | ‏הרץ את השומר עם ארטיפקט-דמו מול יעד ראשי → exit≠0 |
 | 9 | profile ‏שגוי מפיל את הבניה | `OW_PROFILE=nope npm run build` → exit≠0 |
 | 10 | ‏regression: `/starter` | ‏גם בבניית הדמו, `/starter` ‏מציג את מסך-הפתיחה ‏ולא מפנה לדמו |
-| 11 | ‏regression: ‏כספת של המשתמש | ‏בבניית הדמו — ‏צור כספת רגילה, ‏שים בה קובץ, ‏טען מחדש → ‏לא נדרס, ‏לא נזרע לתוכה |
+| 11 | ‏regression: ‏כספת של המשתמש | ‏בבניית הדמו — ‏צור כספת רגילה, ‏כתוב לתוכה קובץ, ‏ערוך קובץ קיים, ‏טען מחדש → ‏שניהם שרדו מילה-במילה, ‏והסמן `ow-demo-content` **‏לא נכתב** ‏מכספת שאינה הדמו. (‏**‏ניסוח מתוקן** ‏אחרי כלב ‏ממצא 2: ‏כספת ריקה **‏חדשה** ‏כן מקבלת תוכן-דמו ברגע היצירה — ‏התנהגות פרה-קיימת ‏שהבריף מכיר ב-§4 Commit 3. ‏מה שנבדק כאן הוא **‏שרידות** ‏ו-**‏אי-זיהום הסמן**) |
 | 12 | ‏regression: ‏אפס patches | `sha256sum` ‏של `app.js` ‏בשני הארטיפקטים ‏זהה ל-`vendor/obsidian-mobile/app.js`. (‏**‏אין** ‏דגל `--check` ‏ב-`patch-obsidian-mobile.js` — `argv[2]` ‏הוא נתיב לקובץ. ‏אביגיל ‏ממצא 8) |
 | 13 | ‏הקישור לראשי קיים | `Welcome.md` ‏בדמו מכיל קישור עובד לפריסה הראשית |
 | 14 | `vendor/` ‏לא נכנס ל-git | `git status --short \| grep vendor` → ‏ריק |
+| 15 | ‏הכפתור באנגלית | ‏בבניית הדמו, `/starter` ‏→ ‏הכפתור אומר `Demo vault`. ‏אפס עברית בטקסט-מבקר. ‏ב-390×844 ‏גם: ‏לא חופף לשורת-הגרסה |
+| 16 | `_headers` ‏רק בדמו | `ls public/_headers` → ‏קיים בבניית הדמו, ‏חסר בראשית. ‏תוכנו `X-Robots-Tag: index, follow` |
 
 ### ‏ההליך של DoD#7 — ‏השוואת שני הארטיפקטים
 
@@ -455,7 +522,8 @@ rm -rf /tmp/art-app /tmp/art-demo   # ‏חובה: cp -r ‏ליעד קיים �
 npm run build                 && cp -r ../../../.tmp/deployments/cloudflare/public /tmp/art-app
 OW_PROFILE=demo npm run build && cp -r ../../../.tmp/deployments/cloudflare/public /tmp/art-demo
 diff -r -x 'system-plugins' /tmp/art-app /tmp/art-demo
-# ‏מצופה: ‏הבדל ב-index.html (‏שורת הקונפיג + BUST) ‏וב-sw.js (BUST) ‏בלבד
+# ‏מצופה: ‏הבדל ב-index.html (‏שורת הקונפיג + BUST) ‏וב-sw.js (BUST), ‏ו-_headers
+# ‏קיים ‏רק ‏ב-/tmp/art-demo ‏(Commit 6, DoD#16) — ‏שלושת ‏אלה ‏בלבד.
 ```
 
 ---

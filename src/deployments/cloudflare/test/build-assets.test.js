@@ -178,3 +178,19 @@ test('guard-deploy-target.sh: rejects an unknown/missing target argument', () =>
   }
   expect(threw).toBe(true);
 });
+
+// ── _headers (docs/plans/demo-origin-split.md §4 Commit 6, DoD#16) — demo
+// profile only, overrides the branch-alias noindex Cloudflare would
+// otherwise inject (measured 2026-07-28, see the build-assets.sh comment).
+// The main/default profile must NOT get this file — it's already the
+// production target.
+
+test('build-assets.sh: _headers is written for the demo profile only, main profile has none', () => {
+  execSync('bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+  expect(fs.existsSync(path.join(PUBLIC_DIR, '_headers'))).toBe(false);
+
+  execSync('OW_PROFILE=demo bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+  const headersPath = path.join(PUBLIC_DIR, '_headers');
+  expect(fs.existsSync(headersPath)).toBe(true);
+  expect(fs.readFileSync(headersPath, 'utf8')).toBe('/*\n  X-Robots-Tag: index, follow\n');
+});

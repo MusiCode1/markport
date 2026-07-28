@@ -265,6 +265,21 @@ LAYOUT_VER="$LAYOUT_VER" LAYOUT_ENABLED="$LAYOUT_ENABLED" LS_VERSION="$LS_VERSIO
   fs.writeFileSync(process.env.OUT, JSON.stringify({plugins}));
 '
 
+# ── _headers (demo profile only — docs/plans/demo-origin-split.md §4 Commit 6)
+# A branch-alias Pages deployment (demo.obsidian-online.pages.dev) gets
+# X-Robots-Tag: noindex injected automatically by Cloudflare (measured
+# 2026-07-28: hdrtest.obsidian-online.pages.dev returned it). A committed
+# `_headers` file overrides that per-path — measured the same day that it
+# does: a test deploy with this file returned x-robots-tag: index, follow.
+# This is what lets the demo live on ONE Cloudflare Pages project instead of
+# a second one (topology decision, out of this slice's scope — §2/§7). The
+# main/default profile does NOT get this file — it's already the production
+# target, indexing it is correct by default, no override needed.
+if [[ "$OW_PROFILE" == "demo" ]]; then
+  echo "  writing _headers (demo profile — override branch-alias noindex)..."
+  printf '/*\n  X-Robots-Tag: index, follow\n' > "$PUBLIC_DIR/_headers"
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────
 FILE_COUNT=$(find "$PUBLIC_DIR" -type f | wc -l)
 TOTAL_SIZE=$(du -sh "$PUBLIC_DIR" 2>/dev/null | cut -f1)

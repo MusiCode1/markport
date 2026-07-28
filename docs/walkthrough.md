@@ -2,6 +2,69 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-29 — slice/demo-origin-split — Commit 6: סבב runtime-gate
+
+מרדכי ערך את הבריף ישירות (§4 Commit 6 חדש, DoD#15/#16 חדשים, DoD#11 נוסח-מחדש)
+אחרי שקרא את דוח calev-heavy הסופי (PARTIAL) במלואו. שלושה פריטים:
+
+### א. יעד-הניתוב של הפתיחה-האוטומטית → `/vault/<demoId>/Welcome`
+
+**`src/client-mobile/boot.js`** — בלוק הפתיחה-האוטומטית (Commit 2): היעד השתנה
+מ-`/vault/<DEMO_ID>` ל-`/vault/<DEMO_ID>/Welcome`. זו הכרעת מרדכי (מאמצת את
+המלצת calev-heavy מהדוח הסופי): הסתירה הפנימית בבריף בין DoD#4 ("`Welcome.md`
+מרונדר") לבין §4 Commit 2 המקורי (יעד בלי note-path) — נפתרה **בקוד**, לא
+בריכוך-הניסוח. עדכנתי גם את התיעוד הצמוד (הערת routing entry) לעקביות.
+
+### ב. הכפתור "כספת דמו" → `Demo vault`
+
+**`src/client-mobile/boot.js`** (`ow-demo-vault-btn`, `installDemoVaultButton`)
+— שורת `btn.textContent` בלבד שונתה. קוד פרה-קיים שלא נגעתי בו בשאר הסלייס —
+אבל מרדכי הכריע שהוא נכנס ל-scope כי הסלייס הזה הופך אותו לגלוי למבקרים
+אנגלית-בלבד. **לא נגעתי בשום דבר אחר בפונקציה** (מיקום/CSS/MutationObserver
+נושאים שני סבבי NO-GO היסטוריים — כמצוין בבריף ובהערות בגוף הקוד).
+
+### ג. `_headers` — רק בבניית הדמו
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — בלוק חדש לפני
+"Summary": `if [[ "$OW_PROFILE" == "demo" ]]` כותב `$PUBLIC_DIR/_headers` עם
+`/*\n  X-Robots-Tag: index, follow\n`. הרקע (מדוד ע"י מרדכי, מתועד בבריף):
+Cloudflare מוסיף `noindex` אוטומטית לפריסות branch-alias preview; `_headers`
+דורס את זה — כך שהדמו יכול לחיות בפרויקט Pages **אחד** ולא שניים (טופולוגיה,
+מחוץ ל-scope). הבניה הראשית לא מקבלת את הקובץ.
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — טסט חדש (DoD#16):
+`_headers` חסר בבניית ברירת-המחדל, קיים ומדויק-תוכן בבניית הדמו.
+
+**`docs/plans/demo-origin-split.md`** — עדכנתי את הליך ה-DoD#7 (ההשוואה בין
+הארטיפקטים) לציין ש-`_headers` מצטרף להבדלים הצפויים (רק ב-`/tmp/art-demo`).
+
+### בדיקות
+
+`npm test` (client-mobile) 96/96, `bun test test/*.test.js` (cloudflare) 40/40
+(39 + 1 חדש). DoD#7 המלא הורץ מחדש: `diff -r -x system-plugins` על שני
+ארטיפקטים טריים → **בדיוק** שלושה הבדלים: `_headers` (רק בדמו), `index.html`
+(שורת הקונפיג + BUST), `sw.js` (BUST). DoD#16 ידני: `ls public/_headers` —
+לא קיים בברירת-המחדל, קיים ומדויק בדמו.
+
+**ידני בדפדפן (playwright-cli, שני viewports)** — DoD#4: פרופיל נקי לגמרי →
+`/` → הפניה אוטומטית ל-`/vault/0000demo0000demo/Welcome`, `document.title`
+= `"Welcome - Obsidian Web"`, `Welcome.md` מרונדר על המסך, אפס לחיצות (צילום
+`round2-dod4-desktop.png`). DoD#10: `/starter` על בניית הדמו לא מפנה (regression,
+נבדק מחדש כי הקוד ליד שונה). DoD#15: כפתור "Demo vault" (אנגלית) קיים במסך
+ה-onboarding (כספת-דמו עדיין לא נוצרה), ב-1280×800 וב-390×844 — אין חפיפה
+לשורת-הגרסה בשני הגדלים (צילומים `round2-dod15-desktop.png`/`-mobile.png`).
+DoD#3: הכפתור **לא** קיים בבניית ברירת-המחדל.
+
+### תקלת-תשתית שנתקלתי בה (לא קוד, מדווח לשקיפות)
+
+`wrangler pages dev` בסביבה המשותפת הזו הגיש תוכן **שגוי** (build אחר, לא
+ה-directory שהצבעתי אליו) גם אחרי ניקוי `.wrangler/` מקומי וגלובלי — ייחסתי
+את זה לזיהום cache משותף בין ריצות/סוכנים על אותה מכונה (`/tmp/.wrangler`
+מכיל שאריות מ-thread-ים אחרים, `wrangler-dev2/3/4` וכו' שלא שלי). אימתתי
+שהארטיפקטים על הדיסק היו נכונים תמיד (`grep`/`diff` ישירות על הקבצים) — הבעיה
+הייתה רק בשכבת ה-serving. עקפתי עם שרת-סטטי מינימלי משלי (`/tmp/demo-origin-split/spa-server.js`,
+לא committed) לצורך האימות הידני בלבד; שום דבר מזה לא נכנס ל-git.
+
 ## 2026-07-28 — slice/demo-origin-split — תיקון קל אחרי verifier-slice (calev-heavy PARTIAL)
 
 דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-calev.md`

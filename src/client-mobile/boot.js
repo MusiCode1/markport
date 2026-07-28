@@ -104,9 +104,11 @@ const MOBILE_SCRIPTS = [
   // (forceStarter, למטה — זו דרך-המילוט היחידה למסך-הפתיחה בדומיין הדמו,
   // ממשיכה לעקוף גם את הפתיחה-האוטומטית למטה). רק path "entry" (לא
   // /vault/<id>, לא /starter — /, /mobile וכו') מפנה בעצמו ל-/vault/<id> (יש
-  // כספת-אחרונה), ל-/vault/<DEMO_ID> (אין כספת-אחרונה אבל demoVault.autoOpen
-  // דולק — docs/plans/demo-origin-split.md §4 Commit 2), או ל-/starter (אף
-  // אחד מהשניים) — location.replace (לא push) כדי שלא ייווצר loop ב-back.
+  // כספת-אחרונה), ל-/vault/<DEMO_ID>/Welcome (אין כספת-אחרונה אבל
+  // demoVault.autoOpen דולק — docs/plans/demo-origin-split.md §4 Commit 2,
+  // note-path עודכן ל-/Welcome ב-Commit 6 אחרי calev-heavy, ראה שם), או
+  // ל-/starter (אף אחד מהשניים) — location.replace (לא push) כדי שלא ייווצר
+  // loop ב-back.
   if (forceStarter) {
     // מנקה מפתח-בחירה פעם-אחת (בלי reload נוסף — אין loop) כדי שהבאנדל
     // הנייטיב לא ינסה auto-open כשהוא רץ מיד למטה (מסך-הפתיחה, no-vault).
@@ -126,7 +128,13 @@ const MOBILE_SCRIPTS = [
       // מבטל גם autoOpen).
       var d = window.__owConfig && window.__owConfig.demoVault;
       if (d && d.autoOpen === true && d.enabled !== false) {
-        location.replace('/vault/' + encodeURIComponent(DEMO_ID));
+        // /Welcome (docs/plans/demo-origin-split.md §4 Commit 6, calev-heavy
+        // runtime-gate finding 1): a bare /vault/<demoId> lands on Obsidian's
+        // empty "New tab" screen — Welcome.md exists but isn't open. .obsidian/
+        // (workspace.json, app.json's defaultViewMode) is deliberately never
+        // seeded (finding 1), so routing straight to the note is the only
+        // remaining way to actually render it, zero clicks, as §1 promises.
+        location.replace('/vault/' + encodeURIComponent(DEMO_ID) + '/Welcome');
       } else {
         location.replace('/starter');
       }
@@ -920,7 +928,12 @@ const MOBILE_SCRIPTS = [
       // הזה, לא עוד ניחוש שלישי.
       btn.setAttribute('data-ow-injected', 'demo-vault');
       btn.type = 'button';
-      btn.textContent = 'כספת דמו';
+      // English (docs/plans/demo-origin-split.md §4 Commit 6, calev-heavy
+      // runtime-gate finding — §6 "כל טקסט-מבקר באנגלית"): this slice is
+      // what makes the demo build a public English-only origin, so the
+      // pre-existing Hebrew text becomes visitor-facing. Text only — see
+      // the comments above/below for why nothing else here changes.
+      btn.textContent = 'Demo vault';
       // §3.6ג (calev-heavy NO-GO round 2, ממצא 5): ב-390×844 (mobile) ה-footer
       // (`.mod-version`, §3.4) יושב קבוע ב-y≈787 מתוך גובה-viewport 844 — נמדד
       // ישירות (boundingBox) בכל שלבי-האשף, לא רק "לפעמים נמוך יותר". הכפתור
