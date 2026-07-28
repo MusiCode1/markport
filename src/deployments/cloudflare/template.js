@@ -92,6 +92,10 @@ This is a live demo of **obsidian-web**, an open-source project that runs Obsidi
 > This is an educational proof-of-concept, not an official Obsidian product. Not affiliated with or endorsed by [Obsidian](https://obsidian.md) or Dynalist Inc.
 
 #demo #welcome
+
+---
+
+This is a demo vault; to create your own vault → **[obsidian-online.pages.dev](https://obsidian-online.pages.dev)**
 `],
 
   ['How It Works.md', `# How It Works

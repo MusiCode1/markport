@@ -2,6 +2,30 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — Commit 4: קישור מהדמו לפריסה הראשית
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/template.js`** — שורה אחת (+ separator) בתחתית
+תוכן `Welcome.md` (ב-`TEMPLATE_FILES`, לא `user-data/demo-vault/Welcome.md` —
+זו כספת-פיתוח מקומית נפרדת שאינה חלק מפריסת ה-CF, לא נגעתי בה): "This is a
+demo vault; to create your own vault → **obsidian-online.pages.dev**"
+(אנגלית, כמו כל תוכן הדמו). ה-URL — `https://obsidian-online.pages.dev` —
+אושר ע"י המשתמשת (§9 שאלה 2). קישור-כתוכן בלבד, אפס קוד/CSS — עובר
+אוטומטית דרך מנגנון הזריעה-מחדש (Commit 3) כמו כל שינוי אחר ב-`template.js`.
+
+### בדיקות
+
+approach: none (תוכן טקסט טהור). `node --check` + בניית דמו עברו (`npm run
+build`/`OW_PROFILE=demo npm run build` — exit 0). אימות תוכן:
+`example-vault.json` שנבנה מכיל את הקישור בסוף `Welcome.md`. `git status`
+מאשר ששונה קובץ אחד בלבד (`template.js`) — `user-data/demo-vault/Welcome.md`
+לא נגע. `npm test` 96/96, `bun test test/*.test.js` 34/34 — regression-free.
+
+### חריגות
+
+אין.
+
 ## 2026-07-28 — slice/demo-origin-split — תיקון calev-heavy NO-GO (Commit 3 phase) — 2 ממצאים
 
 דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-commit3-calev.md`
