@@ -1388,8 +1388,44 @@ const MOBILE_SCRIPTS = [
       // (למעלה): לעולם לא בכספת עם תוכן-משתמש קיים (seed-demo §0/§3ב).
       if (isVaultEmptyForSeed && seedStore && window.__owSeedExampleVault
           && (window.__owConfig && window.__owConfig.seedExampleContent)) {
-        try { await window.__owSeedExampleVault.seedExampleVault(seedStore); }
+        try {
+          await window.__owSeedExampleVault.seedExampleVault(seedStore);
+          // 🔴 אביגיל ממצא 7 — כתיבת המפתח מתווספת גם כאן, מיד אחרי הזריעה
+          // הראשונה המוצלחת: בלי זה, בבוט הראשון של הדמו localStorage ריק,
+          // הבלוק החדש למטה (re-seed-on-change) רואה "שונה" ורץ force:true
+          // מיד אחרי הזריעה הראשונה — זריעה כפולה. 🔴 ולכתיבה הזו חייב להיות
+          // אותו guard VAULT_ID===DEMO_ID (אביגיל סבב 2, ממצא 1): הבלוק הזה
+          // רץ על **כל** כספת local/folder ריקה, לא רק הדמו — בלי ה-guard,
+          // כספת local ריקה שהמבקר יצר לעצמו הייתה כותבת את ה-hash הנוכחי
+          // ל-localStorage['ow-demo-content'] (מפתח אחד לכל המקור), ומסמנת
+          // בטעות את כספת-הדמו האמיתית כ"כבר מעודכנת" — זריעה-מחדש לא הייתה
+          // רצה לעולם, באג שקט שאין לו טסט/DoD חוץ מה-guard הזה.
+          if (VAULT_ID === DEMO_ID && window.__owDemoContent) {
+            try { localStorage.setItem('ow-demo-content', window.__owDemoContent); } catch (e) {}
+          }
+        }
         catch (e) { console.warn('[ow] seed example vault failed', e); }
+      }
+
+      // ── re-seed demo content on change (docs/plans/demo-origin-split.md §4
+      // Commit 3) — בלוק חדש ונפרד, לא מתערבב עם הזריעה-הראשונה למעלה. כשה-
+      // hash שהוזרק בבניה (window.__owDemoContent, Commit 1) שונה מהמסומן
+      // ב-localStorage (בוט קודם, אחרי template.js השתנה בין הבניות), דורס
+      // מחדש רק את קבצי-התבנית (force:true — .obsidian/ עדיין מדולג, קבצי
+      // המבקר עצמו לא נוגעים). רק בכספת הדמו (VAULT_ID===DEMO_ID) — כספת
+      // אחרת של המשתמש לעולם לא נדרסת. כישלון לא חוסם את הפתיחה ולא מעדכן
+      // את המפתח, כדי שהניסיון יחזור בבוט הבא (try/catch+console.warn, כמו
+      // הבלוק שמעליו).
+      if (seedStore && window.__owSeedExampleVault
+          && (window.__owConfig && window.__owConfig.seedExampleContent)
+          && !(window.__owConfig && window.__owConfig.demoVault && window.__owConfig.demoVault.enabled === false)
+          && VAULT_ID === DEMO_ID
+          && window.__owDemoContent
+          && window.__owDemoContent !== localStorage.getItem('ow-demo-content')) {
+        try {
+          await window.__owSeedExampleVault.seedExampleVault(seedStore, { force: true });
+          localStorage.setItem('ow-demo-content', window.__owDemoContent);
+        } catch (e) { console.warn('[ow] re-seed example vault (content changed) failed', e); }
       }
 
       setStatus('Loading Obsidian mobile...');

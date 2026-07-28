@@ -2,6 +2,76 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — Commit 3: זריעה-מחדש כשהתוכן השתנה
+
+### מה בוצע? (TDD — red-green)
+
+**`src/client-mobile/seed-example-vault.js`** — `seedExampleVault(store, opts)`
+מקבל `opts.force`: כש-`true`, מדלג על שער ה-stat (`Welcome.md` קיים? → לא
+נכתב שוב) וכותב מחדש את כל קבצי-התבנית. הדילוג על `.obsidian/` (finding 1)
+**נשאר גם ב-force** — לא נפתח מחדש (קונפיג הפלאגינים בבעלות בלעדית של
+seedSystemPlugins). רק paths שקיימים בתבנית נכתבים — קובץ שהמבקר יצר בעצמו
+(לא בתבנית) אף פעם לא נכתב/נמחק, force או לא.
+
+**`src/client-mobile/test/seed-example-vault.test.js`** — 3 טסטים חדשים
+(RED תחילה — נכשלו מול הקוד הישן, ואז GREEN אחרי המימוש): force דורס
+`Welcome.md` קיים; force עדיין מדלג על `.obsidian/`; force לא נוגע בקובץ
+שאינו בתבנית (`My Note.md`). 5 הטסטים הקיימים נשארו ירוקים ללא שינוי.
+
+**`src/client-mobile/boot.js`** — שני שינויים בבלוק הזריעה הקיים + בלוק חדש:
+
+1. 🔴 **זריעה כפולה בבוט הראשון (אביגיל ממצא 7)**: כתיבת המפתח
+   `localStorage['ow-demo-content'] = window.__owDemoContent` נוספה **בתוך**
+   הבלוק הקיים, מיד אחרי `seedExampleVault(seedStore)` שמצליחה — בלעדי זה,
+   בבוט הראשון של הדמו `localStorage` ריק, הבלוק החדש (למטה) היה רואה "שונה"
+   ומריץ `force:true` מיד אחרי הזריעה הראשונה (זריעה כפולה מיותרת).
+2. 🔴 **guard על הכתיבה ההיא (אביגיל סבב 2, ממצא 1)**: `VAULT_ID===DEMO_ID`
+   — הבלוק הקיים רץ על **כל** כספת local/folder ריקה (גם כספת שהמבקר יצר
+   לעצמו בדומיין הדמו — זו התנהגות פרה-קיימת, לא תוקנה כאן, ראה "חריגות"
+   למטה). בלי ה-guard על הכתיבה, כספת כזו הייתה כותבת את ה-hash הנוכחי
+   ל-`ow-demo-content` (מפתח אחד לכל המקור, לא פר-כספת) ⇒ כשכספת הדמו
+   האמיתית נטענת, ה-hash כבר "מסומן כמעודכן" והזריעה-מחדש לא הייתה רצה
+   לעולם — באג שקט שאין לו טסט/DoD, רק ה-guard.
+3. **בלוק חדש ונפרד** מיד אחרי הבלוק הקיים: כשכל התנאים מתקיימים (`seedStore`,
+   `window.__owSeedExampleVault`, `seedExampleContent`, `demoVault.enabled!==false`,
+   `VAULT_ID===DEMO_ID`, `window.__owDemoContent` קיים, ושונה מהמסומן
+   ב-`localStorage`) — קורא ל-`seedExampleVault(seedStore,{force:true})` ואז
+   מעדכן את המפתח. כישלון לא חוסם פתיחה ולא מעדכן מפתח (retry בבוט הבא).
+
+### בדיקות
+
+`cd src/client-mobile && npm test` — 90/90 ירוק (87 + 3 חדשים).
+`bun test test/*.test.js` — 34/34 ירוק (regression-free).
+
+**ידני (playwright-cli, verifier-phase לפי §8 — הקומיט היחיד שכותב לכספת של
+מבקר)**: בנוי `OW_PROFILE=demo`, שרת מקומי (`wrangler pages dev`), עריכת
+`app.vault` API ישירות (מהיר יותר מקליקים ב-UI, אותה תוצאה):
+- **DoD#5**: ערכתי `Welcome.md`, יצרתי `My Note.md`, שיניתי סמן-בדיקה בתוכן
+  `Welcome.md` ב-`template.js` (בוטל אחרי הבדיקה — `git diff` ריק), בניתי
+  מחדש, `reload()` → `Welcome.md` חדש (התוכן המעודכן), `My Note.md` שרד
+  ללא שינוי. `ow-demo-content` ב-localStorage התעדכן ל-hash החדש.
+- **DoD#6**: ערכתי `Welcome.md`, `reload()` פעמיים ברצף בלי לשנות template →
+  העריכה שרדה (אין דריסה מיותרת — ה-hash לא השתנה אז התנאי לא מתקיים).
+- **DoD#11**: יצרתי כספת local אמיתית (`/starter` → Create new vault → App
+  storage) על בניית הדמו, הוספתי `My Real Note.md`, `reload()` → הקובץ שרד
+  ללא שינוי, `ow-demo-content` ב-localStorage לא הושפע (ה-guard
+  `VAULT_ID===DEMO_ID` על שתי נקודות-הכתיבה חוסם כל מגע בכספת הזאת).
+צילום: `/tmp/demo-origin-split/phase3-reseed-verified.png`.
+
+### חריגות
+
+**לא תוקן, מדווח במפורש**: הבלוק ה**קיים** (מלפני הסלייס הזה) שמזרע תוכן-דמו
+לכל כספת local/folder ריקה על בניית הדמו (לא רק לכספת הדמו — `isVaultEmptyForSeed`
++ `config.seedExampleContent`, בלי `VAULT_ID===DEMO_ID`) ממשיך לעבוד כך: כספת
+local חדשה שהמבקר יוצר לעצמו על בניית הדמו **כן** מקבלת את `Welcome.md`/`Features/*`
+בזריעה-ראשונית (נמדד ישירות ב-DoD#11 — הכספת שיצרתי קיבלה `Welcome.md` מיד
+עם היצירה). הבריף מציין זאת במפורש כמצב-קיים ("הבלוק הקיים רץ על כל כספת
+local/folder ריקה — גם כספת שהמבקר יצר לעצמו") ומבקש guard רק על **נקודת
+הכתיבה ל-localStorage**, לא על הזריעה עצמה — כך יישמתי. DoD#11 (כפי שנוסח)
+בודק את מה שקורה **אחרי** שכבר יש קובץ בכספת (לא ריקה יותר) ועובר: לא תוקן,
+לא סטייה מהבריף, אך מדווח לביקורת calev-heavy הסופית לוודא שההבנה שלי
+תואמת את הכוונה.
+
 ## 2026-07-28 — slice/demo-origin-split — Commit 2: פתיחה-אוטומטית של הדמו
 
 ### מה בוצע?

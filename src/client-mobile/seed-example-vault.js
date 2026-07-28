@@ -19,20 +19,33 @@
  * this deployment, so seeding them would cause load errors anyway. The fix:
  * seed ONLY vault content, skip the entire `.obsidian/` subtree — plugin/
  * layout config stays exclusively owned by seedSystemPlugins.
+ *
+ * opts.force (docs/plans/demo-origin-split.md §4 Commit 3): skips the
+ * idempotent stat-gate below and re-writes every template file — used by
+ * boot.js's re-seed-on-content-change block when window.__owDemoContent (a
+ * hash of the deployed template) no longer matches what this vault was last
+ * seeded with. The `.obsidian/` skip above still applies under force — it is
+ * NOT reopened by this option (finding 1 stays in force; plugin/layout config
+ * remains seedSystemPlugins' exclusively). Only paths present in the
+ * template are touched; anything the visitor created on their own (not a
+ * template path) is never written to or deleted, force or not.
  */
 (function () {
   'use strict';
 
-  async function seedExampleVault(store) {
-    let already = false;
-    try { await store.stat({ path: 'Welcome.md' }); already = true; } catch (_) {}   // idempotent gate
-    if (already) return;
+  async function seedExampleVault(store, opts) {
+    const force = !!(opts && opts.force);
+    if (!force) {
+      let already = false;
+      try { await store.stat({ path: 'Welcome.md' }); already = true; } catch (_) {}   // idempotent gate
+      if (already) return;
+    }
 
     const files = await fetch('/example-vault.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
     if (!files) return;   // מקומי (אין example-vault.json) / רשת נכשלה → דלג
 
     for (const [path, content] of files) {
-      if (path.indexOf('.obsidian/') === 0 || path.indexOf('/.obsidian/') !== -1) continue;   // דלג על config (finding 1+3)
+      if (path.indexOf('.obsidian/') === 0 || path.indexOf('/.obsidian/') !== -1) continue;   // דלג על config (finding 1+3), גם ב-force
       // writeFile יוצר תיקיות-אב recursive (אומת opfs-store.js:18, Features/*)
       await store.writeFile({ path: path, data: content, encoding: 'utf8' });
     }

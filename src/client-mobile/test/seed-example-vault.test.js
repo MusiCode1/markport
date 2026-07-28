@@ -115,3 +115,44 @@ test('seedExampleVault does not reject when fetch throws (network failure)', asy
   await assert.doesNotReject(seedExampleVault(store));
   assert.equal(store.files.size, 0);
 });
+
+// ── opts.force (docs/plans/demo-origin-split.md §4 Commit 3) ────────────────
+// force:true skips the stat-gate and re-writes every template file, used by
+// boot.js's re-seed-on-content-change block (window.__owDemoContent hash
+// mismatch) — NOT by the first-visit seed, which still uses the default gate.
+
+test('seedExampleVault({force:true}) writes template files even though Welcome.md already exists', async (t) => {
+  const origFetch = global.fetch;
+  global.fetch = makeFakeFetch(EXAMPLE_FILES);
+  t.after(() => { global.fetch = origFetch; });
+
+  const store = makeFakeStore({ 'Welcome.md': '# stale welcome (old template)' });
+  await seedExampleVault(store, { force: true });
+
+  assert.equal(store.files.get('Welcome.md'), '# Welcome', 'force rewrites the stale template file');
+  assert.equal(store.files.get('How It Works.md'), '# How It Works');
+});
+
+test('seedExampleVault({force:true}) still skips .obsidian/ entirely (finding 1 holds under force too)', async (t) => {
+  const origFetch = global.fetch;
+  global.fetch = makeFakeFetch(EXAMPLE_FILES);
+  t.after(() => { global.fetch = origFetch; });
+
+  const store = makeFakeStore({ 'Welcome.md': '# stale' });
+  await seedExampleVault(store, { force: true });
+
+  assert.equal(store.files.has('.obsidian/app.json'), false);
+  assert.equal(store.files.has('.obsidian/community-plugins.json'), false);
+});
+
+test('seedExampleVault({force:true}) does not touch a visitor-created file outside the template', async (t) => {
+  const origFetch = global.fetch;
+  global.fetch = makeFakeFetch(EXAMPLE_FILES);
+  t.after(() => { global.fetch = origFetch; });
+
+  const store = makeFakeStore({ 'Welcome.md': '# stale', 'My Note.md': '# my own note, not in the template' });
+  await seedExampleVault(store, { force: true });
+
+  assert.equal(store.files.get('My Note.md'), '# my own note, not in the template', 'visitor file untouched — not deleted, not overwritten');
+  assert.equal(store.files.get('Welcome.md'), '# Welcome', 'template file still refreshed');
+});
