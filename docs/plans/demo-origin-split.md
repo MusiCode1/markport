@@ -2,9 +2,13 @@
 
 > **‏תאריך**: 2026-07-28
 > **‏סוג מסמך**: ‏בריף ביצועי לסלייס
-> **‏סטטוס**: ‏הושלם (אליעזר, 2026-07-28) — 7 commits על `slice/demo-origin-split`
-> (`966bf04`..`31c55c2`), כולל תיקון calev-heavy NO-GO אחד (2 ממצאים, Commit 3
-> phase). ‏ראה `docs/walkthrough.md` לפירוט מלא פר-commit.
+> **‏סטטוס**: ‏הושלם (אליעזר, 2026-07-29) — 10 commits על `slice/demo-origin-split`
+> (`966bf04`..`a5f735b`), כולל תיקון calev-heavy NO-GO אחד (2 ממצאים, Commit 3
+> phase) וסבב runtime-gate (Commit 6, אחרי calev-heavy PARTIAL). **calev-heavy
+> round 2 (דלתא, `demo-origin-split-round2-calev.md`): GO** — 6/6 פריטי-דלתא,
+> 0 regressions, 0 חוסמי-merge (3 ממצאים מוסרים להכרעת מרדכי: `_headers` תחת
+> Pages Advanced mode, חפיפת הכפתור לבורר-השפה במובייל, וענף ה-resume שלא
+> קיבל `/Welcome`). ‏ראה `docs/walkthrough.md` לפירוט מלא פר-commit.
 > **‏אימות אביגיל**: ✅ **READY** (‏סבב 3). ‏סבב 1: NEEDS-REWORK, 11 ‏ממצאים · ‏סבב 2:
 > USABLE-AFTER-FIX, 3 ‏ממצאים · ‏סבב 3: 0 ‏ממצאים.
 > ‏דוחות (‏**‏מחוץ לריפו** — `reports/` ‏היא תיקייה-אחות של `dev/`, ‏לא נתיב יחסי בגיט):
