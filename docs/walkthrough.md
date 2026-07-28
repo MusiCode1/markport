@@ -2,6 +2,64 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — תיקון calev-heavy NO-GO (Commit 3 phase) — 2 ממצאים
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-commit3-calev.md`
+(NO-GO, 4 ממצאים: 2 באגים אמיתיים + 2 הערות-ניסוח שאינן קוד — DoD#4/Commit 2
+כבר דווח כחריגה בשעתו, ו-"זריעת דמו לכל כספת local ריקה" — כלב אישר במפורש
+שזו התנהגות פרה-קיימת מוכרת בבריף, לא באג חדש). תוקנו שני הבאגים באותו phase
+(1-2 ממצאים → תיקון, לא escalation):
+
+### NBug1 (blocker) — זריעה-מחדש אחרי redeploy מגישה תוכן ישן
+
+**הבעיה**: ה-Service Worker (`sw.js`) מגיש GET-ים סטטיים cache-first, ממופתח
+לפי `BUILD_ID`. מיד אחרי redeploy, ה-SW **הקודם** עדיין עשוי לשלוט בעמוד
+(takeover אסינכרוני — `skipWaiting`+`clients.claim` לא מיידיים) — כך ש-
+`fetch('/example-vault.json')` בבלוק הזריעה-מחדש (Commit 3) יכול לפגוע ב-
+cache **הישן** ולקבל את תוכן ה-build **הקודם**, בעוד `window.__owDemoContent`
+(שנקרא מ-`index.html` החדש) כבר מדווח על ה-hash **החדש** — התוכן הישן נכתב,
+המפתח נחתם עם ה-hash החדש, והמצב **קבוע** (הזריעה-מחדש לא תרוץ שוב לעבור-
+build הזה). נמדד ע"י calev: 2 מ-3 ריצות.
+
+**התיקון**: `seedExampleVault(store, opts)` מקבל `opts.cacheBust` — כשניתן,
+מוסיף `?v=<cacheBust>` ל-URL. cache-first תואם URL מדויק בלבד ⇒ query
+חדש = תמיד cache miss (בין אם ה-SW הישן או החדש מיירט) ⇒ fetch רשת אמיתי,
+ללא תלות באיזה SW שולט. `boot.js` מעביר `cacheBust: window.__owDemoContent`
+בבלוק הזריעה-מחדש (לא בבלוק הזריעה-הראשונה — שם אין בעיית cache-staleness
+מתועדת, ה-URL נשאר כפי שהיה, backward-compatible).
+
+**אימות מחדש (playwright-cli, אותו תרחיש בדיוק שבו calev נכשל)**: build A →
+טעינה, עריכת `Welcome.md`, יצירת `My Note.md` → שינוי `Welcome.md` ב-
+`template.js` (בוטל מיד אחרי, `git diff` ריק) → build B (hash שונה) →
+החלפת הארטיפקט המוגש **על אותו origin** (מדמה redeploy אמיתי) → **5 ריצות
+reload רצופות**: כל חמש הראו את תוכן ה-build **החדש** (`REDEPLOY-MARKER-B`),
+`My Note.md` שרד בכולן, `ow-demo-content` תואם את ה-hash החדש.
+
+### NBug2 — כשל-fetch שקט מעדכן את המפתח בכל זאת
+
+**הבעיה**: `seedExampleVault` לא הבחינה בין "כתב קבצים בהצלחה" ל"דילג/נכשל
+בשקט" (gate/fetch-failure — `if (!files) return;` בלי לזרוק). שני הקוראים
+ב-`boot.js` עדכנו את `ow-demo-content` ללא תנאי אחרי הקריאה, ולכן כישלון
+שקט (רשת נופלת, 500 וכו') **עדיין** סימן את הניסיון כ"בוצע" — בניגוד מפורש
+לבריף ("במקרה כישלון אל תעדכן את המפתח — שהניסיון יחזור בבוט הבא").
+
+**התיקון**: `seedExampleVault` עכשיו מחזירה `true` רק כשבאמת כתבה קבצים,
+`false` בכל נתיב-דילוג. שני הקוראים ב-`boot.js` מעדכנים את המפתח **רק**
+כש-`true` חוזר.
+
+**אימות מחדש**: ניקוי כל ה-SW caches (כדי לא לפגוע ב-cache-hit מריצות
+קודמות), `ow-demo-content` נקבע ידנית ל-`FORCE_MISMATCH`, `route()` על
+`**/example-vault.json*` → status 500 → reload → `ow-demo-content` **נשאר**
+`FORCE_MISMATCH` (לא עודכן), `My Note.md` שרד. הסרת ה-route + reload נוסף →
+המפתח התעדכן בהצלחה ל-hash הנכון (retry עבד).
+
+### בדיקות (TDD, red-green)
+
+6 טסטים חדשים ב-`seed-example-vault.test.js` (RED תחילה מול הקוד הישן):
+ערך-חזרה `true`/`false` לפי הצלחה/דילוג/כישלון-fetch/כישלון-רשת, ו-
+`cacheBust` מוסיף `?v=` ל-URL (עם ובלי — backward compat). `npm test`:
+96/96 (90 + 6 חדשים). `bun test test/*.test.js`: 34/34.
+
 ## 2026-07-28 — slice/demo-origin-split — Commit 3: זריעה-מחדש כשהתוכן השתנה
 
 ### מה בוצע? (TDD — red-green)

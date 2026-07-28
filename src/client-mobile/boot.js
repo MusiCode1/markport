@@ -1389,7 +1389,12 @@ const MOBILE_SCRIPTS = [
       if (isVaultEmptyForSeed && seedStore && window.__owSeedExampleVault
           && (window.__owConfig && window.__owConfig.seedExampleContent)) {
         try {
-          await window.__owSeedExampleVault.seedExampleVault(seedStore);
+          // seedExampleVault resolves true only when it actually wrote files
+          // (calev-heavy Commit-3 phase-verify NBug2 —
+          // reports/obsidian-web/demo-origin-split-commit3-calev.md): a
+          // silent skip (missing/failed /example-vault.json fetch) must NOT
+          // be mistaken for success below.
+          var seeded1 = await window.__owSeedExampleVault.seedExampleVault(seedStore);
           // 🔴 אביגיל ממצא 7 — כתיבת המפתח מתווספת גם כאן, מיד אחרי הזריעה
           // הראשונה המוצלחת: בלי זה, בבוט הראשון של הדמו localStorage ריק,
           // הבלוק החדש למטה (re-seed-on-change) רואה "שונה" ורץ force:true
@@ -1399,8 +1404,9 @@ const MOBILE_SCRIPTS = [
           // כספת local ריקה שהמבקר יצר לעצמו הייתה כותבת את ה-hash הנוכחי
           // ל-localStorage['ow-demo-content'] (מפתח אחד לכל המקור), ומסמנת
           // בטעות את כספת-הדמו האמיתית כ"כבר מעודכנת" — זריעה-מחדש לא הייתה
-          // רצה לעולם, באג שקט שאין לו טסט/DoD חוץ מה-guard הזה.
-          if (VAULT_ID === DEMO_ID && window.__owDemoContent) {
+          // רצה לעולם, באג שקט שאין לו טסט/DoD חוץ מה-guard הזה. seeded1
+          // (למעלה): לא לסמן "בוצע" על סמך ניסיון שדולג/נכשל בשקט (NBug2).
+          if (seeded1 && VAULT_ID === DEMO_ID && window.__owDemoContent) {
             try { localStorage.setItem('ow-demo-content', window.__owDemoContent); } catch (e) {}
           }
         }
@@ -1413,9 +1419,13 @@ const MOBILE_SCRIPTS = [
       // ב-localStorage (בוט קודם, אחרי template.js השתנה בין הבניות), דורס
       // מחדש רק את קבצי-התבנית (force:true — .obsidian/ עדיין מדולג, קבצי
       // המבקר עצמו לא נוגעים). רק בכספת הדמו (VAULT_ID===DEMO_ID) — כספת
-      // אחרת של המשתמש לעולם לא נדרסת. כישלון לא חוסם את הפתיחה ולא מעדכן
-      // את המפתח, כדי שהניסיון יחזור בבוט הבא (try/catch+console.warn, כמו
-      // הבלוק שמעליו).
+      // אחרת של המשתמש לעולם לא נדרסת. כישלון (או ניסיון שדולג בשקט — seeded2
+      // false, NBug2) לא חוסם את הפתיחה ולא מעדכן את המפתח, כדי שהניסיון
+      // יחזור בבוט הבא (try/catch+console.warn, כמו הבלוק שמעליו). cacheBust
+      // (NBug1, אותו דוח): מעביר את ה-hash החדש שכבר בידינו כ-query string —
+      // ה-fetch עצמו יוצא נגד URL שמעולם לא נכנס ל-cache (של ה-SW הישן
+      // *או* החדש), כך ש-service worker קודם שעדיין שולט בעמוד (redeploy,
+      // takeover אסינכרוני) לא יכול להחזיר hit על תוכן ה-build הקודם.
       if (seedStore && window.__owSeedExampleVault
           && (window.__owConfig && window.__owConfig.seedExampleContent)
           && !(window.__owConfig && window.__owConfig.demoVault && window.__owConfig.demoVault.enabled === false)
@@ -1423,8 +1433,8 @@ const MOBILE_SCRIPTS = [
           && window.__owDemoContent
           && window.__owDemoContent !== localStorage.getItem('ow-demo-content')) {
         try {
-          await window.__owSeedExampleVault.seedExampleVault(seedStore, { force: true });
-          localStorage.setItem('ow-demo-content', window.__owDemoContent);
+          var seeded2 = await window.__owSeedExampleVault.seedExampleVault(seedStore, { force: true, cacheBust: window.__owDemoContent });
+          if (seeded2) localStorage.setItem('ow-demo-content', window.__owDemoContent);
         } catch (e) { console.warn('[ow] re-seed example vault (content changed) failed', e); }
       }
 

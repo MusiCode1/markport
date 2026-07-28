@@ -44,7 +44,9 @@ const EXAMPLE_FILES = [
 
 function makeFakeFetch(files) {
   return async function fakeFetch(url) {
-    if (url === '/example-vault.json') return { ok: true, json: async () => files };
+    if (url === '/example-vault.json' || url.indexOf('/example-vault.json?') === 0) {
+      return { ok: true, json: async () => files };
+    }
     return { ok: false };
   };
 }
@@ -155,4 +157,66 @@ test('seedExampleVault({force:true}) does not touch a visitor-created file outsi
 
   assert.equal(store.files.get('My Note.md'), '# my own note, not in the template', 'visitor file untouched — not deleted, not overwritten');
   assert.equal(store.files.get('Welcome.md'), '# Welcome', 'template file still refreshed');
+});
+
+// ── return value + opts.cacheBust (calev-heavy NO-GO, Commit 3 phase-verify —
+// reports/obsidian-web/demo-origin-split-commit3-calev.md, NBug1 + NBug2) ──
+
+test('seedExampleVault resolves true when it actually writes files', async (t) => {
+  const origFetch = global.fetch;
+  global.fetch = makeFakeFetch(EXAMPLE_FILES);
+  t.after(() => { global.fetch = origFetch; });
+
+  const result = await seedExampleVault(makeFakeStore());
+  assert.equal(result, true);
+});
+
+test('seedExampleVault resolves false (not true) when the gate skips it (already seeded, no force)', async (t) => {
+  const origFetch = global.fetch;
+  global.fetch = makeFakeFetch(EXAMPLE_FILES);
+  t.after(() => { global.fetch = origFetch; });
+
+  const result = await seedExampleVault(makeFakeStore({ 'Welcome.md': '# already here' }));
+  assert.equal(result, false);
+});
+
+test('seedExampleVault resolves false (not true) when /example-vault.json fetch fails — NBug2: caller must not mark the attempt as done', async (t) => {
+  const origFetch = global.fetch;
+  global.fetch = async () => ({ ok: false, status: 500 });
+  t.after(() => { global.fetch = origFetch; });
+
+  const result = await seedExampleVault(makeFakeStore());
+  assert.equal(result, false);
+});
+
+test('seedExampleVault resolves false (not true) when fetch throws (network failure)', async (t) => {
+  const origFetch = global.fetch;
+  global.fetch = async () => { throw new Error('network down'); };
+  t.after(() => { global.fetch = origFetch; });
+
+  const result = await seedExampleVault(makeFakeStore());
+  assert.equal(result, false);
+});
+
+test('seedExampleVault(store, {force:true, cacheBust}) appends ?v=<cacheBust> to the example-vault.json request — NBug1: a still-controlling PREVIOUS service worker caches that URL cache-first, so a fixed URL can silently serve a stale (pre-redeploy) payload even though the new build hash already differs', async (t) => {
+  const requestedUrls = [];
+  const origFetch = global.fetch;
+  global.fetch = async (url) => { requestedUrls.push(url); return makeFakeFetch(EXAMPLE_FILES)(url); };
+  t.after(() => { global.fetch = origFetch; });
+
+  await seedExampleVault(makeFakeStore({ 'Welcome.md': '# stale' }), { force: true, cacheBust: 'a165e8e61a880d38' });
+
+  assert.equal(requestedUrls.length, 1);
+  assert.equal(requestedUrls[0], '/example-vault.json?v=a165e8e61a880d38');
+});
+
+test('seedExampleVault(store, {force:true}) without cacheBust still uses the plain URL (backward compatible)', async (t) => {
+  const requestedUrls = [];
+  const origFetch = global.fetch;
+  global.fetch = async (url) => { requestedUrls.push(url); return makeFakeFetch(EXAMPLE_FILES)(url); };
+  t.after(() => { global.fetch = origFetch; });
+
+  await seedExampleVault(makeFakeStore({ 'Welcome.md': '# stale' }), { force: true });
+
+  assert.equal(requestedUrls[0], '/example-vault.json');
 });
