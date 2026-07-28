@@ -80,6 +80,17 @@ fi
 echo "  copying index.html..."
 cp "$MAIN_DIR/src/client-mobile/index.html" "$PUBLIC_DIR/index.html"
 
+# Pages Functions (advanced mode). Without this the deploy is static-only and
+# POST /api/proxy-request returns 405 — community-plugin installs break, and so
+# does the one automatic deprecation check Obsidian makes when a vault loads.
+# Directory form (not a single _worker.js file) because index.js does a relative
+# `import { handleProxy } from './proxy-worker.js'`, which the single-file form
+# does not support.
+echo "  copying _worker.js/ (Pages Functions)..."
+mkdir -p "$PUBLIC_DIR/_worker.js"
+cp "$CF_DIR/index.js"        "$PUBLIC_DIR/_worker.js/index.js"
+cp "$CF_DIR/proxy-worker.js" "$PUBLIC_DIR/_worker.js/proxy-worker.js"
+
 # PWA web manifest at the root (scope "/"); icons ride along under
 # public/client-mobile/icons/ via the client-mobile copy above.
 cp "$MAIN_DIR/src/client-mobile/manifest.webmanifest" "$PUBLIC_DIR/manifest.webmanifest"
