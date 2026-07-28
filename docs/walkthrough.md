@@ -2,6 +2,57 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — Commit 5: סקריפטי פריסה + שומר
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/scripts/guard-deploy-target.sh`** (חדש) —
+`bash scripts/guard-deploy-target.sh <main|demo> [artifact-dir]`. בודק את
+`index.html` שנבנה מול העוגן **`"demoVault":{"enabled":true`** (עם שם
+המפתח — אביגיל ממצא 4: `"enabled":true` לבדו נותן false-positive גם על
+הארטיפקט הראשי, כי `deploy-config.json` מכיל
+`"obsidian-web-layout":{"install":true,"enabled":true}`). `target=main` +
+ארטיפקט-דמו, או `target=demo` + ארטיפקט-ראשי → `exit 1` עם הודעה מפורשת.
+ארגומנט חסר/שגוי → `exit 1` גם כן.
+
+**`src/deployments/cloudflare/package.json`** — 4 מפתחות (2 זוגות build+guard,
+אחד לכל פרופיל): `build:demo` (הסניפט המדויק מהבריף), `predeploy`
+(`npm run build && bash scripts/guard-deploy-target.sh main` — hook מובנה
+של npm, רץ **אוטומטית** לפני `npm run deploy`), `predeploy:demo` (אותו דבר
+לפרופיל הדמו), ו-`deploy`/`deploy:demo` שצומצמו ל-`wrangler deploy` בלבד
+(הבנייה עברה ל-pre-hook, כדי שהשומר יבדוק תמיד את הארטיפקט **הטרי ביותר**
+ולא שאריות מבנייה קודמת — סדר-הפעולות היה שגוי בטיוטה הראשונה: guard לפני
+build היה בודק ארטיפקט ישן; תוקן לפני commit).
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — 5 טסטים
+חדשים לשומר: חוסם דמו→main, מאשר דמו→demo, חוסם main→demo, מאשר main→main,
+דוחה ארגומנט חסר.
+
+**`src/deployments/cloudflare/README.md`** — סעיף "Deploy" הורחב: טבלת שני
+הפרופילים (main/demo, קובץ-קונפיג, חוויית-מבקר), פקודות `build:demo`/
+`deploy`/`deploy:demo`, הערה מפורשת ש**טופולוגיית היעד עצמה** (פרויקט CF
+שני, דומיין) **לא** נקבעה בסלייס הזה (`wrangler.toml` לא נגעתי בו — מחוץ
+ל-scope, §2), וסעיף שמסביר את השומר + העוגן המדויק.
+
+### בדיקות
+
+`bun test test/*.test.js` — 39/39 ירוק (34 + 5 חדשים). `npm test`
+(client-mobile) — 96/96, regression-free.
+
+**‏פקודות ה-deploy עצמן (`wrangler deploy` האמיתי) לא רצו** — כנדרש בבריף.
+מה שכן הרצתי (בטוח, לא מפרסם כלום): `npm run predeploy` ו-
+`npm run predeploy:demo` בנפרד — שניהם עברו (`exit 0`, "guard: artifact
+matches target ... — OK") ומוכיחים שה-hook השרשור בונה+שומר עובד מקצה
+לקצה בלי לגעת ב-`wrangler deploy` עצמו. גם: DoD#2 (שתי הבניות, exit 0),
+DoD#9 (`OW_PROFILE=nope` → exit 1), DoD#12 (`sha256sum app.js` זהה בשלושה
+מקומות — `vendor/`, ארטיפקט-ראשי, ארטיפקט-דמו), DoD#14 (`git status --short
+| grep vendor` → ריק).
+
+### חריגות
+
+אין (מלבד תיקון-סדר פנימי בין build ל-guard, מתועד למעלה — לא נחשף
+החוצה, לא נגע ב-git history שקדם ל-commit הזה).
+
 ## 2026-07-28 — slice/demo-origin-split — Commit 4: קישור מהדמו לפריסה הראשית
 
 ### מה בוצע?

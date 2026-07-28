@@ -152,13 +152,59 @@ delete `template.js`.
    dev`/deployed Worker → GitHub) — deferred to a real `wrangler deploy` or a
    CF environment where `workerd` runs.
 
-## Deploy
+## Deploy — two profiles, one build (docs/plans/demo-origin-split.md)
+
+The **same** `build-assets.sh`/`index.js`/`template.js` produce two different
+experiences, selected at BUILD time via `OW_PROFILE` — nothing branches at
+runtime beyond reading the injected config, so the two artifacts can never
+silently drift apart (`git diff` always shows the one line that changed).
+
+| Profile | Command | Config file | Visitor experience |
+|---|---|---|---|
+| main (default) | `npm run build` | `src/config/deploy-config.json` | Clean vault-creation screen, no demo, no seeding |
+| demo | `npm run build:demo` | `src/config/deploy-config.demo.json` | Auto-opens into a pre-seeded demo vault, re-seeds on template change, links back to the main deployment |
+
 ```
-npm run build          # scripts/build-assets.sh → .tmp/deployments/cloudflare/public
-npm run dev             # local emulation (wrangler dev) — does NOT publish anywhere
-wrangler deploy        # from src/deployments/cloudflare/ — publishes for real, only when intended
+npm run build           # main profile → .tmp/deployments/cloudflare/public
+npm run build:demo      # demo profile (OW_PROFILE=demo) → same output dir
+npm run dev              # local emulation (wrangler dev) — does NOT publish anywhere
+npm run deploy           # predeploy: rebuilds MAIN + guard, then `wrangler deploy` — publishes for real, only when intended
+npm run deploy:demo      # predeploy:demo: rebuilds DEMO + guard, then `wrangler deploy` — publishes for real, only when intended
 ```
-`npm run build` needs network access to GitHub (`api.github.com` +
+`npm run build`/`build:demo` need network access to GitHub (`api.github.com` +
 release-asset CDN) to fetch the LiveSync plugin on a cold cache — see
 "System plugins" above. It never blocks the build if unreachable (WARN +
 continue, layout-switcher only).
+
+**Which target `wrangler deploy` publishes to** is controlled by `wrangler.toml`
+(`name`/`routes`) — a second Cloudflare project + custom domain for the demo,
+separate from the main deployment, is a manual dashboard step outside this
+repo's scope (topology isn't code — see the brief). Until that's set up, both
+`deploy`/`deploy:demo` publish to whatever single target `wrangler.toml`
+currently points at; treat that as a placeholder, not a statement about the
+final topology.
+
+**`OW_PROFILE=nope npm run build`** (any name that isn't a real
+`deploy-config.<name>.json`) fails the build loudly (`exit 1`) rather than
+silently falling back to the default config — a typo in the profile name
+must never ship the wrong experience.
+
+### The guard (`scripts/guard-deploy-target.sh`)
+
+The one failure mode here that reaches real visitors without any test
+noticing otherwise: the artifact itself is perfectly valid, it just got
+uploaded to the **wrong target** (a demo build shipped to main, or vice
+versa). `predeploy`/`predeploy:demo` run the guard automatically (npm's
+built-in pre-hook convention) right after the matching build and right
+before `wrangler deploy` — a mismatch aborts with `exit 1` and an explicit
+message, `wrangler deploy` never runs.
+
+```
+bash scripts/guard-deploy-target.sh main   # exit 0 iff the built artifact has NO demo config
+bash scripts/guard-deploy-target.sh demo   # exit 0 iff the built artifact DOES have demo config
+```
+
+The anchor it checks for is `"demoVault":{"enabled":true` — **with the key
+name**, not a bare `"enabled":true` (that string alone also appears in the
+main artifact's injected config, via the `obsidian-web-layout` plugin entry
+— a naive search would false-positive on every build).
