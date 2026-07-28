@@ -54,7 +54,7 @@ export const TEMPLATE_FILES = new Map([
 
 This is a live demo of **obsidian-web**, an open-source project that runs Obsidian's original renderer in a standard browser by replacing every Capacitor/Electron dependency with lightweight browser-native shims.
 
-**Everything works in the browser:** edit notes, create folders, rename files. Your changes are stored **locally in your browser** (via [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)) — private to you, never sent to a server, and never reset automatically. They survive a page reload and stick around until you clear this site's browsing data.
+**Everything works in the browser:** edit notes, create folders, rename files. Your changes are stored **locally in your browser** (via [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)) — private to you and never sent to a server. They survive a page reload and stick around until you clear this site's browsing data.
 
 **One exception:** your notes are never involved, but requests to \`github.com\`, \`githubusercontent.com\`, and \`obsidian.md\` — installing a community plugin, or the one automatic check Obsidian itself makes for deprecated plugins when the vault loads — pass through a small proxy on our server, since the browser can't reach those hosts directly (see [[How It Works]] for the details). A sync server you connect, or any other host, is never routed through it — that traffic is a direct connection from your browser.
 
@@ -82,7 +82,7 @@ This is a live demo of **obsidian-web**, an open-source project that runs Obsidi
 
 ---
 
-> **Note:** this vault is **yours alone** — it lives only in this browser's local storage (OPFS), is never sent to a server, and nobody else can see it. Nothing here resets automatically; edit, delete, or recreate anything freely. (The one exception — GitHub/obsidian.md requests, not your vault content — is explained above.)
+> **Note:** this vault is **yours alone** — it lives only in this browser's local storage (OPFS), is never sent to a server, and nobody else can see it. Edit, delete, or recreate anything freely. (The one exception — GitHub/obsidian.md requests, not your vault content — is explained above.)
 
 ---
 
@@ -122,11 +122,7 @@ This deployment (Cloudflare Pages + a small edge Worker) does **not** store your
 | **OPFS** | The [Origin Private File System](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system) — a private, sandboxed filesystem the browser gives this site. Your vault's files live there, on your device |
 | **Seed** | On first visit, this demo vault's files are copied into your own OPFS vault once (client-side, \`seed-example-vault.js\`) — after that, it's just your vault |
 
-There is no server-side database, no cross-tab WebSocket sync, and no scheduled reset in this deployment — everything above lives entirely in your browser's OPFS.
-
-## Fast bootstrap (server-backed mode only)
-
-The optional Node.js server deployment (\`src/runtime-server/server/\`) can load faster than the desktop app: instead of Obsidian reading dozens of config files one by one, the server serves everything in a single HTTP request (\`/api/bootstrap\`) — all files, directories, and metadata arrive at once. **This demo doesn't use that path** — with OPFS there's no HTTP round-trip for vault reads at all; the shim talks to the browser's local storage directly.
+There is no server-side database and no cross-tab WebSocket sync in this deployment — everything above lives entirely in your browser's OPFS.
 
 ## The shim approach
 
@@ -201,8 +197,8 @@ const vault = new Map<string, VaultFile>();
 > [!info] How this works
 > This note is rendered by Obsidian's real Markdown pipeline — CodeMirror for editing, their custom renderer for preview. We don't reimplement anything.
 
-> [!warning] Demo vault
-> Nothing here resets automatically — this vault is private to your browser. Clearing this site's browsing data is the only thing that removes it. Create your own notes to experiment!
+> [!info] Demo vault
+> This vault is private to your browser. Clearing this site's browsing data is the only thing that removes it. Create your own notes to experiment!
 
 ## Math
 
