@@ -14,7 +14,8 @@ const test = require('node:test');
 const { DEFAULTS, deepMerge } = require('../deploy-config');
 
 test('DEFAULTS mirrors src/config/deploy-config.json — today\'s hardcoded behavior (regression baseline)', () => {
-  assert.equal(DEFAULTS.seedExampleContent, true);
+  assert.equal(DEFAULTS.seedExampleContent, false);
+  assert.equal(DEFAULTS.demoVault.enabled, false);
   assert.equal(DEFAULTS.layout.default, 'auto');
   assert.equal(DEFAULTS.layout.threshold, 900);
   assert.equal(DEFAULTS.plugins['obsidian-livesync'].install, true);
@@ -22,6 +23,15 @@ test('DEFAULTS mirrors src/config/deploy-config.json — today\'s hardcoded beha
   assert.equal(DEFAULTS.plugins['obsidian-web-layout'].install, true);
   assert.equal(DEFAULTS.plugins['obsidian-web-layout'].enabled, true);
   assert.equal(DEFAULTS.defaultVaultLocation, 'device');
+});
+
+// avigail finding 3: the test above only ever compared DEFAULTS against
+// hardcoded literals — it never actually read src/config/deploy-config.json,
+// so nothing caught the two files drifting apart. deepStrictEqual (not
+// deepEqual) so a type-only drift (e.g. "true" vs true) is also caught.
+test('DEFAULTS is byte-for-byte deepStrictEqual to src/config/deploy-config.json (drift guard)', () => {
+  const fileConfig = require('../../config/deploy-config.json');
+  assert.deepStrictEqual(DEFAULTS, fileConfig);
 });
 
 test('deepMerge with an empty override returns the defaults unchanged (regression: no config = today\'s behavior)', () => {

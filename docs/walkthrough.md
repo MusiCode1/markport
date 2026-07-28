@@ -2,6 +2,45 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-28 — slice/demo-origin-split — Commit 0: `OW_PROFILE` + קונפיג הדמו
+
+### מה בוצע?
+
+**`src/config/deploy-config.demo.json`** (חדש) — קובץ קונפיג מלא (לא overlay) לפרופיל
+הדמו: `seedExampleContent:true`, `demoVault.enabled:true` + `autoOpen:true`.
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — הוספת `OW_PROFILE` (שורה 39
+לשעבר, כעת בלוק חדש לפני הבדיקה הקיימת): ריק/לא-מוגדר → קובץ ברירת-המחדל (כמו היום);
+`OW_PROFILE=demo` → `deploy-config.demo.json`; ערך לא-קיים → **כשל-רועש** (`exit 1`, לא
+נפילה שקטה לברירת-מחדל — profile שגוי חייב להפיל את הבניה, לא לפרוס דמו לפרודקשן
+בשוגג).
+
+**`src/config/deploy-config.json`** — `seedExampleContent` ו-`demoVault.enabled` הפכו
+ל-`false` (ברירת-המחדל היא כעת "בלי דמו" — §9 שאלה 1: החלטה מאושרת מראש בבריף).
+
+**`src/client-mobile/deploy-config.js`** — `DEFAULTS` עודכן להיות מראה מדויקת של
+`deploy-config.json` החדש (`seedExampleContent:false`, `demoVault.enabled:false`);
+ההערה בשורה 31 עודכנה מ"Mirrors src/config/deploy-config.json" ל"מראה של פרופיל
+ברירת-המחדל" (עם שני profiles השם הישן דו-משמעי).
+
+**`src/client-mobile/test/deploy-config.test.js`** — טסט אדום מובטח (אביגיל ממצא 2)
+תוקן: assertion על `seedExampleContent`/`demoVault.enabled` עודכן ל-`false`. נוסף טסט
+חדש (אביגיל ממצא 3): `assert.deepStrictEqual(DEFAULTS, require('../../config/deploy-config.json'))`
+— לפני הקומיט הזה שום טסט לא באמת קרא את ה-JSON, רק השווה ליטרלים קשיחים; drift בין
+שני הקבצים לא היה נתפס.
+
+### בדיקות
+
+`cd src/client-mobile && npm test` — 87/87 ירוק (כולל 2 טסטים חדשים ב-deploy-config.test.js).
+`cd src/deployments/cloudflare && bun test test/build-assets.test.js` — 3/3 ירוק.
+ידני: `npm run build` → `seedExampleContent:false,"demoVault":{"enabled":false,...}`;
+`OW_PROFILE=demo npm run build` → `seedExampleContent:true,"demoVault":{"enabled":true,...,"autoOpen":true}`;
+`OW_PROFILE=nope npm run build` → `exit=1` עם הודעת שגיאה מפורשת.
+
+### חריגות
+
+אין.
+
 ## 2026-07-27 — slice/zero-patches — Commit 3: §3ד — `template.js:92` (ההצהרה הציבורית) + README
 
 ### מה בוצע?

@@ -36,7 +36,23 @@ fi
 # for which system plugins ship/are-enabled and for window.__owConfigInjected
 # below. Committed to the repo (not gitignored), so it is always present at
 # build time — unlike vendor/, no existence-fallback needed here.
-CONFIG_PATH="$MAIN_DIR/src/config/deploy-config.json"
+#
+# OW_PROFILE (docs/plans/demo-origin-split.md §4 Commit 0) selects which
+# config file to build against — unset/empty = default (no-demo) profile,
+# same file+behavior as before this commit. A named profile that doesn't
+# resolve to an existing file must fail the build LOUDLY (never fall back to
+# the default silently — that "silent" would mean deploying the demo profile
+# to a production target).
+OW_PROFILE="${OW_PROFILE:-}"
+if [[ -n "$OW_PROFILE" ]]; then
+  CONFIG_PATH="$MAIN_DIR/src/config/deploy-config.$OW_PROFILE.json"
+  if [[ ! -f "$CONFIG_PATH" ]]; then
+    echo ""; echo "ERROR: unknown OW_PROFILE '$OW_PROFILE' — $CONFIG_PATH not found."; exit 1
+  fi
+  echo "  profile: $OW_PROFILE"
+else
+  CONFIG_PATH="$MAIN_DIR/src/config/deploy-config.json"
+fi
 if [[ ! -f "$CONFIG_PATH" ]]; then
   echo ""
   echo "ERROR: $CONFIG_PATH not found — required for deploy config (plugins + injected config)."
