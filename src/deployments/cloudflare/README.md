@@ -47,8 +47,8 @@ previous server-side in-memory vault store (internally named `VaultDO`) has been
   - **`caches.default` is a no-op on `*.workers.dev`** — documented Cloudflare
     limitation. The proxy is fully functional there (every request just
     always misses cache and goes to origin); to get actual cache hits in
-    production, deploy behind a **custom domain/route**: uncomment `routes` in
-    `wrangler.toml`.
+    production, serve the deployment behind a **custom domain** attached to the
+    Pages project (a dashboard step — this repo holds no route config).
 
 ## System plugins — layout-switcher (enabled) + LiveSync (installed, disabled)
 `build-assets.sh` builds `public/system-plugins/manifest.json` with **two**
@@ -172,22 +172,40 @@ silently drift apart (`git diff` always shows the one line that changed).
 ```
 npm run build           # main profile → .tmp/deployments/cloudflare/public
 npm run build:demo      # demo profile (OW_PROFILE=demo) → same output dir
-npm run dev              # local emulation (wrangler dev) — does NOT publish anywhere
-npm run deploy           # predeploy: rebuilds MAIN + guard, then `wrangler deploy` — publishes for real, only when intended
-npm run deploy:demo      # predeploy:demo: rebuilds DEMO + guard, then `wrangler deploy` — publishes for real, only when intended
+npm run dev              # local emulation (wrangler pages dev) — does NOT publish anywhere
+npm run deploy           # predeploy: rebuilds MAIN + guard, then publishes to --branch=main → obsidian-online.pages.dev
+npm run deploy:demo      # predeploy:demo: rebuilds DEMO + guard, then publishes to --branch=demo → demo.obsidian-online.pages.dev
 ```
 `npm run build`/`build:demo` need network access to GitHub (`api.github.com` +
 release-asset CDN) to fetch the LiveSync plugin on a cold cache — see
 "System plugins" above. It never blocks the build if unreachable (WARN +
 continue, layout-switcher only).
 
-**Which target `wrangler deploy` publishes to** is controlled by `wrangler.toml`
-(`name`/`routes`) — a second Cloudflare project + custom domain for the demo,
-separate from the main deployment, is a manual dashboard step outside this
-repo's scope (topology isn't code — see the brief). Until that's set up, both
-`deploy`/`deploy:demo` publish to whatever single target `wrangler.toml`
-currently points at; treat that as a placeholder, not a statement about the
-final topology.
+**Where each one publishes** is written into the command itself — the
+`--project-name` / `--branch` flags above, not a config file:
+
+| Script | Target | URL |
+|---|---|---|
+| `npm run deploy` | `obsidian-online`, branch `main` (the project's **production** branch) | `obsidian-online.pages.dev` |
+| `npm run deploy:demo` | `obsidian-online`, branch `demo` (a preview **branch alias**) | `demo.obsidian-online.pages.dev` |
+
+One Cloudflare Pages project serves both. A branch alias always tracks the
+latest deployment pushed to that branch name, and — unlike a git-integrated
+project — `--branch` here is just a label on the upload, so no `demo` git
+branch exists or is needed.
+
+Cloudflare adds `X-Robots-Tag: noindex` to every preview deployment, which
+would leave the demo unindexable. The demo build ships a `public/_headers`
+with `X-Robots-Tag: index, follow`, which **overrides it** — measured on a
+real deployment of this artifact (Pages Advanced mode, `_worker.js/` present),
+not inferred from the docs. That is what makes one project sufficient instead
+of two.
+
+> Earlier revisions of this file said both scripts ran a bare `wrangler deploy`
+> against a single `wrangler.toml` target. That was true, and it meant the two
+> deployments overwrote each other — the guard below validated the *artifact*
+> while nothing validated the *destination*. `wrangler.toml` was a Workers
+> config that this Pages deployment never used; it has been removed.
 
 **`OW_PROFILE=nope npm run build`** (any name that isn't a real
 `deploy-config.<name>.json`) fails the build loudly (`exit 1`) rather than
@@ -201,8 +219,12 @@ noticing otherwise: the artifact itself is perfectly valid, it just got
 uploaded to the **wrong target** (a demo build shipped to main, or vice
 versa). `predeploy`/`predeploy:demo` run the guard automatically (npm's
 built-in pre-hook convention) right after the matching build and right
-before `wrangler deploy` — a mismatch aborts with `exit 1` and an explicit
-message, `wrangler deploy` never runs.
+before the upload — a mismatch aborts with `exit 1` and an explicit
+message, and `wrangler pages deploy` never runs.
+
+The guard checks *what is in the artifact*; the `--branch` flag in the script
+fixes *where it goes*. Both halves are needed — the guard alone cannot tell
+you that two scripts point at the same destination.
 
 ```
 bash scripts/guard-deploy-target.sh main   # exit 0 iff the built artifact has NO demo config
