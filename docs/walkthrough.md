@@ -2,6 +2,44 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-29 — slice/demo-origin-split — Commit 8: הקישור לראשי עובר לראש Welcome.md
+
+החלטת המשתמשת. הקישור ישב בתחתית הפתק (footer-style) — עכשיו הוא הדבר הראשון
+שמבקר קורא אחרי הכותרת והמשפט הפותח.
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/template.js`** — תוכן `Welcome.md` בלבד:
+- הועברה שורה חדשה מיד אחרי ה-blockquote הפותח (`> **Obsidian's desktop
+  app…**`) ולפני "This is a live demo of **obsidian-web**…":
+  `**This is a demo vault.** [Create your own →](https://obsidian-online.pages.dev)`
+  (ניסוח-הזמנה, לא footer — לשיקולי, בשני האילוצים שהמשתמשת קבעה: אנגלית,
+  אותו URL).
+- **נמחק** המופע הישן בתחתית הפתק (`This is a demo vault; to create your
+  own vault → …`, אחרי `#demo #welcome`) — מופע יחיד, לא שכפול.
+  `grep -c "obsidian-online.pages.dev" template.js` → 1.
+
+### בדיקות
+
+approach: none (טקסט טהור, כמו Commit 4 המקורי). `npm test` 96/96, `bun test
+test/*.test.js` 40/40 — regression-free.
+
+**ידני — DoD#5 עם שינוי-תוכן אמיתי (לא מסונתז)**, כהזדמנות שהמשתמשת ציינה:
+בניתי ארטיפקט A (`git stash` על `template.js` בלבד → חזרה לגרסת Commit 7,
+בנייה, `cp -r` הצידה, `git stash pop` להחזיר את Commit 8) ← טעינה, עריכת
+`Welcome.md`, יצירת `My Note.md` ← `git stash pop` + בנייה אמיתית של B (hash
+חדש `c5138c4b3d460be6`, שונה מ-`0b49eae00bd69969` של A) ← החלפת הארטיפקט
+המוגש על אותו origin (מדמה redeploy אמיתי) ← reload → `Welcome.md` נדרס
+לתוכן **B** (הקישור מופיע עכשיו ליד הראש, מרונדר — צילום `c8-link-top.png`),
+`My Note.md` (תוכן המבקר) שרד מילה-במילה. `fullMatches` של ה-URL המלא בקובץ
+= **1** (לא 2 — worktree נשאר נקי, `git stash` לא השאיר שאריות).
+
+### חריגות
+
+אין. עדכנתי גם את DoD#13 בבריף לשקף מיקום+מופע-יחיד, והוספתי §4 Commit 8
+לבריף עצמו (המשתמשת תיארה את הקומיט בהודעה, לא ערכה את הקובץ ישירות הפעם —
+הוספתי section תואם-סגנון ל-Commit 6/7 כדי שהבריף יישאר עקבי כמקור-אמת).
+
 ## 2026-07-29 — slice/demo-origin-split — Commit 7: מחיקת כפתור "כספת דמו"
 
 החלטת המשתמשת (מחליפה את Commit 6ב, שרק תרגם את הכפתור). עם הפיצול לדמו הכפתור

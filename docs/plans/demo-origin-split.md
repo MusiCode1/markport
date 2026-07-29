@@ -519,6 +519,41 @@ grep -n "data-ow-injected" src/client-mobile/boot.js                            
 
 ---
 
+### Commit 8 — ‏הקישור לפריסה הראשית עובר לראש `Welcome.md` (approach: **none**)
+
+> ‏החלטת המשתמשת, 2026-07-29.
+
+‏הקישור יושב היום ‏ב**‏תחתית** ‏הפתק. ‏המשתמשת רוצה אותו ‏ב**‏תחילת** ‏הקובץ —
+‏הדבר הראשון שמבקר קורא אחרי הכותרת והמשפט הפותח, ‏לא footer.
+
+**‏קבצים שמשתנים**: `src/deployments/cloudflare/template.js` — ‏תוכן `Welcome.md` ‏בלבד.
+
+**‏מיקום**: ‏אחרי שורת הכותרת `# Welcome to Obsidian Web` ‏ואחרי ה-blockquote
+(`> **Obsidian's desktop app — running in your browser, no Electron needed.**`),
+‏לפני הפסקה `This is a live demo of **obsidian-web**…`.
+
+**‏אילוצים**: ‏אנגלית; **‏אותו URL בדיוק** (`https://obsidian-online.pages.dev`);
+**‏מופע יחיד** — ‏להעביר, ‏לא לשכפל (‏מחיקת המופע הישן בתחתית). ‏ניסוח כהזמנה
+("‏זה דמו — ‏לכספת משלך לחץ כאן"), ‏לא כ-footer.
+
+> ‏שים לב: `example-vault.json` ‏נגזר מ-`template.js` **‏בזמן הבניה**, ‏ולכן
+> ‏ה-hash `__owDemoContent` ‏ישתנה — ‏וזה בדיוק מה שאמור לקרות: ‏מבקר עם כספת
+> ‏דמו קיימת יקבל זריעה-מחדש (Commit 3). ‏הזדמנות לאמת את DoD#5 ‏פעם נוספת
+> ‏על שינוי-תוכן **‏אמיתי** ‏ולא מסונתז.
+
+**Verification**:
+
+```bash
+grep -c "obsidian-online.pages.dev" src/deployments/cloudflare/template.js   # ‏מצופה: 1
+cd src/deployments/cloudflare && OW_PROFILE=demo npm run build
+grep -o '__owDemoContent="[^"]*"' ../../../.tmp/deployments/cloudflare/public/index.html   # ‏מצופה: hash חדש
+bun test test/*.test.js
+```
+
+‏עדכן את DoD#13 (§5) ‏לשקף שהקישור נמצא בראש הפתק ‏עם מופע יחיד, ‏וכלול DoD#13 ‏בסבב כלב.
+
+---
+
 ## §5 — DoD verifiable
 
 | # | ‏בדיקה | ‏איך |
@@ -535,7 +570,7 @@ grep -n "data-ow-injected" src/client-mobile/boot.js                            
 | 10 | ‏regression: `/starter` | ‏גם בבניית הדמו, `/starter` ‏מציג את מסך-הפתיחה ‏ולא מפנה לדמו |
 | 11 | ‏regression: ‏כספת של המשתמש | ‏בבניית הדמו — ‏צור כספת רגילה, ‏כתוב לתוכה קובץ, ‏ערוך קובץ קיים, ‏טען מחדש → ‏שניהם שרדו מילה-במילה, ‏והסמן `ow-demo-content` **‏לא נכתב** ‏מכספת שאינה הדמו. (‏**‏ניסוח מתוקן** ‏אחרי כלב ‏ממצא 2: ‏כספת ריקה **‏חדשה** ‏כן מקבלת תוכן-דמו ברגע היצירה — ‏התנהגות פרה-קיימת ‏שהבריף מכיר ב-§4 Commit 3. ‏מה שנבדק כאן הוא **‏שרידות** ‏ו-**‏אי-זיהום הסמן**) |
 | 12 | ‏regression: ‏אפס patches | `sha256sum` ‏של `app.js` ‏בשני הארטיפקטים ‏זהה ל-`vendor/obsidian-mobile/app.js`. (‏**‏אין** ‏דגל `--check` ‏ב-`patch-obsidian-mobile.js` — `argv[2]` ‏הוא נתיב לקובץ. ‏אביגיל ‏ממצא 8) |
-| 13 | ‏הקישור לראשי קיים | `Welcome.md` ‏בדמו מכיל קישור עובד לפריסה הראשית |
+| 13 | ‏הקישור לראשי קיים, ‏בראש הפתק, ‏מופע יחיד | `Welcome.md` ‏בדמו מכיל קישור עובד לפריסה הראשית. ‏מיקום: ‏בראש הפתק (‏אחרי הכותרת+blockquote, ‏לפני "This is a live demo…") — ‏**‏לא** ‏בתחתית. `grep -c "obsidian-online.pages.dev"` ‏על `template.js` → **‏מופע יחיד** (‏Commit 8, ‏החלטת המשתמשת — ‏הועבר מהתחתית, ‏לא שוכפל) |
 | 14 | `vendor/` ‏לא נכנס ל-git | `git status --short \| grep vendor` → ‏ריק |
 | 15 | ‏הכפתור **‏נמחק** | ‏בבניית הדמו, `/starter` ‏ב-1280×800 **‏וב-390×844** → ‏אין כפתור כלל. ‏אפס עברית בטקסט-מבקר, ‏אפס חפיפה לבורר-השפה ‏ולשורת-הגרסה. (‏החליף את DoD#15 ‏המקורי "‏הכפתור באנגלית" — ‏החלטת המשתמשת, Commit 7) |
 | 17 | ‏regression: create-vault interceptor | `/starter` → Create new vault → ‏האשף עובד מקצה-לקצה ‏ונוצרת כספת. `data-ow-injected` ‏עדיין ב-`boot.js`. ‏הכפתור המוזרק השני עדיין מתפקד |
