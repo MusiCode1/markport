@@ -2,6 +2,29 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-29 — slice/demo-origin-split — calev-heavy round 3 (דלתא) — GO + תיקון README
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-round3-calev.md`
+(**GO**, 9/9 DoD — DoD#15/#17/#13 + regression DoD#3/#4/#10 + DoD#5/#6/#7
+שנוספו ביוזמת כלב, **1 ממצא בלבד, מינורי, לא-חוסם**).
+
+**מה תוקן כאן** (ממצא 1 — זול, נובע ישירות מ-Commit 7 שלי): `README.md`
+(`src/deployments/cloudflare/`) עדיין תיאר בשני מקומות כפתור "כספת דמו"
+שנמחק ב-Commit 7 (`installDemoVaultButton`) כאילו הוא עדיין קיים ותוקף.
+עודכן: (1) "What the Worker does now" — מתאר עכשיו את זרימת ה-auto-open
+בפועל (`demoVault.autoOpen`, `/vault/<demoId>/Welcome`, אפס לחיצות) במקום
+כפתור-שאיננו. (2) "Example / demo vault content" — אותו תיקון, וגם ציון
+שהזריעה-מחדש קורית על שינוי `template.js` (Commit 3) ושהקישור לראשי יושב
+עכשיו בראש הפתק (Commit 8). כלב ציטט את §0 של הבריף עצמו (ה"קפאת" ענף
+demo-and-docs-truth "כדי למנוע הצהרות-שווא") כהנמקה לתקן — אותה דוקטרינה
+חלה כאן. `npm test` 96/96, `bun test` 40/40 (שינוי-README, regression-free).
+
+**‏מה כלב אימת ‏(‏ולא ‏רק ‏ב-grep)**: `data-ow-injected` ‏עדיין ‏קיים ‏בקוד
+‏אחרי ‏המחיקה — ‏כלב ‏לא ‏הסתפק ‏בכך: ‏הזריק ‏כפתור-בדיקה ‏עם ‏הסימון ‏לתוך
+`.mobile-onboarding` (‏אותה ‏צורה ‏שנחטפה ‏ב-NO-GO ‏ההיסטורי) ‏ולחץ ‏עליו —
+‏ה-handler ‏שלו ‏רץ, ‏ה-interceptor ‏לא ‏חטף. ‏האינטגריטי ‏של ‏ה-guard ‏אומת
+‏פונקציונלית, ‏לא ‏רק ‏טקסטואלית.
+
 ## 2026-07-29 — slice/demo-origin-split — Commit 8: הקישור לראשי עובר לראש Welcome.md
 
 החלטת המשתמשת. הקישור ישב בתחתית הפתק (footer-style) — עכשיו הוא הדבר הראשון

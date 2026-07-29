@@ -9,17 +9,19 @@ previous server-side in-memory vault store (internally named `VaultDO`) has been
 ## What the Worker does now
 - Serves the **static app bundle** (`env.ASSETS`) for everything except
   `/api/proxy-request` and the `/starter`/`/vault/*` SPA-fallback routes. See `index.js`.
-- `/` runs `boot.js`'s entry-routing first (`boot.js:105-113`): if the browser already
-  has a `mobile-selected-vault` from a previous visit, it **auto-resumes that vault**
+- `/` runs `boot.js`'s entry-routing first: if the browser already has a
+  `mobile-selected-vault` from a previous visit, it **auto-resumes that vault**
   at `/vault/<id>` — a returning visitor's vault opens automatically, the chooser is
-  never shown. Only a visitor with no remembered vault is redirected to `/starter`,
-  which renders **Obsidian's native mobile onboarding screen** ("Create a vault" /
-  "Use my existing vault") with no vault pre-opened. That onboarding screen also gets
-  a **"כספת דמו" (demo vault) button** injected (`installDemoVaultButton` in
-  `boot.js`) that creates/opens a fixed-id local (OPFS) vault and seeds it with
-  `template.js`'s example content on first open — see "Example / demo vault content"
-  below. Vault creation/writes/reads happen **entirely client-side** (OpfsStore
-  engine); 0 dependency on `/api/*` for vault storage.
+  never shown. A visitor with no remembered vault is redirected to `/starter` (clean
+  build) or, on the **demo profile** (`OW_PROFILE=demo`, docs/plans/demo-origin-split.md),
+  straight into the fixed-id demo vault at `/vault/<demoId>/Welcome` — created/seeded
+  with `template.js`'s example content on first open, zero clicks. There is no
+  visitor-facing "try the demo" button anymore (removed — the demo now has its own
+  origin, so the button's original purpose of letting a *main-site* visitor reach the
+  demo no longer applies); on the clean/main profile `/starter` renders **Obsidian's
+  native mobile onboarding screen** ("Create a vault" / "Use my existing vault") with
+  no vault pre-opened and no demo trace. Vault creation/writes/reads happen **entirely
+  client-side** (OpfsStore engine); 0 dependency on `/api/*` for vault storage.
 - `vendor/obsidian-mobile/` is self-contained (own `app.js`/`worker.js`/`i18n`/
   `lib`) — `build-assets.sh` copies it (and mirrors its resource dirs at the
   bundle root) without touching `vendor/obsidian-desktop` (desktop).
@@ -72,14 +74,17 @@ entries, served statically (CF static hosting has no `/api/system-plugins` —
 
 ## Example / demo vault content (`template.js`) — wired, not a stub
 `template.js` holds the **demo vault** — 11 example files (`Welcome.md`,
-`How It Works.md`, `Features/*.md`, `.obsidian/*` config). It **is wired**: the
-"כספת דמו" (demo vault) button on the onboarding screen (see "What the Worker
-does now" above) opens a fixed-id local (OPFS) vault; the first time that
-vault is empty, `boot.js` seeds it from `template.js` (via the static
-`/example-vault.json` built by `build-assets.sh` — see "Deploy" below) using
-`seed-example-vault.js`. A visitor who never clicks that button gets Obsidian's
-plain native onboarding chooser instead, with no vault pre-opened. Do **not**
-delete `template.js`.
+`How It Works.md`, `Features/*.md`, `.obsidian/*` config). It **is wired**: on
+the demo profile (`OW_PROFILE=demo`), `boot.js` auto-opens a fixed-id local
+(OPFS) vault at `/vault/<demoId>/Welcome` on every first visit (see "What the
+Worker does now" above); the first time that vault is empty, it's seeded from
+`template.js` (via the static `/example-vault.json` built by `build-assets.sh`
+— see "Deploy" below) using `seed-example-vault.js`, and re-seeded whenever
+`template.js`'s content changes on a later deploy (`window.__owDemoContent`
+hash, docs/plans/demo-origin-split.md §4 Commit 3). `Welcome.md` links back to
+the main deployment near the top of the note. On the main/default profile,
+none of this runs — a visitor gets Obsidian's plain native onboarding chooser,
+with no vault pre-opened and no demo trace. Do **not** delete `template.js`.
 
 ## What's included (finished)
 - OPFS vault engine on the mobile runtime (create local vault, notes, nested
