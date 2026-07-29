@@ -2,6 +2,47 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-29 — slice/demo-origin-split — Commit 7: מחיקת כפתור "כספת דמו"
+
+החלטת המשתמשת (מחליפה את Commit 6ב, שרק תרגם את הכפתור). עם הפיצול לדמו הכפתור
+איבד את הסיבה לקיומו — הוא נועד לאפשר למבקר באתר הראשי לנסות דמו; עכשיו לדמו יש
+מקור משלו. מוחקת גם את ממצא 1 מסבב calev-heavy 2 (חפיפה לבורר-השפה ב-390×844)
+בלי לגעת ב-CSS.
+
+### מה בוצע?
+
+**`src/client-mobile/boot.js`**:
+- נמחקה הפונקציה `installDemoVaultButton()` במלואה (כולל בלוק ההערות שמעליה
+  שתיאר את הכפתור) והקריאה אליה (`installDemoVaultButton();`).
+- 🔴 **מה שלא נמחק**: `if (btn.hasAttribute('data-ow-injected')) return;`
+  ב-`installCreateVaultInterceptor` — המוסכמה משרתת כפתור מוזרק שני
+  (`showGrantScreen`, `data-ow-injected="grant-access"`) שנשאר חי.
+- שלוש הערות שהפנו ל-`installDemoVaultButton` (שכבר לא קיימת) — בהוראת
+  הבריף — **נוסחו מחדש** בלי למחוק את הקוד שמתחתיהן: ה-guard ב-interceptor
+  (עכשיו מתאר את הכפתור שנמחק כדוגמה היסטורית + מפנה ל-`showGrantScreen`),
+  ההערה ב-`installExternalStorageGate` (דוגמת-MutationObserver כללית
+  במקום ספציפית), וההערה ב-`showGrantScreen` עצמה.
+
+### בדיקות
+
+`npm test` (client-mobile) 96/96, `bun test test/*.test.js` (cloudflare) 40/40
+— regression-free (השינוי לא נגע בצד ה-CF). גם `grep` שהבריף מפרט במפורש:
+`grep "ow-demo-vault-btn\|installDemoVaultButton"` → ריק; `grep "data-ow-injected"`
+→ עדיין 4 מופעים (guard + setAttribute × 2 + הערה).
+
+**ידני (playwright-cli, שני viewports)**: DoD#15 (הוחלף) — בבניית הדמו, `/starter`
+ב-1280×800 **וב-390×844** → `find "Demo vault"` אין תוצאות,
+`document.querySelectorAll('[data-ow-injected]').length === 0`. צילומים
+`c7-dod15-desktop.png`/`-mobile.png` — אין כפתור, אין חפיפה (כי אין מה שיחפוף).
+DoD#17 (חדש, regression) — `/starter` → Create a vault → Continue without
+sync → Configure vault (App storage) → Create a vault → נחיתה מוצלחת ב-
+`/vault/<id-אמיתי>` — האשף עובד מקצה-לקצה, האינטרספטור לא נתקע/לא חוטף.
+
+### חריגות
+
+אין. הבריף ציין במפורש שממצא 2 של calev סבב 2 (ענף ה-resume בלי `/Welcome`)
+**נשאר בכוונה** — ראה §"סטיות מהתכנון" בבריף לניסוח ההחלטה.
+
 ## 2026-07-29 — slice/demo-origin-split — calev-heavy round 2 (דלתא) — GO
 
 דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-round2-calev.md`

@@ -696,13 +696,15 @@ const MOBILE_SCRIPTS = [
         e.target.closest('.mobile-onboarding button.mod-cta, .mobile-vault-chooser-screen button.mod-cta');
       if (!btn) return;
 
-      // §3.6 (calev-heavy NO-GO round 2, ממצא 2): כפתור-הדמו שלנו
-      // (installDemoVaultButton) חי בתוך `.mobile-onboarding` ונושא
-      // `mod-cta` ⇒ תואם את ה-selector למעלה ונחטף. זיהוי-לפי-class/מיקום
-      // יישבר שוב ברגע שכפתור-שלנו נוסף/משתנה (זו הפעם השנייה שבורר-לפי-
-      // מראה נשבר בסלייס הזה) — הפתרון הנכון הוא לסמן במפורש כל כפתור
-      // שאנחנו מזריקים (`data-ow-injected`, ראה installDemoVaultButton
-      // וגם showGrantScreen למטה) ולדלג עליו כאן, לפני כל בדיקה אחרת.
+      // §3.6 (calev-heavy NO-GO round 2, ממצא 2): כפתור מוזרק-שלנו שחי בתוך
+      // `.mobile-onboarding` ונושא `mod-cta` תואם את ה-selector למעלה ונחטף
+      // (זה בדיוק מה שקרה לכפתור-הדמו שהיה כאן — נמחק ב-docs/plans/
+      // demo-origin-split.md §4 Commit 7, אחרי שהפיצול-לדמו ייתר אותו — אבל
+      // המוסכמה נשארת כי showGrantScreen למטה עדיין מזריק כפתור). זיהוי-
+      // לפי-class/מיקום נשבר שוב ברגע שכפתור-שלנו נוסף/משתנה (זו הפעם
+      // השנייה שבורר-לפי-מראה נשבר בסלייס ההוא) — הפתרון הנכון הוא לסמן
+      // במפורש כל כפתור שאנחנו מזריקים (`data-ow-injected`, ראה
+      // showGrantScreen למטה) ולדלג עליו כאן, לפני כל בדיקה אחרת.
       if (btn.hasAttribute('data-ow-injected')) return;
 
       // §3.5ב (calev PARTIAL, ממצא 1 — DoD#13): היה כאן גם התאמת-טקסט
@@ -841,10 +843,11 @@ const MOBILE_SCRIPTS = [
   // שלעולם לא יכולה לעבוד. הסתרה בלבד הייתה משאירה כשל-שקט אם מישהו איכשהו
   // מגיע ל-external בכל זאת; הבחירה בפועל מועברת ל-"App storage" (קליק תכנותי
   // דרך ה-listener הקיים של הבאנדל — ste.addOption רושם click→setValue).
-  // MutationObserver (לא DOM סטטי, כמו installDemoVaultButton למעלה): הרדיו
-  // הזה מרונדר גם במסך ה-onboarding הראשוני וגם במודל "Create new vault" —
-  // וכל שלב-אשף עשוי לרנדר-מחדש. לא רץ בכלל ב-Chromium (return מוקדם) — שם
-  // showDirectoryPicker עובד, אין מה לגדר.
+  // MutationObserver (לא DOM סטטי — כל תוכן שמוזרק/מוגן במסכי ה-onboarding
+  // בקובץ הזה משתמש באותה טכניקה, ראה installVersionDisplay/showGrantScreen):
+  // הרדיו הזה מרונדר גם במסך ה-onboarding הראשוני וגם במודל "Create new
+  // vault" — וכל שלב-אשף עשוי לרנדר-מחדש. לא רץ בכלל ב-Chromium (return
+  // מוקדם) — שם showDirectoryPicker עובד, אין מה לגדר.
   // §3.5ב (calev PARTIAL, ממצא 1 — DoD#13): הגרסה הקודמת זיהתה את שתי
   // האפשרויות לפי טקסט מרונדר (/device storage/i, /app storage/i) — טקסט
   // מתורגם ⇒ בכל locale שאינו אנגלית (43 מתוך 44 בבורר-השפה, שיושב על המסך
@@ -897,67 +900,6 @@ const MOBILE_SCRIPTS = [
     obs.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ── מסך-פתיחה נייטיב (no-vault) — כפתור "כספת דמו" (seed-demo §3ד) ─────────
-  // spike (executor): הבריף (avigail סבב 2) מבקש במפורש `.mobile-onboarding`
-  // (לא `.mobile-onboarding-screen`) — root ה-wizard של first-run
-  // (`document.body.createDiv("mobile-onboarding")`, אומת גרפית מול
-  // vendor/obsidian-mobile/app.js). לא `.mobile-vault-chooser-screen`
-  // (משתמש עם ≥1 vault קיים) — הכפתור מיועד למסך-onboarding בלבד (§0).
-  // MutationObserver (לא הזרקה חד-פעמית): שלבי-האשף (welcome→sync-intro→
-  // configure-vault) עשויים לרנדר-מחדש תוכן פנימי; ה-observer מבטיח שהכפתור
-  // חוזר אחרי כל שלב (idempotent — guard על .ow-demo-vault-btn), ופשוט
-  // מפסיק להזריק כש-.mobile-onboarding מוסר (כספת נפתחה/reload — הדף עצמו
-  // עומד להיטען מחדש, אין disconnect() נחוץ). guard demoVault.enabled===false
-  // (ES5, אותו pattern כמו ensureDemo) — לא מציגים כפתור למשהו שלא יעשה כלום.
-  function installDemoVaultButton() {
-    function inject() {
-      var d = window.__owConfig && window.__owConfig.demoVault;
-      if (d && d.enabled === false) return;
-      var root = document.querySelector('.mobile-onboarding');
-      if (!root || root.querySelector('.ow-demo-vault-btn')) return;
-      var btn = document.createElement('button');
-      btn.className = 'ow-demo-vault-btn mod-cta';
-      // §3.6 (calev-heavy NO-GO round 2, ממצא 2 — DoD#18): זה הכפתור שנחטף
-      // ע"י installCreateVaultInterceptor — הוא `button.mod-cta` בתוך
-      // `.mobile-onboarding`, בדיוק ה-selector של ה-interceptor, ועל מסך
-      // "Configure your new vault" גם `input[type=text]` (שדה השם) וגם
-      // הרדיו קיימים ⇒ הדיסקרימינטור החדש למעלה לא היה מספיק להוציא אותו.
-      // הפתרון: לסמן, לא לזהות. כל כפתור שאנחנו מזריקים נושא
-      // `data-ow-injected` וה-interceptor מדלג עליו במפורש (למעלה, השורה
-      // הראשונה ב-handler) — זיהוי-לפי-class/מיקום כבר נשבר פעמיים בסלייס
-      // הזה, לא עוד ניחוש שלישי.
-      btn.setAttribute('data-ow-injected', 'demo-vault');
-      btn.type = 'button';
-      // English (docs/plans/demo-origin-split.md §4 Commit 6, calev-heavy
-      // runtime-gate finding — §6 "כל טקסט-מבקר באנגלית"): this slice is
-      // what makes the demo build a public English-only origin, so the
-      // pre-existing Hebrew text becomes visitor-facing. Text only — see
-      // the comments above/below for why nothing else here changes.
-      btn.textContent = 'Demo vault';
-      // §3.6ג (calev-heavy NO-GO round 2, ממצא 5): ב-390×844 (mobile) ה-footer
-      // (`.mod-version`, §3.4) יושב קבוע ב-y≈787 מתוך גובה-viewport 844 — נמדד
-      // ישירות (boundingBox) בכל שלבי-האשף, לא רק "לפעמים נמוך יותר". הכפתור
-      // ב-bottom:16px (גובה 44) חופף אותו (y 784-828 מול 787-804). בדסקטופ
-      // (1280×800, נמדד) אין שום חפיפה — הטקסט מתחיל ב-x=410, הכפתור מסתיים
-      // ב-x≈104. bottom גבוה יותר על viewport צר בלבד (heuristic על רוחב,
-      // לא UA-sniffing) מרים את הכפתור מעל שורת-הגרסה בלי לגעת בדסקטופ.
-      var narrowViewport = window.innerWidth <= 480;
-      btn.style.cssText = 'position:fixed;left:16px;bottom:' + (narrowViewport ? '68px' : '16px') +
-        ';z-index:9999;padding:8px 16px;border:none;border-radius:4px;background:#7f6df2;' +
-        'color:#fff;cursor:pointer;font:13px -apple-system,BlinkMacSystemFont,sans-serif;';
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var id = ensureDemo();
-        if (id) navigateToVault(id);
-      });
-      root.appendChild(btn);
-    }
-    inject();
-    var obs = new MutationObserver(inject);
-    obs.observe(document.body, { childList: true, subtree: true });
-  }
-
   // ── מספר-גרסה (§3.4) — לצד רכיב-הגרסה הקיים בכותרת-התחתונה של ה-onboarding ──
   // window.__owVersion מוזרק רק ע"י בניית ה-CF (אותו ערוץ נפרד של __owBackend,
   // §3.2) — בפריסת runtime-server הוא לעולם לא מוגדר ⇒ מציגים רק את הגרסה של
@@ -995,7 +937,6 @@ const MOBILE_SCRIPTS = [
     installNativeVaultOpenBridge();
     installCreateVaultInterceptor();
     installExternalStorageGate();
-    installDemoVaultButton();
     installVersionDisplay();
     seedNativeVaultList()
       .catch(function (err) { console.warn('[obsidian-web] seedNativeVaultList failed:', err); })
@@ -1016,11 +957,13 @@ const MOBILE_SCRIPTS = [
       var overlay = document.getElementById('ow-loading');
       setStatus('Access to "' + handle.name + '" is needed to continue.');
       var btn = document.createElement('button');
-      // §3.6: same marking convention as installDemoVaultButton — this one
-      // lives in `#ow-loading` (not under `.mobile-onboarding`/
-      // `.mobile-vault-chooser-screen`) so installCreateVaultInterceptor's
-      // selector can never match it today, but "every button we inject gets
-      // marked" is the rule going forward, not "every button we've checked
+      // §3.6: same `data-ow-injected` marking convention required of every
+      // button this file injects (installCreateVaultInterceptor above skips
+      // anything carrying it) — this one lives in `#ow-loading` (not under
+      // `.mobile-onboarding`/`.mobile-vault-chooser-screen`) so the
+      // interceptor's selector can never match it today, but "every button
+      // we inject gets marked" is the rule going forward, not "every button
+      // we've checked
       // doesn't currently collide."
       btn.setAttribute('data-ow-injected', 'grant-access');
       btn.textContent = 'Grant access to ' + handle.name;
