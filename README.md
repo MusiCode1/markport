@@ -2,9 +2,13 @@
 
 Run Obsidian in a standard browser — no Electron, no native app needed.
 
-**[Live Demo →](https://obsidian-online.pages.dev)** — client-only: your vault lives entirely in
-your own browser (OPFS), nothing is stored on any server, and nothing is shared between visitors.
-See "Two deployment modes" below.
+**[Try the demo →](https://demo.obsidian-online.pages.dev)** — opens a ready-made vault, nothing to set up.
+**[Open the app →](https://obsidian-online.pages.dev)** — start with your own empty vault.
+
+Both are client-only: your vault lives entirely in your own browser (OPFS), nothing is stored on
+any server, and nothing is shared between visitors. They are two deployments of the *same build*,
+differing only in a config profile chosen at build time — the demo seeds example content and opens
+it automatically, the app does neither. See "Two deployment modes" below.
 
 obsidian-web loads Obsidian's original renderer (`app.js`) completely unmodified — zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle — and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
 
@@ -45,8 +49,14 @@ The client-only deployment (and local/folder vaults on the Node server) are back
 | Storage | Real filesystem, via `/api/fs` | OPFS — entirely inside your browser |
 | Persistence | Full | Until you clear this site's browsing data |
 | Sharing | Whoever can reach the server/port | Nobody — your vault stays private to your browser; only GitHub/obsidian.md requests (plugin installs, plus one automatic check on vault load) pass through a small proxy, see "Cloudflare (client-only) deployment" below |
-| Use case | Personal use, self-hosted | Public demo, zero-maintenance, no server-side vault storage |
-| URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) |
+| Use case | Personal use, self-hosted | Public app + demo, zero-maintenance, no server-side vault storage |
+| URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) (app) · [demo.obsidian-online.pages.dev](https://demo.obsidian-online.pages.dev) (demo) |
+
+The two Cloudflare URLs come from **one build**. `scripts/build-assets.sh` picks a config profile
+from the `OW_PROFILE` environment variable — the default profile ships the app (no demo vault, no
+seeding), `OW_PROFILE=demo` ships the demo (seeded example vault, opened automatically, re-seeded
+when the shipped content changes). A guard script refuses to upload an artifact to the wrong
+target. See `src/deployments/cloudflare/README.md`.
 
 There's also `src/sync-server/` — a separate, optional pull-sync server (`/sync/v1`, content-hash
 based, Bearer-token auth via `SYNC_TOKEN`) that lets an OPFS vault pull from a server-hosted vault

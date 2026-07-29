@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>obsidian-web — אובסידיאן בתוך הדפדפן</title>
+<meta name="description" content="המנוע המקורי של Obsidian רץ בדפדפן רגיל. בלי Electron, בלי התקנה, בלי כספת בצד השרת. הפתקים נשארים אצלך בדפדפן.">
+<meta name="theme-color" content="#1e1e1e">
+<link rel="alternate" hreflang="en" href="index.html">
+
+<meta property="og:title" content="obsidian-web">
+<meta property="og:description" content="המנוע המקורי של Obsidian, רץ בדפדפן רגיל. הפתקים שלך לא עוזבים את הדפדפן.">
+<meta property="og:type" content="website">
+
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --panel: #262626;
+    --line: #363636;
+    --text: #dcddde;
+    --dim: #999;
+    --accent: #7f6df2;
+    --accent-soft: #a396f5;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Hebrew", Arial, sans-serif;
+  }
+  a { color: var(--accent-soft); }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+
+  header { padding: 72px 0 40px; text-align: center; }
+  h1 { font-size: 2.5rem; line-height: 1.2; margin: 0 0 14px; }
+  h1 span { color: var(--accent-soft); }
+  .tagline { font-size: 1.15rem; color: var(--dim); margin: 0 auto; max-width: 34em; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 36px 0 8px; }
+  .btn {
+    display: inline-block; padding: 13px 26px; border-radius: 8px;
+    text-decoration: none; font-weight: 600; font-size: 1.02rem;
+    border: 1px solid var(--line); color: var(--text); background: var(--panel);
+    transition: border-color .15s, transform .15s;
+  }
+  .btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
+  .btn small { display: block; font-weight: 400; font-size: .8rem; opacity: .85; margin-top: 2px; }
+
+  section { padding: 30px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.25rem; margin: 0 0 14px; }
+  ul { padding-inline-start: 1.2em; }
+  li { margin: 6px 0; }
+  code {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: .88em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .note { color: var(--dim); font-size: .93rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+  th, td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; }
+  td:not(:first-child), th:not(:first-child) { text-align: center; width: 5.5em; }
+
+  footer { padding: 34px 0 60px; color: var(--dim); font-size: .9rem; text-align: center; }
+  footer a { margin: 0 8px; }
+
+  .lang {
+    position: absolute; top: 16px; inset-inline-end: 20px;
+    font-size: .88rem; color: var(--dim); text-decoration: none;
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 11px;
+  }
+  .lang:hover { color: var(--text); border-color: var(--accent); }
+
+  @media (max-width: 520px) {
+    header { padding: 48px 0 30px; }
+    h1 { font-size: 1.9rem; }
+    .btn { width: 100%; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<a class="lang" href="index.html" hreflang="en" lang="en" dir="ltr">English</a>
+
+<header class="wrap">
+  <h1>אובסידיאן, רץ <span>בדפדפן שלך</span></h1>
+  <p class="tagline">
+    המנוע המקורי של Obsidian — ממש הוא, בייט-בבייט ללא שינוי — כשכל תלות
+    ב-Electron וב-Capacitor הוחלפה בשכבות-ביניים מבוססות-דפדפן.
+  </p>
+
+  <div class="actions">
+    <a class="btn btn-primary" href="https://demo.obsidian-online.pages.dev">
+      לנסות את הדמו
+      <small>כספת מוכנה — אין מה להגדיר</small>
+    </a>
+    <a class="btn" href="https://obsidian-online.pages.dev">
+      לפתוח את האפליקציה
+      <small>ליצור כספת משלך</small>
+    </a>
+  </div>
+  <p class="note">חינמי, קוד פתוח, בלי חשבון.</p>
+</header>
+
+<main class="wrap">
+
+<section>
+  <h2>איפה הפתקים שלך יושבים</h2>
+  <p>
+    בדפדפן שלך, ובשום מקום אחר. הכספות נשמרות ב־<a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system">OPFS</a>
+    — פרטיות לך, לא נשלחות לשום שרת, לא משותפות בין מבקרים, ולא מתאפסות מעצמן.
+    הן שורדות רענון של הדף ונשארות עד שתמחק את נתוני הגלישה של האתר הזה.
+  </p>
+  <p class="note">
+    <strong>חריג אחד, בלי לטשטש:</strong> בקשות אל <code dir="ltr">github.com</code>,
+    <code dir="ltr">githubusercontent.com</code> ו־<code dir="ltr">obsidian.md</code> — התקנת
+    תוסף קהילתי, והבדיקה האחת ש-Obsidian עצמו עושה לתוספים מיושנים בטעינת הכספת — עוברות דרך
+    פרוקסי קטן, כי דפדפן לא יכול לפנות למארחים האלה ישירות. הפתקים שלך לא חלק מזה בשום שלב.
+    שרת סנכרון שתחבר בעצמך הוא חיבור ישיר ולא עובר דרך הפרוקסי.
+  </p>
+</section>
+
+<section>
+  <h2>אפס תיקונים לבאנדל של Obsidian</h2>
+  <p>
+    <code dir="ltr">app.js</code> מוגש בדיוק כפי ש-Obsidian מפיצה אותו — מאומת ב-checksum מול
+    הבאנדל הרשמי לאנדרואיד. שום דבר לא נכתב מחדש בזמן הבנייה. התנהגות הפלטפורמה (פריסת דסקטופ
+    מול מובייל) מותאמת <em>בזמן ריצה</em>, דרך שכבה שלוכדת את אובייקט ה־<code dir="ltr">Platform</code>
+    של Obsidian עצמה במקום לערוך את הקוד שלה.
+  </p>
+  <p class="note">
+    הריפוזיטורי הזה לא מכיל ולא מפיץ את הבאנדל. סקריפטי ההתקנה מורידים אותו מ-Obsidian ישירות.
+  </p>
+</section>
+
+<section>
+  <h2>מה עובד</h2>
+  <ul>
+    <li>עריכת Markdown מלאה ותצוגה חיה, במנוע של Obsidian עצמה</li>
+    <li>עץ קבצים, לשוניות, חלוקת מסך, תצוגת גרף</li>
+    <li>קישורים דו־כיווניים, backlinks, תגיות, חיפוש, פלטת פקודות</li>
+    <li>תוספי הליבה, ותוספי קהילה שמותקנים מתוך האפליקציה</li>
+    <li>כספות־תיקייה — פתיחת תיקייה אמיתית מהדיסק (Chromium)</li>
+    <li>תמיכה מלאה בעברית, ב-RTL וביוניקוד</li>
+  </ul>
+</section>
+
+<section>
+  <h2>תמיכת דפדפנים</h2>
+  <table>
+    <tr><th>יכולת</th><th>Chromium</th><th>Firefox</th><th>Safari</th></tr>
+    <tr><td>אחסון כספת — קריאה</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>אחסון כספת — כתיבה</td><td>✅</td><td>✅</td><td>⚠️</td></tr>
+    <tr><td>כספות־תיקייה</td><td>✅</td><td>❌</td><td>❌</td></tr>
+    <tr><td>רענון אוטומטי בשינוי חיצוני</td><td>✅</td><td>❌</td><td>❌</td></tr>
+  </table>
+  <p class="note">
+    Chromium נותן את החוויה המלאה. ב-Safari הכתיבה ל-OPFS הגיעה הרבה אחרי הקריאה — כדאי לבדוק
+    את הגרסה. בכל דפדפן נדרש הקשר מאובטח (<code dir="ltr">https://</code> או
+    <code dir="ltr">localhost</code>).
+  </p>
+</section>
+
+<section>
+  <h2>להריץ בעצמך</h2>
+  <p>
+    שני מצבי פריסה: בנייה סטטית לגמרי בצד־הלקוח (מה שהאתר הזה מגיש), ושרת Node.js אופציונלי
+    ששומר כספות כקבצים אמיתיים על הדיסק ודוחף עדכונים חיים בין לשוניות. שניהם מריצים את אותו
+    ליבת־דפדפן.
+  </p>
+  <p>
+    <a href="https://github.com/MusiCode1/obsidian-web#readme">הוראות התקנה ←</a>
+  </p>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <a href="https://github.com/MusiCode1/obsidian-web">GitHub</a>·
+  <a href="https://github.com/MusiCode1/obsidian-web/blob/main/docs/architecture.md">ארכיטקטורה</a>·
+  <a href="https://github.com/MusiCode1/obsidian-web/blob/main/docs/investigations.md">הערות הנדסה־לאחור</a>·
+  <a href="https://obsidian.md">Obsidian</a>
+  <p class="note" style="margin-top:14px">
+    פרויקט קוד פתוח עצמאי. לא מסונף ל-Obsidian ולא מאושר על ידה.
+  </p>
+</footer>
+
+</body>
+</html>
