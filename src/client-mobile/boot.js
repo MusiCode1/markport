@@ -84,6 +84,13 @@ const MOBILE_SCRIPTS = [
     location.href = '/vault/' + encodeURIComponent(id);
   }
 
+  // DEMO_ID — הועלה לכאן, לפני בלוק ניתוב-הכניסה למטה (docs/plans/
+  // demo-origin-split.md §4 Commit 2, 🔴 אילוץ סדר): הבלוק הזה משתמש בו
+  // כדי להפנות ישירות לכספת הדמו כשאין VAULT_ID/כספת-אחרונה ו-autoOpen
+  // דולק. ensureDemo() והקריאה `if (VAULT_ID === DEMO_ID) ensureDemo();`
+  // (§3ג) נשארות במקומן למטה — רק ההגדרה הועלתה, לא הלוגיקה שתלויה בה.
+  var DEMO_ID = (window.__owConfig && window.__owConfig.demoVault && window.__owConfig.demoVault.id) || '0000demo0000demo';
+
   // מודל הנייטיב: 'mobile-selected-vault' = "כספת פתוחה/נבחרה" — מקור-האמת
   // (Bug 1, brief §0/§3א). היעדרו פירושו native close/"ניהול כספות" (quick
   // action 'close-vault' מוחק את המפתח ועושה reload) — כוונה מפורשת לחזור
@@ -94,9 +101,14 @@ const MOBILE_SCRIPTS = [
   //
   // path-based routing (brief §3ב): /vault/<id> כבר קבע VAULT_ID מה-path —
   // אין צורך להתייעץ עם localStorage. /starter מתעלם מ-auto-resume לגמרי
-  // (forceStarter, למטה). רק path "entry" (לא /vault/<id>, לא /starter — /,
-  // /mobile וכו') מפנה בעצמו ל-/vault/<id> (יש כספת-אחרונה) או ל-/starter
-  // (אין) — location.replace (לא push) כדי שלא ייווצר loop ב-back.
+  // (forceStarter, למטה — זו דרך-המילוט היחידה למסך-הפתיחה בדומיין הדמו,
+  // ממשיכה לעקוף גם את הפתיחה-האוטומטית למטה). רק path "entry" (לא
+  // /vault/<id>, לא /starter — /, /mobile וכו') מפנה בעצמו ל-/vault/<id> (יש
+  // כספת-אחרונה), ל-/vault/<DEMO_ID>/Welcome (אין כספת-אחרונה אבל
+  // demoVault.autoOpen דולק — docs/plans/demo-origin-split.md §4 Commit 2,
+  // note-path עודכן ל-/Welcome ב-Commit 6 אחרי calev-heavy, ראה שם), או
+  // ל-/starter (אף אחד מהשניים) — location.replace (לא push) כדי שלא ייווצר
+  // loop ב-back.
   if (forceStarter) {
     // מנקה מפתח-בחירה פעם-אחת (בלי reload נוסף — אין loop) כדי שהבאנדל
     // הנייטיב לא ינסה auto-open כשהוא רץ מיד למטה (מסך-הפתיחה, no-vault).
@@ -109,7 +121,23 @@ const MOBILE_SCRIPTS = [
     if (resumeId) {
       location.replace('/vault/' + encodeURIComponent(resumeId));
     } else {
-      location.replace('/starter');
+      // דמו — פתיחה-אוטומטית (§0 מטרה: מבקר בדומיין הדמו נוחת ישירות בכספת,
+      // אפס לחיצות). ES5 guard pattern (כמו ensureDemo/DEMO_ID למעלה) —
+      // demoVault.autoOpen===true במפורש (לא ייתכן "on by default" — ברירת-
+      // המחדל היא ללא-דמו, §9 שאלה 1) וגם enabled!==false (opt-out מפורש
+      // מבטל גם autoOpen).
+      var d = window.__owConfig && window.__owConfig.demoVault;
+      if (d && d.autoOpen === true && d.enabled !== false) {
+        // /Welcome (docs/plans/demo-origin-split.md §4 Commit 6, calev-heavy
+        // runtime-gate finding 1): a bare /vault/<demoId> lands on Obsidian's
+        // empty "New tab" screen — Welcome.md exists but isn't open. .obsidian/
+        // (workspace.json, app.json's defaultViewMode) is deliberately never
+        // seeded (finding 1), so routing straight to the note is the only
+        // remaining way to actually render it, zero clicks, as §1 promises.
+        location.replace('/vault/' + encodeURIComponent(DEMO_ID) + '/Welcome');
+      } else {
+        location.replace('/starter');
+      }
     }
     return;   // מנווטים החוצה — אין מה לעשות יותר בטיק הזה
   }
@@ -124,7 +152,8 @@ const MOBILE_SCRIPTS = [
   // in a later commit, DoD#4). Idempotent: get(DEMO_ID) truthy on repeat
   // visits → no-op (the fixed id, not a fresh uuid, is what makes this work
   // — local-vault-registry.js create() opts.id, seed-demo §3א).
-  var DEMO_ID = (window.__owConfig && window.__owConfig.demoVault && window.__owConfig.demoVault.id) || '0000demo0000demo';
+  // (DEMO_ID itself is defined earlier, before the entry-routing block —
+  // see the comment there, Commit 2 — so the routing block below can use it.)
   function ensureDemo() {
     // ES5 guard, avigail round-2 fix (precedence bug in the brief's draft
     // pseudocode `!d.enabled ?? true`, which isn't even valid without `??`):
@@ -667,13 +696,15 @@ const MOBILE_SCRIPTS = [
         e.target.closest('.mobile-onboarding button.mod-cta, .mobile-vault-chooser-screen button.mod-cta');
       if (!btn) return;
 
-      // §3.6 (calev-heavy NO-GO round 2, ממצא 2): כפתור-הדמו שלנו
-      // (installDemoVaultButton) חי בתוך `.mobile-onboarding` ונושא
-      // `mod-cta` ⇒ תואם את ה-selector למעלה ונחטף. זיהוי-לפי-class/מיקום
-      // יישבר שוב ברגע שכפתור-שלנו נוסף/משתנה (זו הפעם השנייה שבורר-לפי-
-      // מראה נשבר בסלייס הזה) — הפתרון הנכון הוא לסמן במפורש כל כפתור
-      // שאנחנו מזריקים (`data-ow-injected`, ראה installDemoVaultButton
-      // וגם showGrantScreen למטה) ולדלג עליו כאן, לפני כל בדיקה אחרת.
+      // §3.6 (calev-heavy NO-GO round 2, ממצא 2): כפתור מוזרק-שלנו שחי בתוך
+      // `.mobile-onboarding` ונושא `mod-cta` תואם את ה-selector למעלה ונחטף
+      // (זה בדיוק מה שקרה לכפתור-הדמו שהיה כאן — נמחק ב-docs/plans/
+      // demo-origin-split.md §4 Commit 7, אחרי שהפיצול-לדמו ייתר אותו — אבל
+      // המוסכמה נשארת כי showGrantScreen למטה עדיין מזריק כפתור). זיהוי-
+      // לפי-class/מיקום נשבר שוב ברגע שכפתור-שלנו נוסף/משתנה (זו הפעם
+      // השנייה שבורר-לפי-מראה נשבר בסלייס ההוא) — הפתרון הנכון הוא לסמן
+      // במפורש כל כפתור שאנחנו מזריקים (`data-ow-injected`, ראה
+      // showGrantScreen למטה) ולדלג עליו כאן, לפני כל בדיקה אחרת.
       if (btn.hasAttribute('data-ow-injected')) return;
 
       // §3.5ב (calev PARTIAL, ממצא 1 — DoD#13): היה כאן גם התאמת-טקסט
@@ -812,10 +843,11 @@ const MOBILE_SCRIPTS = [
   // שלעולם לא יכולה לעבוד. הסתרה בלבד הייתה משאירה כשל-שקט אם מישהו איכשהו
   // מגיע ל-external בכל זאת; הבחירה בפועל מועברת ל-"App storage" (קליק תכנותי
   // דרך ה-listener הקיים של הבאנדל — ste.addOption רושם click→setValue).
-  // MutationObserver (לא DOM סטטי, כמו installDemoVaultButton למעלה): הרדיו
-  // הזה מרונדר גם במסך ה-onboarding הראשוני וגם במודל "Create new vault" —
-  // וכל שלב-אשף עשוי לרנדר-מחדש. לא רץ בכלל ב-Chromium (return מוקדם) — שם
-  // showDirectoryPicker עובד, אין מה לגדר.
+  // MutationObserver (לא DOM סטטי — כל תוכן שמוזרק/מוגן במסכי ה-onboarding
+  // בקובץ הזה משתמש באותה טכניקה, ראה installVersionDisplay/showGrantScreen):
+  // הרדיו הזה מרונדר גם במסך ה-onboarding הראשוני וגם במודל "Create new
+  // vault" — וכל שלב-אשף עשוי לרנדר-מחדש. לא רץ בכלל ב-Chromium (return
+  // מוקדם) — שם showDirectoryPicker עובד, אין מה לגדר.
   // §3.5ב (calev PARTIAL, ממצא 1 — DoD#13): הגרסה הקודמת זיהתה את שתי
   // האפשרויות לפי טקסט מרונדר (/device storage/i, /app storage/i) — טקסט
   // מתורגם ⇒ בכל locale שאינו אנגלית (43 מתוך 44 בבורר-השפה, שיושב על המסך
@@ -868,62 +900,6 @@ const MOBILE_SCRIPTS = [
     obs.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ── מסך-פתיחה נייטיב (no-vault) — כפתור "כספת דמו" (seed-demo §3ד) ─────────
-  // spike (executor): הבריף (avigail סבב 2) מבקש במפורש `.mobile-onboarding`
-  // (לא `.mobile-onboarding-screen`) — root ה-wizard של first-run
-  // (`document.body.createDiv("mobile-onboarding")`, אומת גרפית מול
-  // vendor/obsidian-mobile/app.js). לא `.mobile-vault-chooser-screen`
-  // (משתמש עם ≥1 vault קיים) — הכפתור מיועד למסך-onboarding בלבד (§0).
-  // MutationObserver (לא הזרקה חד-פעמית): שלבי-האשף (welcome→sync-intro→
-  // configure-vault) עשויים לרנדר-מחדש תוכן פנימי; ה-observer מבטיח שהכפתור
-  // חוזר אחרי כל שלב (idempotent — guard על .ow-demo-vault-btn), ופשוט
-  // מפסיק להזריק כש-.mobile-onboarding מוסר (כספת נפתחה/reload — הדף עצמו
-  // עומד להיטען מחדש, אין disconnect() נחוץ). guard demoVault.enabled===false
-  // (ES5, אותו pattern כמו ensureDemo) — לא מציגים כפתור למשהו שלא יעשה כלום.
-  function installDemoVaultButton() {
-    function inject() {
-      var d = window.__owConfig && window.__owConfig.demoVault;
-      if (d && d.enabled === false) return;
-      var root = document.querySelector('.mobile-onboarding');
-      if (!root || root.querySelector('.ow-demo-vault-btn')) return;
-      var btn = document.createElement('button');
-      btn.className = 'ow-demo-vault-btn mod-cta';
-      // §3.6 (calev-heavy NO-GO round 2, ממצא 2 — DoD#18): זה הכפתור שנחטף
-      // ע"י installCreateVaultInterceptor — הוא `button.mod-cta` בתוך
-      // `.mobile-onboarding`, בדיוק ה-selector של ה-interceptor, ועל מסך
-      // "Configure your new vault" גם `input[type=text]` (שדה השם) וגם
-      // הרדיו קיימים ⇒ הדיסקרימינטור החדש למעלה לא היה מספיק להוציא אותו.
-      // הפתרון: לסמן, לא לזהות. כל כפתור שאנחנו מזריקים נושא
-      // `data-ow-injected` וה-interceptor מדלג עליו במפורש (למעלה, השורה
-      // הראשונה ב-handler) — זיהוי-לפי-class/מיקום כבר נשבר פעמיים בסלייס
-      // הזה, לא עוד ניחוש שלישי.
-      btn.setAttribute('data-ow-injected', 'demo-vault');
-      btn.type = 'button';
-      btn.textContent = 'כספת דמו';
-      // §3.6ג (calev-heavy NO-GO round 2, ממצא 5): ב-390×844 (mobile) ה-footer
-      // (`.mod-version`, §3.4) יושב קבוע ב-y≈787 מתוך גובה-viewport 844 — נמדד
-      // ישירות (boundingBox) בכל שלבי-האשף, לא רק "לפעמים נמוך יותר". הכפתור
-      // ב-bottom:16px (גובה 44) חופף אותו (y 784-828 מול 787-804). בדסקטופ
-      // (1280×800, נמדד) אין שום חפיפה — הטקסט מתחיל ב-x=410, הכפתור מסתיים
-      // ב-x≈104. bottom גבוה יותר על viewport צר בלבד (heuristic על רוחב,
-      // לא UA-sniffing) מרים את הכפתור מעל שורת-הגרסה בלי לגעת בדסקטופ.
-      var narrowViewport = window.innerWidth <= 480;
-      btn.style.cssText = 'position:fixed;left:16px;bottom:' + (narrowViewport ? '68px' : '16px') +
-        ';z-index:9999;padding:8px 16px;border:none;border-radius:4px;background:#7f6df2;' +
-        'color:#fff;cursor:pointer;font:13px -apple-system,BlinkMacSystemFont,sans-serif;';
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var id = ensureDemo();
-        if (id) navigateToVault(id);
-      });
-      root.appendChild(btn);
-    }
-    inject();
-    var obs = new MutationObserver(inject);
-    obs.observe(document.body, { childList: true, subtree: true });
-  }
-
   // ── מספר-גרסה (§3.4) — לצד רכיב-הגרסה הקיים בכותרת-התחתונה של ה-onboarding ──
   // window.__owVersion מוזרק רק ע"י בניית ה-CF (אותו ערוץ נפרד של __owBackend,
   // §3.2) — בפריסת runtime-server הוא לעולם לא מוגדר ⇒ מציגים רק את הגרסה של
@@ -961,7 +937,6 @@ const MOBILE_SCRIPTS = [
     installNativeVaultOpenBridge();
     installCreateVaultInterceptor();
     installExternalStorageGate();
-    installDemoVaultButton();
     installVersionDisplay();
     seedNativeVaultList()
       .catch(function (err) { console.warn('[obsidian-web] seedNativeVaultList failed:', err); })
@@ -982,11 +957,13 @@ const MOBILE_SCRIPTS = [
       var overlay = document.getElementById('ow-loading');
       setStatus('Access to "' + handle.name + '" is needed to continue.');
       var btn = document.createElement('button');
-      // §3.6: same marking convention as installDemoVaultButton — this one
-      // lives in `#ow-loading` (not under `.mobile-onboarding`/
-      // `.mobile-vault-chooser-screen`) so installCreateVaultInterceptor's
-      // selector can never match it today, but "every button we inject gets
-      // marked" is the rule going forward, not "every button we've checked
+      // §3.6: same `data-ow-injected` marking convention required of every
+      // button this file injects (installCreateVaultInterceptor above skips
+      // anything carrying it) — this one lives in `#ow-loading` (not under
+      // `.mobile-onboarding`/`.mobile-vault-chooser-screen`) so the
+      // interceptor's selector can never match it today, but "every button
+      // we inject gets marked" is the rule going forward, not "every button
+      // we've checked
       // doesn't currently collide."
       btn.setAttribute('data-ow-injected', 'grant-access');
       btn.textContent = 'Grant access to ' + handle.name;
@@ -1367,8 +1344,65 @@ const MOBILE_SCRIPTS = [
       // (למעלה): לעולם לא בכספת עם תוכן-משתמש קיים (seed-demo §0/§3ב).
       if (isVaultEmptyForSeed && seedStore && window.__owSeedExampleVault
           && (window.__owConfig && window.__owConfig.seedExampleContent)) {
-        try { await window.__owSeedExampleVault.seedExampleVault(seedStore); }
+        try {
+          // seedExampleVault resolves true only when it actually wrote files
+          // (calev-heavy Commit-3 phase-verify NBug2 —
+          // reports/obsidian-web/demo-origin-split-commit3-calev.md): a
+          // silent skip (missing/failed /example-vault.json fetch) must NOT
+          // be mistaken for success below.
+          var seeded1 = await window.__owSeedExampleVault.seedExampleVault(seedStore);
+          // 🔴 אביגיל ממצא 7 — כתיבת המפתח מתווספת גם כאן, מיד אחרי הזריעה
+          // הראשונה המוצלחת: בלי זה, בבוט הראשון של הדמו localStorage ריק,
+          // הבלוק החדש למטה (re-seed-on-change) רואה "שונה" ורץ force:true
+          // מיד אחרי הזריעה הראשונה — זריעה כפולה. 🔴 ולכתיבה הזו חייב להיות
+          // אותו guard VAULT_ID===DEMO_ID (אביגיל סבב 2, ממצא 1): הבלוק הזה
+          // רץ על **כל** כספת local/folder ריקה, לא רק הדמו — בלי ה-guard,
+          // כספת local ריקה שהמבקר יצר לעצמו הייתה כותבת את ה-hash הנוכחי
+          // ל-localStorage['ow-demo-content'] (מפתח אחד לכל המקור), ומסמנת
+          // בטעות את כספת-הדמו האמיתית כ"כבר מעודכנת" — זריעה-מחדש לא הייתה
+          // רצה לעולם, באג שקט שאין לו טסט/DoD חוץ מה-guard הזה. seeded1
+          // (למעלה): לא לסמן "בוצע" על סמך ניסיון שדולג/נכשל בשקט (NBug2).
+          if (seeded1 && VAULT_ID === DEMO_ID && window.__owDemoContent) {
+            try { localStorage.setItem('ow-demo-content', window.__owDemoContent); } catch (e) {}
+          }
+        }
         catch (e) { console.warn('[ow] seed example vault failed', e); }
+      }
+
+      // ── re-seed demo content on change (docs/plans/demo-origin-split.md §4
+      // Commit 3) — בלוק חדש ונפרד, לא מתערבב עם הזריעה-הראשונה למעלה. כשה-
+      // hash שהוזרק בבניה (window.__owDemoContent, Commit 1) שונה מהמסומן
+      // ב-localStorage (בוט קודם, אחרי template.js השתנה בין הבניות), דורס
+      // מחדש רק את קבצי-התבנית (force:true — .obsidian/ עדיין מדולג, קבצי
+      // המבקר עצמו לא נוגעים). רק בכספת הדמו (VAULT_ID===DEMO_ID) — כספת
+      // אחרת של המשתמש לעולם לא נדרסת. כישלון (או ניסיון שדולג בשקט — seeded2
+      // false, NBug2) לא חוסם את הפתיחה ולא מעדכן את המפתח, כדי שהניסיון
+      // יחזור בבוט הבא (try/catch+console.warn, כמו הבלוק שמעליו). cacheBust
+      // (NBug1, אותו דוח): מעביר את ה-hash החדש שכבר בידינו כ-query string —
+      // ה-fetch עצמו יוצא נגד URL שמעולם לא נכנס ל-cache (של ה-SW הישן
+      // *או* החדש), כך ש-service worker קודם שעדיין שולט בעמוד (redeploy,
+      // takeover אסינכרוני) לא יכול להחזיר hit על תוכן ה-build הקודם.
+      if (seedStore && window.__owSeedExampleVault
+          && (window.__owConfig && window.__owConfig.seedExampleContent)
+          && !(window.__owConfig && window.__owConfig.demoVault && window.__owConfig.demoVault.enabled === false)
+          && VAULT_ID === DEMO_ID
+          && window.__owDemoContent
+          && window.__owDemoContent !== localStorage.getItem('ow-demo-content')) {
+        try {
+          var seeded2 = await window.__owSeedExampleVault.seedExampleVault(seedStore, { force: true, cacheBust: window.__owDemoContent });
+          if (seeded2) {
+            localStorage.setItem('ow-demo-content', window.__owDemoContent);
+          } else {
+            // calev-heavy end-of-slice verify (finding 5 —
+            // reports/obsidian-web/demo-origin-split-calev.md): a silent
+            // (non-throwing) skip — e.g. /example-vault.json fetch failed —
+            // still needs the field diagnostic the brief asks for here
+            // ("try/catch + console.warn"). The key correctly stays
+            // un-updated either way (retry next boot); this only adds the
+            // missing log line for that path.
+            console.warn('[ow] re-seed example vault (content changed): seed did not complete — will retry next boot');
+          }
+        } catch (e) { console.warn('[ow] re-seed example vault (content changed) failed', e); }
       }
 
       setStatus('Loading Obsidian mobile...');

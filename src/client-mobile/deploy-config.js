@@ -28,18 +28,21 @@
 (function () {
   'use strict';
 
-  // Mirrors src/config/deploy-config.json — kept as a literal (not fetched)
-  // so config is available synchronously before boot.js runs (brief §6 risk:
-  // an async fetch here would race boot.js's synchronous reads).
+  // Mirrors src/config/deploy-config.json — the DEFAULT profile (as opposed
+  // to src/config/deploy-config.demo.json, selected at build time via
+  // OW_PROFILE=demo, docs/plans/demo-origin-split.md §4 Commit 0) — kept as a
+  // literal (not fetched) so config is available synchronously before
+  // boot.js runs (brief §6 risk: an async fetch here would race boot.js's
+  // synchronous reads).
   var DEFAULTS = {
     defaultVaultLocation: 'device',
-    seedExampleContent: true,
+    seedExampleContent: false,
     plugins: {
       'obsidian-livesync': { install: true, enabled: false },
       'obsidian-web-layout': { install: true, enabled: true }
     },
     layout: { default: 'auto', threshold: 900 },
-    demoVault: { enabled: true, id: '0000demo0000demo' },
+    demoVault: { enabled: false, id: '0000demo0000demo' },
     branding: { name: 'Obsidian Web', themeColor: '#1e1e1e' }
   };
 

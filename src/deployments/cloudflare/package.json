@@ -6,7 +6,11 @@
   "private": true,
   "scripts": {
     "build": "bash scripts/build-assets.sh",
-    "deploy": "bash scripts/build-assets.sh && wrangler deploy",
+    "build:demo": "OW_PROFILE=demo bash scripts/build-assets.sh",
+    "predeploy": "npm run build && bash scripts/guard-deploy-target.sh main",
+    "deploy": "wrangler deploy",
+    "predeploy:demo": "npm run build:demo && bash scripts/guard-deploy-target.sh demo",
+    "deploy:demo": "wrangler deploy",
     "dev": "bash scripts/build-assets.sh && wrangler dev",
     "test": "bun test test/*.test.js"
   },

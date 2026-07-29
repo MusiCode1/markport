@@ -2,7 +2,17 @@
 
 > **‏תאריך**: 2026-07-28
 > **‏סוג מסמך**: ‏בריף ביצועי לסלייס
-> **‏סטטוס**: ‏מאושר
+> **‏סטטוס**: ‏הושלם (אליעזר, 2026-07-29) — 13 commits על `slice/demo-origin-split`
+> (`966bf04`..HEAD), כולל תיקון calev-heavy NO-GO אחד (2 ממצאים, Commit 3 phase),
+> סבב runtime-gate ראשון (Commit 6, אחרי calev-heavy PARTIAL), מחיקת כפתור "כספת
+> דמו" (Commit 7, החלטת המשתמשת), והעברת הקישור-לראשי לראש `Welcome.md` (Commit 8,
+> החלטת המשתמשת). **שלושה סבבי calev-heavy runtime-gate, כולם GO/PARTIAL-לא-חוסם**:
+> round 1 (`demo-origin-split-calev.md`) PARTIAL 13/14; round 2 (דלתא,
+> `demo-origin-split-round2-calev.md`) GO 6/6 (3 ממצאים מוסרים למרדכי — `_headers`
+> תחת Pages Advanced mode נמדד בפועל ע"י מרדכי ואושר תקין, חפיפת-כפתור נסגרה
+> ע"י מחיקת הכפתור ב-Commit 7, ענף-resume בלי `/Welcome` — החלטת-כוונה מתועדת);
+> round 3 (דלתא, `demo-origin-split-round3-calev.md`) GO 9/9 (ממצא README-תיעוד
+> יחיד, תוקן). ‏ראה `docs/walkthrough.md` לפירוט מלא פר-commit.
 > **‏אימות אביגיל**: ✅ **READY** (‏סבב 3). ‏סבב 1: NEEDS-REWORK, 11 ‏ממצאים · ‏סבב 2:
 > USABLE-AFTER-FIX, 3 ‏ממצאים · ‏סבב 3: 0 ‏ממצאים.
 > ‏דוחות (‏**‏מחוץ לריפו** — `reports/` ‏היא תיקייה-אחות של `dev/`, ‏לא נתיב יחסי בגיט):
@@ -288,7 +298,25 @@ npm run build && npm run build   # ‏פעמיים — ‏אותו hash (‏דט
 
 ‏בבלוק ניתוב-הכניסה (‏עוגן: `} else if (!VAULT_ID) {` ‏ובתוכו `location.replace('/starter')`):
 ‏כשאין `VAULT_ID` ‏ואין כספת-אחרונה, ‏ובקונפיג `demoVault.autoOpen === true` ‏ו-`enabled !== false`
-‏— ‏הפניה ל-`/vault/<demoId>` ‏במקום ל-`/starter`.
+‏— ‏הפניה ל-**`/vault/<demoId>/Welcome`** ‏במקום ל-`/starter`.
+
+> 🔧 **‏עודכן אחרי כלב-heavy (‏ממצא 1, ‏סבב runtime-gate).** ‏הניסוח המקורי אמר
+> `/vault/<demoId>` ‏בלבד — ‏וזה בדיוק מה שנבנה. ‏אבל ‏Obsidian ‏נוחת אז על "New tab"
+> ‏ריק: ‏עץ הקבצים מלא, ‏התוכן **‏לא מרונדר**, ‏והמבקר רואה `Create new note / Go to
+> file / Close`. ‏כל מה שהסלייס קיים כדי להראות — ‏כולל הקישור לפריסה הראשית
+> (Commit 4 / DoD#13) — ‏בלתי-נראה עד לחיצה יזומה.
+>
+> ‏זו הייתה **‏סתירה פנימית בבריף**: §5 DoD#4 ‏הבטיח חוויה ("`Welcome.md` ‏מרונדר")
+> ‏ש-§4 ‏לא הנחה אף אחד לבנות. ‏ההכרעה: ‏מתקנים ‏**‏בקוד**, ‏לא מרככים את ה-DoD.
+>
+> ‏כלב מדד בדפדפן **‏נקי לחלוטין** (‏פרופיל חדש, ‏אין כספת, ‏אין `ow-demo-content`)
+> ‏ש-`/vault/<demoId>/Welcome` ‏כבר עובד היום מקצה-לקצה: ‏כספת נוצרת, ‏תוכן נזרע,
+> `Welcome.md` ‏מרונדר, ‏אפס לחיצות. ‏**‏יעד-הניתוב הוא הדבר היחיד שמשתנה** — ‏אין
+> ‏פיצ'ר חדש לבנות.
+>
+> ‏רקע שכלב מצא: ‏שני המנגנונים שהיו נותנים את זה לבד מנוטרלים **‏במכוון** —
+> `.obsidian/app.json` ‏עם `defaultViewMode: "preview"` ‏ו-`workspace.json` ‏מדולגים
+> ‏שניהם בזריעה (finding 1, ‏ובצדק). ‏ניתוב הוא הדרך היחידה שנשארה.
 
 > 🔴 **‏אילוץ סדר — ‏הכשל הצפוי בקומיט הזה.** `DEMO_ID` ‏מוגדר היום ‏**‏אחרי** ‏בלוק
 > ‏ניתוב-הכניסה (‏עוגן: `var DEMO_ID = (window.__owConfig && ...)`). ‏שימוש בו בבלוק
@@ -411,6 +439,123 @@ build:demo   OW_PROFILE=demo bash scripts/build-assets.sh
 **‏פקודות ה-`deploy` ‏עצמן ‏לא רצות בסלייס הזה** — ‏אליעזר כותב ובודק אותן ב-`--dry-run`
 ‏או בקריאת הפלט בלבד. ‏פריסה ציבורית היא החלטת מרדכי+המשתמשת אחרי merge.
 
+> ⚠️ **‏השומר מאמת כוונה, ‏לא יעד** (‏כלב-heavy ‏ממצא 4). ‏כל עוד `deploy` ‏ו-`deploy:demo`
+> ‏פונים לאותו `name` ‏ב-`wrangler.toml`, ‏ההבטחה "‏אחרי שהשומר קיים ‏הכשל הזה
+> ‏בלתי-אפשרי" ‏**‏עדיין לא מתקיימת**. ‏זה לא באג בקוד — ‏זה תנאי-קדם בטופולוגיה,
+> ‏באחריות מרדכי לפני הפריסה הציבורית. ‏ראה Commit 6.
+
+---
+
+### Commit 6 — ‏סבב runtime-gate (approach: **manual**)
+
+> ‏נוסף אחרי כלב-heavy (PARTIAL, 13/14). ‏שלושה פריטים; ‏אף אחד מהם אינו blocker,
+> ‏שניים מהם נוגעים ישירות במה שמבקר אמיתי רואה בשנייה הראשונה.
+
+**‏א. ‏יעד-הניתוב של הפתיחה-האוטומטית** — ‏ראה Commit 2 ‏המעודכן. `/vault/<demoId>/Welcome`.
+‏זה מה שסוגר את DoD#4.
+
+**‏ב. ‏הכפתור "‏כספת דמו" ‏באנגלית** — `src/client-mobile/boot.js` (‏עוגן: `ow-demo-vault-btn`,
+`btn.textContent = 'כספת דמו'`). ‏קוד **‏פרה-קיים** ‏שהסלייס הזה לא נגע בו — ‏אבל הסלייס
+‏הזה הוא מה שהופך את הדמו למקור ציבורי אנגלי-בלבד, ‏ולכן הכפתור נעשה גלוי למבקרים
+‏אמיתיים ‏וסותר את §6 ("‏כל טקסט-מבקר באנגלית"). ‏החלף ל-`Demo vault`.
+‏**‏אל תיגע בשום דבר אחר בפונקציה** — ‏המיקום/CSS/MutationObserver ‏נושאים היסטוריה של
+‏שני סבבי NO-GO ‏(‏ראה ההערות בגוף הקוד).
+
+**‏ג. `_headers` ‏לארטיפקט הדמו** — ‏קובץ בשורש ה-`public/`, ‏מיוצר **‏רק** ‏בבניית הדמו:
+
+```
+/*
+  X-Robots-Tag: index, follow
+```
+
+‏הרקע: `demo.obsidian-online.pages.dev` ‏הוא alias של ענף ⇒ Cloudflare ‏מוסיף
+`X-Robots-Tag: noindex` ‏אוטומטית. ‏**‏נמדד בפועל** (2026-07-28) ‏ש-`_headers` ‏דורס אותו:
+‏פריסת-בדיקה על `hdrtest.obsidian-online.pages.dev` ‏החזירה `x-robots-tag: index, follow`.
+‏זה מה שמאפשר פרויקט Pages **‏אחד** ‏במקום שניים.
+‏הבניה הראשית **‏לא** ‏מקבלת `_headers` — ‏היא פרודקשן וממילא מאונדקסת.
+
+**Verification**:
+
+```bash
+cd src/deployments/cloudflare
+npm run build                 && ls ../../../.tmp/deployments/cloudflare/public/_headers   # ‏מצופה: ‏לא קיים
+OW_PROFILE=demo npm run build && cat ../../../.tmp/deployments/cloudflare/public/_headers  # ‏מצופה: ‏קיים
+bun test test/*.test.js
+```
+
+> **‏שים לב**: ‏קובץ שקיים באחד הארטיפקטים ‏ולא בשני **‏משנה את DoD#7**. ‏עדכן את
+> ‏הציפייה שם: `_headers` ‏מצטרף ל-`index.html` ‏ול-`sw.js` ‏כהבדל **‏צפוי**.
+
+---
+
+### Commit 7 — ‏מחיקת כפתור "‏כספת דמו" (approach: **manual**)
+
+> ‏החלטת המשתמשת, 2026-07-29. ‏מחליף את Commit 6ב (‏שרק תרגם את הכפתור לאנגלית).
+
+‏עם הפיצול הכפתור **‏איבד את הסיבה לקיומו**: ‏הוא נועד לאפשר למבקר באתר הראשי לנסות
+‏דמו, ‏ועכשיו לדמו יש מקור משלו. ‏בבניה הראשית הוא כבר מוסתר (`enabled:false`), ‏ובבניית
+‏הדמו הוא מופיע רק ב-`/starter` — ‏מסך שמבקר בקושי מגיע אליו כי הדמו נפתח לבד.
+‏מחיקתו סוגרת גם את ממצא 1 ‏של כלב סבב 2 (‏חפיפה לבורר-השפה ב-390×844) ‏**‏בלי לגעת
+‏ב-CSS** ‏שנושא שני סבבי NO-GO.
+
+**‏קבצים שמשתנים**: `src/client-mobile/boot.js`
+
+**‏מה נמחק**:
+- ‏הפונקציה `installDemoVaultButton()` ‏במלואה (‏עוגן: `function installDemoVaultButton()`)
+- ‏הקריאה אליה (‏עוגן: `installDemoVaultButton();`)
+- ‏הערות-הרקע שמאבדות משמעות ‏אחרי המחיקה — ‏אבל **‏רק** ‏אלה שמתארות את הכפתור עצמו
+
+> 🔴 **‏מה חייב להישאר — ‏אל תמחק בטעות.** `boot.js:706`,
+> `if (btn.hasAttribute('data-ow-injected')) return;` ‏בתוך ה-create-vault interceptor.
+> ‏המוסכמה `data-ow-injected` ‏משרתת **‏כפתור מוזרק שני** (‏עוגן: ‏ההערה "same marking
+> convention as installDemoVaultButton", ‏סביב `boot.js:1019`) ‏שנשאר חי. ‏הסימון הזה
+> ‏נולד מ-NO-GO ‏שבו ה-interceptor חטף את הכפתור הלא-נכון — ‏מחיקתו מזמינה את אותו
+> ‏באג בחזרה. ‏אם הערה מפנה ל-`installDemoVaultButton` ‏שכבר לא קיימת — ‏**‏נסח אותה
+> ‏מחדש**, ‏אל תמחק את הקוד שמתחתיה.
+
+**Verification**:
+
+```bash
+cd src/client-mobile && npm test
+grep -n "ow-demo-vault-btn\|installDemoVaultButton" src/client-mobile/boot.js   # ‏מצופה: ‏רק הערות, ‏אם בכלל
+grep -n "data-ow-injected" src/client-mobile/boot.js                            # ‏מצופה: ‏עדיין קיים
+```
+
+---
+
+### Commit 8 — ‏הקישור לפריסה הראשית עובר לראש `Welcome.md` (approach: **none**)
+
+> ‏החלטת המשתמשת, 2026-07-29.
+
+‏הקישור יושב היום ‏ב**‏תחתית** ‏הפתק. ‏המשתמשת רוצה אותו ‏ב**‏תחילת** ‏הקובץ —
+‏הדבר הראשון שמבקר קורא אחרי הכותרת והמשפט הפותח, ‏לא footer.
+
+**‏קבצים שמשתנים**: `src/deployments/cloudflare/template.js` — ‏תוכן `Welcome.md` ‏בלבד.
+
+**‏מיקום**: ‏אחרי שורת הכותרת `# Welcome to Obsidian Web` ‏ואחרי ה-blockquote
+(`> **Obsidian's desktop app — running in your browser, no Electron needed.**`),
+‏לפני הפסקה `This is a live demo of **obsidian-web**…`.
+
+**‏אילוצים**: ‏אנגלית; **‏אותו URL בדיוק** (`https://obsidian-online.pages.dev`);
+**‏מופע יחיד** — ‏להעביר, ‏לא לשכפל (‏מחיקת המופע הישן בתחתית). ‏ניסוח כהזמנה
+("‏זה דמו — ‏לכספת משלך לחץ כאן"), ‏לא כ-footer.
+
+> ‏שים לב: `example-vault.json` ‏נגזר מ-`template.js` **‏בזמן הבניה**, ‏ולכן
+> ‏ה-hash `__owDemoContent` ‏ישתנה — ‏וזה בדיוק מה שאמור לקרות: ‏מבקר עם כספת
+> ‏דמו קיימת יקבל זריעה-מחדש (Commit 3). ‏הזדמנות לאמת את DoD#5 ‏פעם נוספת
+> ‏על שינוי-תוכן **‏אמיתי** ‏ולא מסונתז.
+
+**Verification**:
+
+```bash
+grep -c "obsidian-online.pages.dev" src/deployments/cloudflare/template.js   # ‏מצופה: 1
+cd src/deployments/cloudflare && OW_PROFILE=demo npm run build
+grep -o '__owDemoContent="[^"]*"' ../../../.tmp/deployments/cloudflare/public/index.html   # ‏מצופה: hash חדש
+bun test test/*.test.js
+```
+
+‏עדכן את DoD#13 (§5) ‏לשקף שהקישור נמצא בראש הפתק ‏עם מופע יחיד, ‏וכלול DoD#13 ‏בסבב כלב.
+
 ---
 
 ## §5 — DoD verifiable
@@ -427,10 +572,13 @@ build:demo   OW_PROFILE=demo bash scripts/build-assets.sh
 | 8 | ‏השומר חוסם | ‏הרץ את השומר עם ארטיפקט-דמו מול יעד ראשי → exit≠0 |
 | 9 | profile ‏שגוי מפיל את הבניה | `OW_PROFILE=nope npm run build` → exit≠0 |
 | 10 | ‏regression: `/starter` | ‏גם בבניית הדמו, `/starter` ‏מציג את מסך-הפתיחה ‏ולא מפנה לדמו |
-| 11 | ‏regression: ‏כספת של המשתמש | ‏בבניית הדמו — ‏צור כספת רגילה, ‏שים בה קובץ, ‏טען מחדש → ‏לא נדרס, ‏לא נזרע לתוכה |
+| 11 | ‏regression: ‏כספת של המשתמש | ‏בבניית הדמו — ‏צור כספת רגילה, ‏כתוב לתוכה קובץ, ‏ערוך קובץ קיים, ‏טען מחדש → ‏שניהם שרדו מילה-במילה, ‏והסמן `ow-demo-content` **‏לא נכתב** ‏מכספת שאינה הדמו. (‏**‏ניסוח מתוקן** ‏אחרי כלב ‏ממצא 2: ‏כספת ריקה **‏חדשה** ‏כן מקבלת תוכן-דמו ברגע היצירה — ‏התנהגות פרה-קיימת ‏שהבריף מכיר ב-§4 Commit 3. ‏מה שנבדק כאן הוא **‏שרידות** ‏ו-**‏אי-זיהום הסמן**) |
 | 12 | ‏regression: ‏אפס patches | `sha256sum` ‏של `app.js` ‏בשני הארטיפקטים ‏זהה ל-`vendor/obsidian-mobile/app.js`. (‏**‏אין** ‏דגל `--check` ‏ב-`patch-obsidian-mobile.js` — `argv[2]` ‏הוא נתיב לקובץ. ‏אביגיל ‏ממצא 8) |
-| 13 | ‏הקישור לראשי קיים | `Welcome.md` ‏בדמו מכיל קישור עובד לפריסה הראשית |
+| 13 | ‏הקישור לראשי קיים, ‏בראש הפתק, ‏מופע יחיד | `Welcome.md` ‏בדמו מכיל קישור עובד לפריסה הראשית. ‏מיקום: ‏בראש הפתק (‏אחרי הכותרת+blockquote, ‏לפני "This is a live demo…") — ‏**‏לא** ‏בתחתית. `grep -c "obsidian-online.pages.dev"` ‏על `template.js` → **‏מופע יחיד** (‏Commit 8, ‏החלטת המשתמשת — ‏הועבר מהתחתית, ‏לא שוכפל) |
 | 14 | `vendor/` ‏לא נכנס ל-git | `git status --short \| grep vendor` → ‏ריק |
+| 15 | ‏הכפתור **‏נמחק** | ‏בבניית הדמו, `/starter` ‏ב-1280×800 **‏וב-390×844** → ‏אין כפתור כלל. ‏אפס עברית בטקסט-מבקר, ‏אפס חפיפה לבורר-השפה ‏ולשורת-הגרסה. (‏החליף את DoD#15 ‏המקורי "‏הכפתור באנגלית" — ‏החלטת המשתמשת, Commit 7) |
+| 17 | ‏regression: create-vault interceptor | `/starter` → Create new vault → ‏האשף עובד מקצה-לקצה ‏ונוצרת כספת. `data-ow-injected` ‏עדיין ב-`boot.js`. ‏הכפתור המוזרק השני עדיין מתפקד |
+| 16 | `_headers` ‏רק בדמו | `ls public/_headers` → ‏קיים בבניית הדמו, ‏חסר בראשית. ‏תוכנו `X-Robots-Tag: index, follow` |
 
 ### ‏ההליך של DoD#7 — ‏השוואת שני הארטיפקטים
 
@@ -453,7 +601,8 @@ rm -rf /tmp/art-app /tmp/art-demo   # ‏חובה: cp -r ‏ליעד קיים �
 npm run build                 && cp -r ../../../.tmp/deployments/cloudflare/public /tmp/art-app
 OW_PROFILE=demo npm run build && cp -r ../../../.tmp/deployments/cloudflare/public /tmp/art-demo
 diff -r -x 'system-plugins' /tmp/art-app /tmp/art-demo
-# ‏מצופה: ‏הבדל ב-index.html (‏שורת הקונפיג + BUST) ‏וב-sw.js (BUST) ‏בלבד
+# ‏מצופה: ‏הבדל ב-index.html (‏שורת הקונפיג + BUST) ‏וב-sw.js (BUST), ‏ו-_headers
+# ‏קיים ‏רק ‏ב-/tmp/art-demo ‏(Commit 6, DoD#16) — ‏שלושת ‏אלה ‏בלבד.
 ```
 
 ---
@@ -516,4 +665,40 @@ diff -r -x 'system-plugins' /tmp/art-app /tmp/art-demo
 
 ## ‏סטיות מהתכנון (‏מתעדכן ע"י executor)
 
-- ...
+- **‏אין סטיות מבניות מהבריף.** ‏כל 6 ה-commits (0-5) בוצעו לפי הסדר, ‏הגישה
+  ‏(approach) ‏שנקבעה פר-commit, ‏וה-API skeleton המדויק (`seedExampleVault(store, opts)`).
+- **‏Commit 3 — calev-heavy NO-GO ‏אחד ‏בפאזה, 2 ‏ממצאים אמיתיים, ‏תוקנו באותו
+  phase** (‏לא escalation — ‏בטווח 1-2 ‏לפי המדיניות): (1) NBug1/blocker —
+  ‏זריעה-מחדש אחרי redeploy יכלה לפגוע ב-cache הישן של ה-SW ‏ולכתוב תוכן ‏לא-
+  ‏עדכני תוך חתימת ה-hash החדש (‏קבוע); ‏תוקן ע"י `opts.cacheBust` ‏ב-
+  `seedExampleVault` (query string חדש = cache miss ‏מובטח). (2) NBug2 —
+  ‏כשל-fetch שקט עדכן את `ow-demo-content` בכל זאת; ‏תוקן ע"י ערך-חזרה
+  `true`/`false` מ-`seedExampleVault` שה-caller מכבד. ‏שני התיקונים נוספו
+  ‏ל-API ‏(`opts.cacheBust`, ‏ערך-חזרה) ‏בלי לשנות את החתימה `(store, opts)`
+  ‏עצמה. ‏6 ‏טסטי TDD חדשים + ‏אימות ידני חוזר (5/5 ‏ריצות redeploy). ‏דוח:
+  `reports/obsidian-web/demo-origin-split-commit3-calev.md`.
+- **DoD#4 — ‏ניסוח, ‏לא קוד** (‏דווח ‏גם ‏ע"י ‏אליעזר ‏ב-Commit 2, ‏גם ‏אושר ‏ע"י
+  ‏calev-heavy ‏ב-Commit 3 phase): ‏הנחיתה בדמו אחרי הפתיחה-האוטומטית ‏היא על
+  ‏"New tab" ‏ריק של Obsidian (‏אין `workspace.json` ‏מזורע — `.obsidian/`
+  ‏מדולג במכוון), ‏לא ‏על `Welcome.md` ‏פתוח-על-המסך כפי ‏שהניסוח המילולי
+  ‏"‏נוחת בכספת עם `Welcome.md` ‏מרונדר" ‏עשוי לרמז. ‏הארכיטקטורה (§3) ‏מציינת
+  ‏יעד-ניתוב `/vault/<demoId>` ‏בלבד (‏בלי note-path) — ‏כך מומש. `Welcome.md`
+  ‏קיים ‏וניתן-לפתיחה מיד (‏קליק אחד ‏בעץ הקבצים). ‏לא ‏שיניתי ‏קוד ‏על ‏דעת ‏עצמי;
+  ‏מוסר להחלטת מרדכי — ‏תיקון-ניסוח ‏ב-DoD#4 ‏או ‏הוספת פתיחת-קובץ ‏יזומה (‏שינוי
+  ‏קוד ‏קטן ‏אם ‏יוחלט ‏שנדרש).
+- **DoD#11 — ‏חידוד-ניסוח מוצע** (‏העלה calev-heavy, ‏לא ‏תוקן): ‏המשפט "‏לא
+  ‏נזרע לתוכה" ‏עשוי להשתמע ‏שכספת local ‏חדשה בדומיין הדמו לעולם לא ‏מקבלת
+  ‏תוכן-דמו — ‏אך זו ‏התנהגות פרה-קיימת (‏מתועדת ‏בבריף עצמו, Commit 3: "‏הבלוק
+  ‏הקיים רץ על **‏כל** ‏כספת local/folder ‏ריקה") ‏שנשארת ‏כך ‏במכוון; ‏ה-guard
+  ‏הנדרש (`VAULT_ID===DEMO_ID`) ‏חל ‏רק ‏על ‏נקודות-הכתיבה ‏ל-`localStorage`, ‏לא
+  ‏על ‏קריאת-הזריעה ‏עצמה. ‏ההליך המדויק ‏בטבלת ‏ה-DoD (‏קובץ *בתוך* ‏הכספת, ‏אז
+  ‏reload) ‏עובר. ‏לא ‏קוד — ‏ניסוח ‏בלבד, ‏למרדכי.
+- **‏ענף ה-resume (`boot.js:122`) ‏במכוון לא קיבל `/Welcome`** (‏calev-heavy
+  ‏סבב 2, ‏ממצא 3 — ‏הכרעת מרדכי, ‏לא תוקן ‏ולא ‏יתוקן): ‏רק הענף שאין בו
+  ‏כספת-אחרונה (`boot.js:137`, Commit 6א) ‏מפנה ‏ל-`/vault/<demoId>/Welcome`.
+  ‏מבקר-חוזר ‏עם כספת-אחרונה **‏שיש לו פתק פתוח** ‏מפנה ‏עדיין ‏ל-`/vault/<id>`
+  ‏חשוף — ‏כפיית `/Welcome` ‏עליו ‏הייתה ‏גרועה יותר: ‏דורסת ‏את ‏מה ‏שהוא ‏עשה
+  ‏(‏פתק אחר פתוח, גלילה, ‏עריכה). ‏התקיעה שכלב מצא (8 ‏כניסות רצופות ‏בלי
+  ‏המתנה, ‏בחלון-זמן ‏תת-שנייה ‏לפני ‏ש-Obsidian ‏שומר `workspace.json`) ‏היא
+  ‏מקרה-קצה ‏מלאכותי, ‏לא ‏מסלול ‏מציאותי (‏כל ‏5 ‏תרחישי-ההפרעה ‏הסבירים ‏שנבדקו
+  ‏התאוששו). ‏DoD#4 ‏כפי שנוסח ‏עובר ‏נקי ‏עם ‏המצב ‏הנוכחי.

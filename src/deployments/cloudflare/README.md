@@ -9,17 +9,19 @@ previous server-side in-memory vault store (internally named `VaultDO`) has been
 ## What the Worker does now
 - Serves the **static app bundle** (`env.ASSETS`) for everything except
   `/api/proxy-request` and the `/starter`/`/vault/*` SPA-fallback routes. See `index.js`.
-- `/` runs `boot.js`'s entry-routing first (`boot.js:105-113`): if the browser already
-  has a `mobile-selected-vault` from a previous visit, it **auto-resumes that vault**
+- `/` runs `boot.js`'s entry-routing first: if the browser already has a
+  `mobile-selected-vault` from a previous visit, it **auto-resumes that vault**
   at `/vault/<id>` — a returning visitor's vault opens automatically, the chooser is
-  never shown. Only a visitor with no remembered vault is redirected to `/starter`,
-  which renders **Obsidian's native mobile onboarding screen** ("Create a vault" /
-  "Use my existing vault") with no vault pre-opened. That onboarding screen also gets
-  a **"כספת דמו" (demo vault) button** injected (`installDemoVaultButton` in
-  `boot.js`) that creates/opens a fixed-id local (OPFS) vault and seeds it with
-  `template.js`'s example content on first open — see "Example / demo vault content"
-  below. Vault creation/writes/reads happen **entirely client-side** (OpfsStore
-  engine); 0 dependency on `/api/*` for vault storage.
+  never shown. A visitor with no remembered vault is redirected to `/starter` (clean
+  build) or, on the **demo profile** (`OW_PROFILE=demo`, docs/plans/demo-origin-split.md),
+  straight into the fixed-id demo vault at `/vault/<demoId>/Welcome` — created/seeded
+  with `template.js`'s example content on first open, zero clicks. There is no
+  visitor-facing "try the demo" button anymore (removed — the demo now has its own
+  origin, so the button's original purpose of letting a *main-site* visitor reach the
+  demo no longer applies); on the clean/main profile `/starter` renders **Obsidian's
+  native mobile onboarding screen** ("Create a vault" / "Use my existing vault") with
+  no vault pre-opened and no demo trace. Vault creation/writes/reads happen **entirely
+  client-side** (OpfsStore engine); 0 dependency on `/api/*` for vault storage.
 - `vendor/obsidian-mobile/` is self-contained (own `app.js`/`worker.js`/`i18n`/
   `lib`) — `build-assets.sh` copies it (and mirrors its resource dirs at the
   bundle root) without touching `vendor/obsidian-desktop` (desktop).
@@ -72,14 +74,17 @@ entries, served statically (CF static hosting has no `/api/system-plugins` —
 
 ## Example / demo vault content (`template.js`) — wired, not a stub
 `template.js` holds the **demo vault** — 11 example files (`Welcome.md`,
-`How It Works.md`, `Features/*.md`, `.obsidian/*` config). It **is wired**: the
-"כספת דמו" (demo vault) button on the onboarding screen (see "What the Worker
-does now" above) opens a fixed-id local (OPFS) vault; the first time that
-vault is empty, `boot.js` seeds it from `template.js` (via the static
-`/example-vault.json` built by `build-assets.sh` — see "Deploy" below) using
-`seed-example-vault.js`. A visitor who never clicks that button gets Obsidian's
-plain native onboarding chooser instead, with no vault pre-opened. Do **not**
-delete `template.js`.
+`How It Works.md`, `Features/*.md`, `.obsidian/*` config). It **is wired**: on
+the demo profile (`OW_PROFILE=demo`), `boot.js` auto-opens a fixed-id local
+(OPFS) vault at `/vault/<demoId>/Welcome` on every first visit (see "What the
+Worker does now" above); the first time that vault is empty, it's seeded from
+`template.js` (via the static `/example-vault.json` built by `build-assets.sh`
+— see "Deploy" below) using `seed-example-vault.js`, and re-seeded whenever
+`template.js`'s content changes on a later deploy (`window.__owDemoContent`
+hash, docs/plans/demo-origin-split.md §4 Commit 3). `Welcome.md` links back to
+the main deployment near the top of the note. On the main/default profile,
+none of this runs — a visitor gets Obsidian's plain native onboarding chooser,
+with no vault pre-opened and no demo trace. Do **not** delete `template.js`.
 
 ## What's included (finished)
 - OPFS vault engine on the mobile runtime (create local vault, notes, nested
@@ -152,13 +157,59 @@ delete `template.js`.
    dev`/deployed Worker → GitHub) — deferred to a real `wrangler deploy` or a
    CF environment where `workerd` runs.
 
-## Deploy
+## Deploy — two profiles, one build (docs/plans/demo-origin-split.md)
+
+The **same** `build-assets.sh`/`index.js`/`template.js` produce two different
+experiences, selected at BUILD time via `OW_PROFILE` — nothing branches at
+runtime beyond reading the injected config, so the two artifacts can never
+silently drift apart (`git diff` always shows the one line that changed).
+
+| Profile | Command | Config file | Visitor experience |
+|---|---|---|---|
+| main (default) | `npm run build` | `src/config/deploy-config.json` | Clean vault-creation screen, no demo, no seeding |
+| demo | `npm run build:demo` | `src/config/deploy-config.demo.json` | Auto-opens into a pre-seeded demo vault, re-seeds on template change, links back to the main deployment |
+
 ```
-npm run build          # scripts/build-assets.sh → .tmp/deployments/cloudflare/public
-npm run dev             # local emulation (wrangler dev) — does NOT publish anywhere
-wrangler deploy        # from src/deployments/cloudflare/ — publishes for real, only when intended
+npm run build           # main profile → .tmp/deployments/cloudflare/public
+npm run build:demo      # demo profile (OW_PROFILE=demo) → same output dir
+npm run dev              # local emulation (wrangler dev) — does NOT publish anywhere
+npm run deploy           # predeploy: rebuilds MAIN + guard, then `wrangler deploy` — publishes for real, only when intended
+npm run deploy:demo      # predeploy:demo: rebuilds DEMO + guard, then `wrangler deploy` — publishes for real, only when intended
 ```
-`npm run build` needs network access to GitHub (`api.github.com` +
+`npm run build`/`build:demo` need network access to GitHub (`api.github.com` +
 release-asset CDN) to fetch the LiveSync plugin on a cold cache — see
 "System plugins" above. It never blocks the build if unreachable (WARN +
 continue, layout-switcher only).
+
+**Which target `wrangler deploy` publishes to** is controlled by `wrangler.toml`
+(`name`/`routes`) — a second Cloudflare project + custom domain for the demo,
+separate from the main deployment, is a manual dashboard step outside this
+repo's scope (topology isn't code — see the brief). Until that's set up, both
+`deploy`/`deploy:demo` publish to whatever single target `wrangler.toml`
+currently points at; treat that as a placeholder, not a statement about the
+final topology.
+
+**`OW_PROFILE=nope npm run build`** (any name that isn't a real
+`deploy-config.<name>.json`) fails the build loudly (`exit 1`) rather than
+silently falling back to the default config — a typo in the profile name
+must never ship the wrong experience.
+
+### The guard (`scripts/guard-deploy-target.sh`)
+
+The one failure mode here that reaches real visitors without any test
+noticing otherwise: the artifact itself is perfectly valid, it just got
+uploaded to the **wrong target** (a demo build shipped to main, or vice
+versa). `predeploy`/`predeploy:demo` run the guard automatically (npm's
+built-in pre-hook convention) right after the matching build and right
+before `wrangler deploy` — a mismatch aborts with `exit 1` and an explicit
+message, `wrangler deploy` never runs.
+
+```
+bash scripts/guard-deploy-target.sh main   # exit 0 iff the built artifact has NO demo config
+bash scripts/guard-deploy-target.sh demo   # exit 0 iff the built artifact DOES have demo config
+```
+
+The anchor it checks for is `"demoVault":{"enabled":true` — **with the key
+name**, not a bare `"enabled":true` (that string alone also appears in the
+main artifact's injected config, via the `obsidian-web-layout` plugin entry
+— a naive search would false-positive on every build).
