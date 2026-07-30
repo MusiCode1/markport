@@ -2,6 +2,30 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-30 23:23 — cloudflare: npx ל-wrangler + הודעות build מעודכנות
+
+תיקון שנחשף בזמן פריסה חיה: `npm run deploy` נפל ב-`wrangler: not found` כי
+`wrangler` אינו מותקן גלובלית בסביבת הפריסה — כל הריצות עד כה עברו דרך `npx`
+באופן ידני. שלושת הסקריפטים עברו ל-`npx wrangler` כדי למנוע תלות בהתקנה
+גלובלית. במקביל, הודעות "Next" בסוף הבנייה (`build-assets.sh`) עודכנו לשקף את
+הפקודות הנכונות (`npm run deploy`, `npm run deploy:demo`, `npm run dev`) במקום
+הפניות הישנות ל-`wrangler deploy` / `wrangler dev`.
+
+#### מה בוצע?
+
+**1. `src/deployments/cloudflare/package.json`**
+
+- `deploy`, `deploy:demo`, `dev` — שלושתם עברו מ-`wrangler …` ל-`npx wrangler …`.
+
+**2. `src/deployments/cloudflare/scripts/build-assets.sh`**
+
+- שלוש שורות "Next" בסוף הפלט עודכנו מ-`wrangler deploy` / `wrangler dev`
+  ל-`npm run deploy` (APP), `npm run deploy:demo` (DEMO), `npm run dev` (local).
+
+#### בדיקות
+
+`bun test` 40/40 — regression-free.
+
 ## 2026-07-29 — slice/demo-origin-split — calev-heavy round 3 (דלתא) — GO + תיקון README
 
 דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-round3-calev.md`
