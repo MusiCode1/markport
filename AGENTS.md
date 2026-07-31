@@ -19,12 +19,33 @@ See `docs/architecture.md` for the full picture.
 
 ## Conventions — required
 
-- **Node 18+ or Bun — depends on the package.** Most packages' scripts invoke `node`
-  (`src/client-mobile` tests, `src/runtime-server/server`, the Cloudflare deployment's
-  build script). `src/sync-server` is the one package that runs on `bun`
-  (`bun index.js` / `bun test`). The maintainer's own dev environment symlinks `node`
-  to `bun`, which is a local habit, not a repo-wide requirement — don't assume `bun`
-  works for every package.
+- **Bun is the sole installer.** `bun install` at the root installs all workspace
+  members. `bun run test` runs all tests across all packages. `bun run typecheck`
+  runs `tsc --build` across the project-references graph.
+- **Node 22.18+ for development.** `node --test` on `.ts` files requires type
+  stripping (stable since Node 22.18). This is the *development* floor for running
+  tests — the *deployment* floor (see `README.md`) is separate and lower, since no
+  package consumes `@ow/core` at runtime yet.
+- **Workspaces.** The root `package.json` declares these workspace members:
+  `packages/*`, `src/client-mobile`, `src/runtime-server/server`, `src/sync-server`,
+  `src/deployments/cloudflare`. Sub-package `package-lock.json` files under `src/`
+  remain tracked for the npm fallback path.
+- **`npm install` behavior change.** With bun workspaces, running `npm install`
+  inside a sub-package resolves against the root workspace — a root-level
+  `package-lock.json` is created (gitignored), and the sub-package's own lockfile
+  is bypassed. The npm path still *works*, but loses the pinning that the local
+  lockfile provided. This is documented here so developers are not surprised.
+- **Node 18+ for deployment** (per `README.md`) — unchanged; no runtime package
+  consumes `@ow/core` yet.
+- **`packages/core` contract.** `@ow/core` is a shared utility package with
+  **zero runtime dependencies** (today). Three constraints are enforced:
+  1. No `enum`, `namespace`, or decorators (node strips types, does not compile).
+  2. No top-level `await` (same reason).
+  3. Relative imports must use explicit `.ts` extensions (`'./x.ts'`, not `'./x'`
+     or `'./x.js'`) — required by node's type-stripping resolver.
+  A boundary script (`scripts/check-core-boundary.mjs`) runs as part of
+  `bun run test` in `packages/core` and rejects any import that is not relative,
+  not `node:`-prefixed, and not listed in `dependencies`.
 - **`vendor/` is gitignored.** It holds Obsidian's own bundle, generated locally by
   `scripts/update-obsidian-*.js`, and is never committed. This repository does not
   contain or distribute that bundle — each user downloads Obsidian themselves via the
@@ -43,6 +64,7 @@ See `docs/architecture.md` for the full picture.
 | Architecture and rationale | `docs/architecture.md` |
 | Reverse-engineering notes, solved issues | `docs/investigations.md` |
 | Writing a system plugin | `docs/system-plugin-dev-guide.md` |
+| Shared utilities (zero deps) | `packages/core/` |
 | Runtime (the browser side) | `src/client-mobile/` |
 | Node backend (optional) | `src/runtime-server/` |
 | Pull-sync server | `src/sync-server/` |
