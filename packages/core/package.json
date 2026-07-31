@@ -1,0 +1,11 @@
+{
+  "name": "@ow/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./fs": "./fs/index.ts" },
+  "dependencies": {},
+  "scripts": {
+    "test": "node ../../scripts/check-core-boundary.mjs && node --test \"fs/*.test.ts\""
+  }
+}
