@@ -1,1 +1,1 @@
-// placeholder — real exports added in Commit 2
+export { toRelative } from './to-relative.ts';
