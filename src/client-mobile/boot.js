@@ -484,11 +484,54 @@ const MOBILE_SCRIPTS = [
   window.__owReportPlatformFailure = function (msg) {
     setStatus(msg);
     showPlatformFailureBanner(msg);
+    // עוצר את הספינר (CSS ב-index.html). ה-overlay עשוי כבר להיות מוסר —
+    // ואז אין מה לעשות, והבאנר הוא מה ששורד ממילא.
+    var overlay = document.getElementById('ow-loading');
+    if (overlay) overlay.classList.add('ow-failed');
   };
 
   // הזרקה דינמית — browser מוריד במקביל, מריץ לפי סדר (async=false).
   // חולצה מ-for-loop inline (היה כאן במקור) לפונקציה נגישה גם לזרימת
   // ה-no-vault (מסך-הפתיחה הנייטיב, למטה) וגם לזרימת ה-VAULT_ID הרגילה.
+  // ── Boot watchdog — כשה-bundle נטען בהצלחה אבל מסרב לעלות ──────────────────
+  // `s.onerror` (למטה) מכסה כשל-**רשת** של app.js. מה שלא היה מכוסה: app.js
+  // נטען בהצלחה, זורק בזמן-ריצה, והספינר נשאר תקוע על "Loading Obsidian mobile
+  // (14/14)" לנצח — בלי שום רמז למשתמש מה קרה. Obsidian 1.13 נכשלת בדיוק כך:
+  // `throw new Error` **ריק**, בלי הודעה, מתוך הבאנדל המוקטן.
+  //
+  // מדוע לא owWhenAppReady: ה-timeout שלו שקט **במכוון** (סעיף vault-name-
+  // display §3 — slices אחרים נשענים על כך שהוא לא מדווח כלום), והוא בודק
+  // `window.app` שנקבע לפני שה-UI מרונדר. כאן בודקים DOM מרונדר בפועל —
+  // איחוד שני ה-selectors ששתי זרימות ההמתנה כבר משתמשות בהן.
+  var BOOT_RENDERED_SELECTORS = '.workspace, .mobile-vault-chooser-screen, .mobile-onboarding';
+
+  // '1.13.4' → 11304, להשוואה מספרית. פורמט לא-צפוי → NaN, והקורא נופל
+  // להודעה הגנרית במקום לנחש.
+  function owVersionKey(v) {
+    var p = String(v || '').split('.');
+    if (p.length < 2) return NaN;
+    return (parseInt(p[0], 10) * 10000) + (parseInt(p[1], 10) * 100) + (parseInt(p[2], 10) || 0);
+  }
+
+  function bootFailureMessage() {
+    var v = window.__owObsidianVersion || '';
+    var key = owVersionKey(v);
+    if (!isNaN(key) && key >= 11300) {
+      return 'Obsidian ' + v + ' did not start. This version asks its host for a ' +
+             'startup acknowledgement that obsidian-web does not provide. The newest ' +
+             'version known to work here is 1.12.7 — see the README.';
+    }
+    return 'Obsidian ' + (v ? v + ' ' : '') + 'did not start: nothing rendered after the ' +
+           'bundle finished loading. Check the browser console for errors.';
+  }
+
+  function startBootWatchdog(timeoutMs) {
+    setTimeout(function () {
+      if (document.querySelector(BOOT_RENDERED_SELECTORS)) return;  // עלה — אין מה לדווח
+      window.__owReportPlatformFailure(bootFailureMessage());
+    }, timeoutMs || 20000);
+  }
+
   function injectMobileScripts() {
     var loaded = 0;
     var appJsSrc = MOBILE_SCRIPTS[MOBILE_SCRIPTS.length - 1]; // app.js — תמיד אחרון (globals שהוא צריך חייבים לפניו)
@@ -507,6 +550,9 @@ const MOBILE_SCRIPTS = [
               typeof window.__owPlatformBridge.notifyAppJsLoaded === 'function') {
             window.__owPlatformBridge.notifyAppJsLoaded();
           }
+          // הדדליין נספר מרגע שה-bundle **סיים** להיטען, לא מרגע ההזרקה —
+          // אחרת רשת איטית הייתה מייצרת התראת-שווא.
+          if (src === appJsSrc) startBootWatchdog();
         };
         s.onerror = function () {
           console.error('[obsidian-web] failed to load: ' + src);

@@ -40,7 +40,15 @@
     #ow-loading .ow-status {
       color: rgba(255,255,255,0.5);
       font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+      /* בלי אלה, הודעת-כשל ארוכה (boot watchdog) רחבה מה-viewport, ולכן
+         align-items:center של האב גולש משני הצדדים והטקסט נחתך בקצה. */
+      max-width: 44ch; text-align: center; line-height: 1.55;
+      padding-inline: 16px;
     }
+    /* מצב-כשל: הספינר מפסיק להיות שקר. ממשיך להסתובב מתחת להודעה שאומרת
+       "did not start" זה חיווי סותר — המשתמש ממתין לכלום. */
+    #ow-loading.ow-failed .ow-spinner { display: none; }
+    #ow-loading.ow-failed .ow-status { color: rgba(255,255,255,0.85); }
     @keyframes ow-spin { to { transform: rotate(360deg); } }
   </style>
 </head>

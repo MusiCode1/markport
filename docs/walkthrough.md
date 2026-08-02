@@ -2,6 +2,60 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-08-02 — boot watchdog: מסך-כשל מובן במקום ספינר נצחי
+
+Obsidian 1.13.4 חשפה חור בחיווי: הבאנדל נטען בהצלחה, זורק `throw new Error` **ריק**
+בזמן ריצה, והספינר נשאר תקוע על "Loading Obsidian mobile (14/14)" לנצח — בלי שום
+רמז למשתמש. `s.onerror` הקיים מכסה רק כשל-**רשת** של `app.js`, לא כשל-ריצה.
+
+#### מה בוצע?
+
+**1. `src/client-mobile/boot.js` — boot watchdog**
+
+- `startBootWatchdog()` נתלה על ה-`onload` של `app.js` (עוגן `src === appJsSrc` שכבר
+  קיים שם) ולא על רגע ההזרקה — אחרת רשת איטית מייצרת התראת-שווא.
+- הבדיקה היא על **DOM מרונדר**: `BOOT_RENDERED_SELECTORS` = איחוד שני ה-selectors
+  ששתי זרימות ההמתנה כבר משתמשות בהן (`.workspace`,
+  `.mobile-vault-chooser-screen`, `.mobile-onboarding`).
+- `owWhenAppReady` **לא שונה** — ה-timeout שלו שקט במכוון (vault-name-display §3)
+  ו-slices אחרים נשענים על כך; הוא גם בודק `window.app` שנקבע לפני שה-UI מרונדר.
+- `bootFailureMessage()` מסתעף לפי `window.__owObsidianVersion`: `>= 1.13` מקבל הסבר
+  ספציfי על שער-ההפעלה; כל השאר מקבל הודעה גנרית שמכסה גם כשלים לא-מוכרים.
+- `__owReportPlatformFailure` מוסיף מחלקה `ow-failed` ל-`#ow-loading`.
+
+**2. `src/client-mobile/index.html` — תצוגת הכשל**
+
+- `.ow-status` קיבל `max-width: 44ch`, `text-align: center`, `padding-inline`.
+  בלעדיהם הודעה ארוכה רחבה מה-viewport, ו-`align-items:center` של האב גולש
+  משני הצדדים — הטקסט נחתך בקצה (נצפה בפועל).
+- `#ow-loading.ow-failed .ow-spinner { display: none }` — ספינר שממשיך להסתובב
+  מתחת ל-"did not start" הוא חיווי סותר.
+- הטקסט מתבהר ל-0.85 במצב כשל (מ-0.5, שהוא גוון של טקסט-טעינה עמום).
+
+**3. `docs/plans/restructure/ROADMAP.md`**
+
+- החלטה חוצת-סלייסים 10 + רשומת האילוץ החיצוני עם טבלת המדידה מול 1.12.7.
+- R-browser-gate: סומן שה-watchdog הוא הזרע שלו — אות-ההצלחה והטיפול ב-flakiness
+  כבר פתורים שם.
+
+#### מדידה
+
+בקרה נקייה, אותה כספת רשומה ואותה המתנה: **1.12.7** — בוחר-הכספות מרונדר במלואו,
+אפס שגיאות `app.js`. **1.13.4** — תקוע, 4 שגיאות. `native-bridge.js` זהה בייט-בייט
+בין הגרסאות, אותם 11 פלאגיני Capacitor, ובדיוק **שער `terms` אחד** בבאנדל.
+
+#### בדיקות
+
+`client-mobile` 96/96 · `cloudflare` 40/40 (מריצות בנייה אמיתית שנוגעת ב-`index.html`).
+אומת חי בדפדפן: המסך מוצג ממורכז, עוטף, בלי ספינר.
+
+#### חריגות
+
+- הבאנר התחתון נשאר מיושר-לשמאל ומלא-רוחב — לא נגעתי. מרכוז בבאנר רחב פוגע
+  בקריאוּת, והוא המנגנון ששורד אחרי הסרת ה-overlay.
+- ההודעה נשענת על `obsidian-version.js` (קובץ מיוצר) ולא על הבאנדל עצמו. אם השניים
+  נפרדים — נצפה בפועל בזמן הפיתוח — תוצג ההודעה הגנרית במקום המדויקת.
+
 ## 2026-07-30 23:23 — cloudflare: npx ל-wrangler + הודעות build מעודכנות
 
 תיקון שנחשף בזמן פריסה חיה: `npm run deploy` נפל ב-`wrangler: not found` כי
