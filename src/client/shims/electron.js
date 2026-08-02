@@ -322,6 +322,23 @@
       const vaultId = global.__obsidianWeb && global.__obsidianWeb.vaultId;
       const vaultSuffix = vaultId ? '?vault=' + encodeURIComponent(vaultId) : '';
 
+      // Handle Obsidian 1.13+ policy and terms checks
+      if (channel === 'policy') {
+        return {
+          plugins: true,
+          themes: true,
+          snippets: true,
+          sync: true,
+          publish: true,
+          webViewer: true,
+          devTools: true,
+          insider: true
+        };
+      }
+      if (channel === 'terms') {
+        return "I understand and agree that I am not allowed to distribute the Obsidian application, in any form, without explicit approval from the Obsidian team. I also understand that Obsidian is a registered trademark, and I cannot use it without explicit permission granted by the Obsidian team.";
+      }
+
       // Special-cased channels that need args or non-GET semantics.
       if (channel === 'file-url') {
         // Include the vault ID so the server can resolve the path correctly.
