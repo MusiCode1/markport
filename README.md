@@ -111,7 +111,7 @@ scripts/                     build tooling (update-obsidian-mobile, patch-obsidi
 Download and extract the Obsidian mobile renderer bundle (the only runtime the server serves):
 
 ```bash
-node scripts/update-obsidian-mobile.js && node scripts/patch-obsidian-mobile.js
+node scripts/update-obsidian-mobile.js --version 1.12.7 && node scripts/patch-obsidian-mobile.js
 ```
 
 Install and run the backend:
@@ -140,23 +140,29 @@ server adds; the static deployment's Worker serves `/`, `/starter`, `/vault/*`, 
 
 ## Obsidian Version
 
+> **Supported version: 1.12.7.** Obsidian 1.13 added a startup check that obsidian-web
+> deliberately does not satisfy, so 1.13+ will not load — you'll get an explanatory screen instead
+> of the app. This is a decision, not an outstanding bug. **Pass `--version 1.12.7` explicitly**;
+> the commands below default to the latest release, which will not work.
+> Full explanation and what was measured: [`docs/obsidian-version-support.md`](docs/obsidian-version-support.md).
+
 ### Mobile bundle (`vendor/obsidian-mobile/`) — the only runtime
 
 `/` and `/mobile` are both served by the mobile runtime, which needs the Obsidian Android APK bundle extracted into `vendor/obsidian-mobile/`. Like the (now vestigial) `vendor/obsidian-desktop/`, this directory is gitignored and downloaded on demand:
 
 ```bash
-# extract vendor/obsidian-mobile/ from the latest Android APK release
-node scripts/update-obsidian-mobile.js
-
-# specific version
+# the supported version — use this one
 node scripts/update-obsidian-mobile.js --version 1.12.7
+
+# latest Android APK release — currently 1.13+, which will NOT boot (see the note above)
+node scripts/update-obsidian-mobile.js
 ```
 
 This script downloads the official APK and unpacks the `assets/public/` tree to `vendor/obsidian-mobile/` — **zero build-time patches are applied**; the extracted bundle is byte-for-byte identical to Obsidian's own Android renderer. All platform behaviour — exposing `window.__owPlatform` and merging `window.__owPlatformOverrides` into the live `Platform` flags, including the desktop-layout vault-profile panel — happens at runtime via `client-mobile/platform-bridge.js`, which intercepts `Object.defineProperty` instead of touching a single byte of app.js (see `docs/plans/runtime-platform-descriptors.md` and `docs/plans/zero-patches.md`). `scripts/patch-obsidian-mobile.js` still runs as part of the update step — its patch list is currently empty, kept as infrastructure in case a future Obsidian version needs one; if a future patch's regex fails to match, the script aborts loudly, same as before.
 
 | Runtime URL | Updater |
 |---|---|
-| `/` | `node scripts/update-obsidian-mobile.js && node scripts/patch-obsidian-mobile.js` |
+| `/` | `node scripts/update-obsidian-mobile.js --version 1.12.7 && node scripts/patch-obsidian-mobile.js` |
 | `/mobile` (alias) | same as `/` — identical `index.html` |
 
 ## Configuration
@@ -258,7 +264,7 @@ Browser
 
 The Node.js server (`src/runtime-server/server/`) can be deployed to any Linux box. A typical setup:
 
-1. Clone the repo and run `node scripts/update-obsidian-mobile.js && node scripts/patch-obsidian-mobile.js` to get Obsidian's renderer files
+1. Clone the repo and run `node scripts/update-obsidian-mobile.js --version 1.12.7 && node scripts/patch-obsidian-mobile.js` to get Obsidian's renderer files
 2. `cd src/runtime-server/server && npm install && npm start`
 3. Put it behind a reverse proxy (nginx, Caddy, Cloudflare Tunnel) with HTTPS
 4. Do not expose the server directly to the internet without auth — there is no application-level authentication
