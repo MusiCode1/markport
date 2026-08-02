@@ -728,6 +728,7 @@
     getInfo:              () => Promise.resolve({ name: 'Obsidian', id: 'md.obsidian', build: '0', version: '1.12.7' }),
     getState:             () => Promise.resolve({ isActive: true }),
     getLaunchUrl:         () => Promise.resolve(null),
+    getManagedPolicy:     () => Promise.resolve({ value: null }),
     addListener:          (opts) => Promise.resolve({ remove: noop }),
     removeAllListeners:   noop,
     exitApp:              noop,
@@ -1011,7 +1012,7 @@
       {
         name: 'App',
         methods: [
-          pm('getInfo'), pm('getState'), pm('getLaunchUrl'),
+          pm('getInfo'), pm('getState'), pm('getLaunchUrl'), pm('getManagedPolicy'),
           pm('addListener'), pm('removeAllListeners'),
           pm('exitApp'), pm('minimizeApp'),
           pm('getFonts'), pm('takeScreenshot'),

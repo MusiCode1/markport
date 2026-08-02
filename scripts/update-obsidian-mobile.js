@@ -49,8 +49,9 @@ const EXTRACT_MAP = {
 
 // Directory prefixes to extract recursively.
 const EXTRACT_DIRS = [
-  { apk: 'assets/public/i18n/', target: 'i18n/' },
-  { apk: 'assets/public/lib/',  target: 'lib/'  },
+  { apk: 'assets/public/i18n/',   target: 'i18n/'   },
+  { apk: 'assets/public/lib/',    target: 'lib/'    },
+  { apk: 'assets/public/public/', target: 'public/' },
 ];
 
 const REQUIRED_FILES = ['app.js', 'native-bridge.js', 'worker.js'];
@@ -175,16 +176,25 @@ async function extractApk(apkPath, tmpDir, targetDir) {
   ];
 
   console.log('  Extracting from APK…');
-  const result = spawnSync('unzip', [
+  let result = spawnSync('unzip', [
     '-o',           // overwrite without prompting
     apkPath,
     ...apkPaths,
     '-d', tmpDir,
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-  if (result.status !== 0 && result.status !== 1) {
+  if (result.error || (result.status !== 0 && result.status !== 1)) {
+    // Try tar -xf (available on Windows 10/11)
+    result = spawnSync('tar', ['-xf', apkPath, '-C', tmpDir], { stdio: ['ignore', 'pipe', 'pipe'] });
+    if (result.error || result.status !== 0) {
+      // Try powershell Expand-Archive as a last resort
+      result = spawnSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${apkPath}' -DestinationPath '${tmpDir}' -Force`], { stdio: ['ignore', 'pipe', 'pipe'] });
+    }
+  }
+
+  if (result.error || (result.status !== 0 && result.status !== 1)) {
     // unzip exits 1 when some files not found but still extracts what it can
-    throw new Error(`unzip failed (exit ${result.status}): ${result.stderr?.toString().slice(0, 300)}`);
+    throw new Error(`extraction failed (exit ${result.status}): ${result.stderr?.toString().slice(0, 300)}`);
   }
 
   // Copy individual files
