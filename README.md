@@ -2,9 +2,13 @@
 
 Run Obsidian in a standard browser — no Electron, no native app needed.
 
-**[Live Demo →](https://obsidian-online.pages.dev)** — client-only: your vault lives entirely in
-your own browser (OPFS), nothing is stored on any server, and nothing is shared between visitors.
-See "Two deployment modes" below.
+**[Try the demo →](https://demo.obsidian-online.pages.dev)** — opens a ready-made vault, nothing to set up.
+**[Open the app →](https://obsidian-online.pages.dev)** — start with your own empty vault.
+
+Both are client-only: your vault lives entirely in your own browser (OPFS), nothing is stored on
+any server, and nothing is shared between visitors. They are two deployments of the *same build*,
+differing only in a config profile chosen at build time — the demo seeds example content and opens
+it automatically, the app does neither. See "Two deployment modes" below.
 
 obsidian-web loads Obsidian's original renderer (`app.js`) completely unmodified — zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle — and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
 
@@ -45,8 +49,14 @@ The client-only deployment (and local/folder vaults on the Node server) are back
 | Storage | Real filesystem, via `/api/fs` | OPFS — entirely inside your browser |
 | Persistence | Full | Until you clear this site's browsing data |
 | Sharing | Whoever can reach the server/port | Nobody — your vault stays private to your browser; only GitHub/obsidian.md requests (plugin installs, plus one automatic check on vault load) pass through a small proxy, see "Cloudflare (client-only) deployment" below |
-| Use case | Personal use, self-hosted | Public demo, zero-maintenance, no server-side vault storage |
-| URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) |
+| Use case | Personal use, self-hosted | Public app + demo, zero-maintenance, no server-side vault storage |
+| URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) (app) · [demo.obsidian-online.pages.dev](https://demo.obsidian-online.pages.dev) (demo) |
+
+The two Cloudflare URLs come from **one build**. `scripts/build-assets.sh` picks a config profile
+from the `OW_PROFILE` environment variable — the default profile ships the app (no demo vault, no
+seeding), `OW_PROFILE=demo` ships the demo (seeded example vault, opened automatically, re-seeded
+when the shipped content changes). A guard script refuses to upload an artifact to the wrong
+target. See `src/deployments/cloudflare/README.md`.
 
 There's also `src/sync-server/` — a separate, optional pull-sync server (`/sync/v1`, content-hash
 based, Bearer-token auth via `SYNC_TOKEN`) that lets an OPFS vault pull from a server-hosted vault
@@ -200,16 +210,23 @@ gaps).
 cd src/deployments/cloudflare
 npm install
 npm run build   # scripts/build-assets.sh → .tmp/deployments/cloudflare/public
-npm run dev     # local emulation (wrangler dev) — does NOT publish anywhere
+npm run dev     # local emulation (wrangler pages dev) — does NOT publish anywhere
 ```
 
 `npm run build` needs network access (GitHub API + release-asset CDN) to fetch the LiveSync
 plugin on a cold cache; if unreachable, it **warns and continues** without LiveSync rather than
 failing the build.
 
-`npm run deploy` (build, then `wrangler deploy`) publishes to the real Cloudflare account
-configured in `wrangler.toml` — only run it when you actually intend to publish; use `npm run dev`
-for local testing.
+Two publish commands, each carrying its own destination:
+
+| Command | Publishes to |
+|---|---|
+| `npm run deploy` | `obsidian-online.pages.dev` — the app, production |
+| `npm run deploy:demo` | `demo.obsidian-online.pages.dev` — the demo, a branch alias |
+
+Both rebuild from source first and run a guard that refuses to upload a demo artifact to the
+app target (or the reverse). Only run them when you actually intend to publish; use
+`npm run dev` for local testing.
 
 ### Architecture
 
@@ -229,7 +246,8 @@ Browser
 | `src/deployments/cloudflare/index.js` | Worker entry: `/api/proxy-request` + `/starter`/`/vault/*` fallback, else static assets |
 | `src/deployments/cloudflare/proxy-worker.js` | The CORS-safe outbound proxy implementation |
 | `src/deployments/cloudflare/template.js` | Demo vault content — seeded client-side into a new visitor's own OPFS vault on first visit |
-| `src/deployments/cloudflare/wrangler.toml` | Worker config: static asset directory, no server-side vault bindings |
+| `src/config/deploy-config.json` / `deploy-config.demo.json` | The two build profiles — app and demo (`OW_PROFILE`) |
+| `src/deployments/cloudflare/scripts/guard-deploy-target.sh` | Refuses to publish an artifact to the wrong target |
 | `src/deployments/cloudflare/scripts/build-assets.sh` | Build: copies the mobile bundle, builds the system-plugins manifest + example-vault JSON |
 | `src/deployments/cloudflare/test/` | `bun test` — proxy + build-assets tests |
 | `.tmp/deployments/cloudflare/public/...` | Built static assets (generated by `npm run build`) |

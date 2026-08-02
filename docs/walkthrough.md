@@ -2,6 +2,599 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-30 23:23 — cloudflare: npx ל-wrangler + הודעות build מעודכנות
+
+תיקון שנחשף בזמן פריסה חיה: `npm run deploy` נפל ב-`wrangler: not found` כי
+`wrangler` אינו מותקן גלובלית בסביבת הפריסה — כל הריצות עד כה עברו דרך `npx`
+באופן ידני. שלושת הסקריפטים עברו ל-`npx wrangler` כדי למנוע תלות בהתקנה
+גלובלית. במקביל, הודעות "Next" בסוף הבנייה (`build-assets.sh`) עודכנו לשקף את
+הפקודות הנכונות (`npm run deploy`, `npm run deploy:demo`, `npm run dev`) במקום
+הפניות הישנות ל-`wrangler deploy` / `wrangler dev`.
+
+#### מה בוצע?
+
+**1. `src/deployments/cloudflare/package.json`**
+
+- `deploy`, `deploy:demo`, `dev` — שלושתם עברו מ-`wrangler …` ל-`npx wrangler …`.
+
+**2. `src/deployments/cloudflare/scripts/build-assets.sh`**
+
+- שלוש שורות "Next" בסוף הפלט עודכנו מ-`wrangler deploy` / `wrangler dev`
+  ל-`npm run deploy` (APP), `npm run deploy:demo` (DEMO), `npm run dev` (local).
+
+#### בדיקות
+
+`bun test` 40/40 — regression-free.
+
+## 2026-07-29 — slice/demo-origin-split — calev-heavy round 3 (דלתא) — GO + תיקון README
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-round3-calev.md`
+(**GO**, 9/9 DoD — DoD#15/#17/#13 + regression DoD#3/#4/#10 + DoD#5/#6/#7
+שנוספו ביוזמת כלב, **1 ממצא בלבד, מינורי, לא-חוסם**).
+
+**מה תוקן כאן** (ממצא 1 — זול, נובע ישירות מ-Commit 7 שלי): `README.md`
+(`src/deployments/cloudflare/`) עדיין תיאר בשני מקומות כפתור "כספת דמו"
+שנמחק ב-Commit 7 (`installDemoVaultButton`) כאילו הוא עדיין קיים ותוקף.
+עודכן: (1) "What the Worker does now" — מתאר עכשיו את זרימת ה-auto-open
+בפועל (`demoVault.autoOpen`, `/vault/<demoId>/Welcome`, אפס לחיצות) במקום
+כפתור-שאיננו. (2) "Example / demo vault content" — אותו תיקון, וגם ציון
+שהזריעה-מחדש קורית על שינוי `template.js` (Commit 3) ושהקישור לראשי יושב
+עכשיו בראש הפתק (Commit 8). כלב ציטט את §0 של הבריף עצמו (ה"קפאת" ענף
+demo-and-docs-truth "כדי למנוע הצהרות-שווא") כהנמקה לתקן — אותה דוקטרינה
+חלה כאן. `npm test` 96/96, `bun test` 40/40 (שינוי-README, regression-free).
+
+**‏מה כלב אימת ‏(‏ולא ‏רק ‏ב-grep)**: `data-ow-injected` ‏עדיין ‏קיים ‏בקוד
+‏אחרי ‏המחיקה — ‏כלב ‏לא ‏הסתפק ‏בכך: ‏הזריק ‏כפתור-בדיקה ‏עם ‏הסימון ‏לתוך
+`.mobile-onboarding` (‏אותה ‏צורה ‏שנחטפה ‏ב-NO-GO ‏ההיסטורי) ‏ולחץ ‏עליו —
+‏ה-handler ‏שלו ‏רץ, ‏ה-interceptor ‏לא ‏חטף. ‏האינטגריטי ‏של ‏ה-guard ‏אומת
+‏פונקציונלית, ‏לא ‏רק ‏טקסטואלית.
+
+## 2026-07-29 — slice/demo-origin-split — Commit 8: הקישור לראשי עובר לראש Welcome.md
+
+החלטת המשתמשת. הקישור ישב בתחתית הפתק (footer-style) — עכשיו הוא הדבר הראשון
+שמבקר קורא אחרי הכותרת והמשפט הפותח.
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/template.js`** — תוכן `Welcome.md` בלבד:
+- הועברה שורה חדשה מיד אחרי ה-blockquote הפותח (`> **Obsidian's desktop
+  app…**`) ולפני "This is a live demo of **obsidian-web**…":
+  `**This is a demo vault.** [Create your own →](https://obsidian-online.pages.dev)`
+  (ניסוח-הזמנה, לא footer — לשיקולי, בשני האילוצים שהמשתמשת קבעה: אנגלית,
+  אותו URL).
+- **נמחק** המופע הישן בתחתית הפתק (`This is a demo vault; to create your
+  own vault → …`, אחרי `#demo #welcome`) — מופע יחיד, לא שכפול.
+  `grep -c "obsidian-online.pages.dev" template.js` → 1.
+
+### בדיקות
+
+approach: none (טקסט טהור, כמו Commit 4 המקורי). `npm test` 96/96, `bun test
+test/*.test.js` 40/40 — regression-free.
+
+**ידני — DoD#5 עם שינוי-תוכן אמיתי (לא מסונתז)**, כהזדמנות שהמשתמשת ציינה:
+בניתי ארטיפקט A (`git stash` על `template.js` בלבד → חזרה לגרסת Commit 7,
+בנייה, `cp -r` הצידה, `git stash pop` להחזיר את Commit 8) ← טעינה, עריכת
+`Welcome.md`, יצירת `My Note.md` ← `git stash pop` + בנייה אמיתית של B (hash
+חדש `c5138c4b3d460be6`, שונה מ-`0b49eae00bd69969` של A) ← החלפת הארטיפקט
+המוגש על אותו origin (מדמה redeploy אמיתי) ← reload → `Welcome.md` נדרס
+לתוכן **B** (הקישור מופיע עכשיו ליד הראש, מרונדר — צילום `c8-link-top.png`),
+`My Note.md` (תוכן המבקר) שרד מילה-במילה. `fullMatches` של ה-URL המלא בקובץ
+= **1** (לא 2 — worktree נשאר נקי, `git stash` לא השאיר שאריות).
+
+### חריגות
+
+אין. עדכנתי גם את DoD#13 בבריף לשקף מיקום+מופע-יחיד, והוספתי §4 Commit 8
+לבריף עצמו (המשתמשת תיארה את הקומיט בהודעה, לא ערכה את הקובץ ישירות הפעם —
+הוספתי section תואם-סגנון ל-Commit 6/7 כדי שהבריף יישאר עקבי כמקור-אמת).
+
+## 2026-07-29 — slice/demo-origin-split — Commit 7: מחיקת כפתור "כספת דמו"
+
+החלטת המשתמשת (מחליפה את Commit 6ב, שרק תרגם את הכפתור). עם הפיצול לדמו הכפתור
+איבד את הסיבה לקיומו — הוא נועד לאפשר למבקר באתר הראשי לנסות דמו; עכשיו לדמו יש
+מקור משלו. מוחקת גם את ממצא 1 מסבב calev-heavy 2 (חפיפה לבורר-השפה ב-390×844)
+בלי לגעת ב-CSS.
+
+### מה בוצע?
+
+**`src/client-mobile/boot.js`**:
+- נמחקה הפונקציה `installDemoVaultButton()` במלואה (כולל בלוק ההערות שמעליה
+  שתיאר את הכפתור) והקריאה אליה (`installDemoVaultButton();`).
+- 🔴 **מה שלא נמחק**: `if (btn.hasAttribute('data-ow-injected')) return;`
+  ב-`installCreateVaultInterceptor` — המוסכמה משרתת כפתור מוזרק שני
+  (`showGrantScreen`, `data-ow-injected="grant-access"`) שנשאר חי.
+- שלוש הערות שהפנו ל-`installDemoVaultButton` (שכבר לא קיימת) — בהוראת
+  הבריף — **נוסחו מחדש** בלי למחוק את הקוד שמתחתיהן: ה-guard ב-interceptor
+  (עכשיו מתאר את הכפתור שנמחק כדוגמה היסטורית + מפנה ל-`showGrantScreen`),
+  ההערה ב-`installExternalStorageGate` (דוגמת-MutationObserver כללית
+  במקום ספציפית), וההערה ב-`showGrantScreen` עצמה.
+
+### בדיקות
+
+`npm test` (client-mobile) 96/96, `bun test test/*.test.js` (cloudflare) 40/40
+— regression-free (השינוי לא נגע בצד ה-CF). גם `grep` שהבריף מפרט במפורש:
+`grep "ow-demo-vault-btn\|installDemoVaultButton"` → ריק; `grep "data-ow-injected"`
+→ עדיין 4 מופעים (guard + setAttribute × 2 + הערה).
+
+**ידני (playwright-cli, שני viewports)**: DoD#15 (הוחלף) — בבניית הדמו, `/starter`
+ב-1280×800 **וב-390×844** → `find "Demo vault"` אין תוצאות,
+`document.querySelectorAll('[data-ow-injected]').length === 0`. צילומים
+`c7-dod15-desktop.png`/`-mobile.png` — אין כפתור, אין חפיפה (כי אין מה שיחפוף).
+DoD#17 (חדש, regression) — `/starter` → Create a vault → Continue without
+sync → Configure vault (App storage) → Create a vault → נחיתה מוצלחת ב-
+`/vault/<id-אמיתי>` — האשף עובד מקצה-לקצה, האינטרספטור לא נתקע/לא חוטף.
+
+### חריגות
+
+אין. הבריף ציין במפורש שממצא 2 של calev סבב 2 (ענף ה-resume בלי `/Welcome`)
+**נשאר בכוונה** — ראה §"סטיות מהתכנון" בבריף לניסוח ההחלטה.
+
+## 2026-07-29 — slice/demo-origin-split — calev-heavy round 2 (דלתא) — GO
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-round2-calev.md`
+(**GO**, 6/6 פריטי-דלתא: DoD#4/#15/#16 + regression DoD#3/#7/#10, **0 regressions**,
+**0 באגים חוסמי-merge**). Commit `a5f735b` הוא הבסיס שנבדק.
+
+**3 ממצאים, כולם מוסרים להכרעת מרדכי במפורש (לא תיקנתי אף אחד)**:
+1. 🔴 `_headers` (Commit 6ג) כנראה **חסר-תוקף בפריסה האמיתית** — הארטיפקט רץ
+   ב-Cloudflare Pages **Advanced mode** (`_worker.js/` קיים), ותיעוד Cloudflare
+   קובע ש-`_headers` לא חל על תגובות שנוצרות ע"י Pages Functions — וכל תגובה
+   כאן (כולל `/`) עוברת דרך `index.js`. DoD#16 **עובר** כפי שנוסח (קובץ קיים,
+   בייט-מדויק, רק בדמו) — מה שמוטל בספק הוא **ההצדקה** בבריף ("פרויקט Pages
+   אחד במקום שניים"). לא קוד שלי לתקן — טופולוגיה, מחוץ ל-scope (§2/§7).
+2. 🟡 במובייל 390×844, הכפתור "Demo vault" (רחב יותר מ-"כספת דמו" ב-~20px)
+   לא חופף לשורת-הגרסה (DoD#15 עובר) — אבל **כן** חופף לבורר-השפה של Obsidian
+   (הגלובוס + 63px משמאל). קדם-קיים בצורתו, הוחמר ע"י הטקסט הארוך יותר. הבריף
+   אוסר לגעת ב-CSS/מיקום בפונקציה הזו (שני סבבי NO-GO היסטוריים) — לא נגעתי.
+3. 🟡 Commit 6א הוסיף `/Welcome` רק לענף autoOpen (אין כספת-אחרונה); ענף
+   ה-resume (יש כספת-אחרונה) עדיין מפנה ל-`/vault/<id>` חשוף — "אפס לחיצות"
+   למבקר-חוזר נשען על שחזור `workspace.json` של Obsidian, לא על הניתוב שלנו.
+   אם הבוט הראשון נקטע בחלון-זמן ספציפי (נמדד: 8 כניסות רצופות בלי המתנה,
+   3/3), "New tab" ריק יכול להידבק לצמיתות. לא מציאותי בהפרעות סבירות (5/5
+   תרחישי-הפרעה רגילים התאוששו) ו-DoD#4 עובר נקי כפי שנוסח — מדווח לשקיפות,
+   לא תוקן (הרחבת התיקון לענף השני היא שינוי-קוד מחוץ למה שהתבקש ב-Commit 6).
+
+## 2026-07-29 — slice/demo-origin-split — Commit 6: סבב runtime-gate
+
+מרדכי ערך את הבריף ישירות (§4 Commit 6 חדש, DoD#15/#16 חדשים, DoD#11 נוסח-מחדש)
+אחרי שקרא את דוח calev-heavy הסופי (PARTIAL) במלואו. שלושה פריטים:
+
+### א. יעד-הניתוב של הפתיחה-האוטומטית → `/vault/<demoId>/Welcome`
+
+**`src/client-mobile/boot.js`** — בלוק הפתיחה-האוטומטית (Commit 2): היעד השתנה
+מ-`/vault/<DEMO_ID>` ל-`/vault/<DEMO_ID>/Welcome`. זו הכרעת מרדכי (מאמצת את
+המלצת calev-heavy מהדוח הסופי): הסתירה הפנימית בבריף בין DoD#4 ("`Welcome.md`
+מרונדר") לבין §4 Commit 2 המקורי (יעד בלי note-path) — נפתרה **בקוד**, לא
+בריכוך-הניסוח. עדכנתי גם את התיעוד הצמוד (הערת routing entry) לעקביות.
+
+### ב. הכפתור "כספת דמו" → `Demo vault`
+
+**`src/client-mobile/boot.js`** (`ow-demo-vault-btn`, `installDemoVaultButton`)
+— שורת `btn.textContent` בלבד שונתה. קוד פרה-קיים שלא נגעתי בו בשאר הסלייס —
+אבל מרדכי הכריע שהוא נכנס ל-scope כי הסלייס הזה הופך אותו לגלוי למבקרים
+אנגלית-בלבד. **לא נגעתי בשום דבר אחר בפונקציה** (מיקום/CSS/MutationObserver
+נושאים שני סבבי NO-GO היסטוריים — כמצוין בבריף ובהערות בגוף הקוד).
+
+### ג. `_headers` — רק בבניית הדמו
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — בלוק חדש לפני
+"Summary": `if [[ "$OW_PROFILE" == "demo" ]]` כותב `$PUBLIC_DIR/_headers` עם
+`/*\n  X-Robots-Tag: index, follow\n`. הרקע (מדוד ע"י מרדכי, מתועד בבריף):
+Cloudflare מוסיף `noindex` אוטומטית לפריסות branch-alias preview; `_headers`
+דורס את זה — כך שהדמו יכול לחיות בפרויקט Pages **אחד** ולא שניים (טופולוגיה,
+מחוץ ל-scope). הבניה הראשית לא מקבלת את הקובץ.
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — טסט חדש (DoD#16):
+`_headers` חסר בבניית ברירת-המחדל, קיים ומדויק-תוכן בבניית הדמו.
+
+**`docs/plans/demo-origin-split.md`** — עדכנתי את הליך ה-DoD#7 (ההשוואה בין
+הארטיפקטים) לציין ש-`_headers` מצטרף להבדלים הצפויים (רק ב-`/tmp/art-demo`).
+
+### בדיקות
+
+`npm test` (client-mobile) 96/96, `bun test test/*.test.js` (cloudflare) 40/40
+(39 + 1 חדש). DoD#7 המלא הורץ מחדש: `diff -r -x system-plugins` על שני
+ארטיפקטים טריים → **בדיוק** שלושה הבדלים: `_headers` (רק בדמו), `index.html`
+(שורת הקונפיג + BUST), `sw.js` (BUST). DoD#16 ידני: `ls public/_headers` —
+לא קיים בברירת-המחדל, קיים ומדויק בדמו.
+
+**ידני בדפדפן (playwright-cli, שני viewports)** — DoD#4: פרופיל נקי לגמרי →
+`/` → הפניה אוטומטית ל-`/vault/0000demo0000demo/Welcome`, `document.title`
+= `"Welcome - Obsidian Web"`, `Welcome.md` מרונדר על המסך, אפס לחיצות (צילום
+`round2-dod4-desktop.png`). DoD#10: `/starter` על בניית הדמו לא מפנה (regression,
+נבדק מחדש כי הקוד ליד שונה). DoD#15: כפתור "Demo vault" (אנגלית) קיים במסך
+ה-onboarding (כספת-דמו עדיין לא נוצרה), ב-1280×800 וב-390×844 — אין חפיפה
+לשורת-הגרסה בשני הגדלים (צילומים `round2-dod15-desktop.png`/`-mobile.png`).
+DoD#3: הכפתור **לא** קיים בבניית ברירת-המחדל.
+
+### תקלת-תשתית שנתקלתי בה (לא קוד, מדווח לשקיפות)
+
+`wrangler pages dev` בסביבה המשותפת הזו הגיש תוכן **שגוי** (build אחר, לא
+ה-directory שהצבעתי אליו) גם אחרי ניקוי `.wrangler/` מקומי וגלובלי — ייחסתי
+את זה לזיהום cache משותף בין ריצות/סוכנים על אותה מכונה (`/tmp/.wrangler`
+מכיל שאריות מ-thread-ים אחרים, `wrangler-dev2/3/4` וכו' שלא שלי). אימתתי
+שהארטיפקטים על הדיסק היו נכונים תמיד (`grep`/`diff` ישירות על הקבצים) — הבעיה
+הייתה רק בשכבת ה-serving. עקפתי עם שרת-סטטי מינימלי משלי (`/tmp/demo-origin-split/spa-server.js`,
+לא committed) לצורך האימות הידני בלבד; שום דבר מזה לא נכנס ל-git.
+
+## 2026-07-28 — slice/demo-origin-split — תיקון קל אחרי verifier-slice (calev-heavy PARTIAL)
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-calev.md`
+(**PARTIAL**, 13/14 DoD, **0 blockers, 0 regressions**, 5 ממצאים — **0 חוסמים merge**).
+
+**‏מה תוקן כאן** (ממצא 5 — זול, קשור ישירות לקוד שכתבתי ב-Commit 3): `boot.js`,
+בלוק הזריעה-מחדש — נתיב-כישלון שקט (`seedExampleVault` מחזירה `false` בלי
+לזרוק, למשל `/example-vault.json` נכשל) לא הפיק שום `console.warn`, בניגוד
+לניסוח המפורש בבריף (§4 Commit 3: "try/catch + console.warn"). ה**התנהגות
+המהותית** (אל תעדכן את המפתח, retry בבוט הבא) כבר הייתה נכונה ואומתה —
+נוסף רק log-line לאבחון בשטח. `npm test` 96/96, `bun test` 39/39.
+
+**‏מה לא תוקן, ‏ומדוע** (‏שאר 4 הממצאים — ‏כולם 🟢/🟡, ‏מוסרים ‏להכרעת ‏מרדכי,
+‏לא ‏קוד ‏שלי ‏לתקן ‏ביוזמתי):
+- **DoD#4** (‏ממצא 1, 🟡) — ‏calev-heavy ‏חלק ‏על ‏המסגור ‏"‏ניסוח ‏בלבד" ‏שלי ‏ושל
+  ‏הפאזה ‏הקודמת: ‏זו ‏סתירה **‏בתוך ‏הבריף ‏עצמו** ‏(DoD#4 ‏מבטיח `Welcome.md`
+  ‏מרונדר; §4 Commit 2 ‏מנחה ‏רק ‏ניתוב ‏ל-`/vault/<demoId>` ‏בלי note-path) —
+  ‏המליץ ‏על ‏שינוי ‏יעד-הניתוב ‏ל-`/vault/<demoId>/Welcome` (‏אימת ‏שזה ‏כבר
+  ‏עובד ‏בדפדפן ‏נקי). ‏זו **‏הכרעה ‏ארכיטקטונית** (‏שינוי ‏יעד-ניתוב, ‏שינוי-DoD,
+  ‏או ‏שניהם) — ‏לא ‏שלי ‏לקבל ‏לבד. ‏מוסר ‏למרדכי.
+- **‏כפתור עברית "‏כספת דמו"** (‏ממצא 3, 🟢) — ‏קוד **‏פרה-קיים ‏שלא נגעתי בו**
+  (‏אומת: `git diff dev..HEAD -- src/client-mobile/boot.js` ‏לא ‏מזכיר את
+  `ow-demo-vault-btn`) — ‏סותר את §6 ("‏כל טקסט-מבקר באנגלית") ‏רק ‏עכשיו ‏כי
+  ‏הסלייס ‏הזה ‏הופך ‏את ‏הדמו ‏למקור-ציבורי. ‏תיקון-טקסט ‏של ‏פיצ'ר ‏שלא ‏נכלל
+  ‏ב-scope ‏הסלייס (‏ה-Reading list ‏מזכיר ‏אותו ‏רק ‏כ-"‏קיים", ‏אין ‏commit ‏שנוגע
+  ‏בו) — ‏שינוי-scope ‏חד-צדדי, ‏לא ‏שלי ‏להחליט. ‏מוסר ‏למרדכי.
+- **‏טופולוגיית `deploy`/`deploy:demo`** (‏ממצא 4, 🟢) — **‏מתועד ‏במפורש** ‏כ-
+  placeholder ‏ב-README (Commit 5) ‏ומחוץ ‏ל-scope ‏לפי §2/§7 — ‏אין ‏מה ‏לתקן
+  ‏בקוד ‏הסלייס ‏הזה, ‏תלוי ‏ביצירת ‏פרויקט CF ‏שני ‏אחרי merge.
+- **DoD#11 ‏ניסוח** (‏ממצא 2, 🟢) — ‏זהה ‏למה ‏שכבר ‏דיווחתי ‏ב-Commit 3
+  (‏התנהגות ‏פרה-קיימת ‏מוכרת ‏בבריף). ‏חידוד-מילים ‏בלבד, ‏למרדכי.
+
+## 2026-07-28 — slice/demo-origin-split — סיכום סלייס
+
+**7 commits** על `slice/demo-origin-split` (`966bf04`..`31c55c2`), base `dev`
+`71e4265`: Commit 0 (`OW_PROFILE`+קונפיג-דמו) → Commit 1 (hash דמו בבניה) →
+Commit 2 (פתיחה-אוטומטית) → Commit 3 (זריעה-מחדש) → **תיקון calev-heavy
+NO-GO** (2 ממצאים אמיתיים, Commit 3 phase) → Commit 4 (קישור לראשי) →
+Commit 5 (סקריפטי פריסה + שומר). ראה רשומות מפורטות למטה, מהחדש לישן.
+
+**טסטים**: התחלנו מ-86 (client-mobile) + 34 (cloudflare) = 120. סיימנו ב-96
++ 39 = **135** (15 טסטים חדשים: 2 ב-deploy-config, 9 ב-seed-example-vault,
+5 ב-guard, 1 net לשינויי-snippet ב-build-assets). כולם ירוקים בכל commit.
+
+**Verifier-phase (§8, אחרי Commit 3)**: calev-heavy — סבב ראשון NO-GO (4
+ממצאים: 2 באגים אמיתיים + 2 הערות-ניסוח), 2 הבאגים תוקנו באותו phase
+(policy: 1-2 ממצאים → תיקון, לא escalation). דוח:
+`reports/obsidian-web/demo-origin-split-commit3-calev.md`.
+
+**סטיות מהתכנון**: ראה `docs/plans/demo-origin-split.md` §"סטיות מהתכנון"
+(מעודכן שם, לא כאן — זה יומן-ביצוע). תמצית: אין סטיות ארכיטקטוניות; שני
+תיקוני-קוד מ-calev-heavy (בטווח 1-2, לא escalation); שתי הערות-ניסוח
+(DoD#4/DoD#11) לא-קוד, מדווחות למרדכי.
+
+**DoD verifiable (§5, טבלה מלאה בבריף)**: כל 14 הפריטים אומתו ידנית לאורך
+הביצוע (ראה רשומות פר-commit למטה) — כולל ה-**הליך המדויק** של DoD#7
+(`cp -r` הצידה + `diff -r -x system-plugins`): ההבדל בין שני הארטיפקטים
+המלאים הוא **אך ורק** `index.html` (שורת הקונפיג + BUST) ו-`sw.js` (BUST) —
+בדיוק כפי שהבריף חזה.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 5: סקריפטי פריסה + שומר
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/scripts/guard-deploy-target.sh`** (חדש) —
+`bash scripts/guard-deploy-target.sh <main|demo> [artifact-dir]`. בודק את
+`index.html` שנבנה מול העוגן **`"demoVault":{"enabled":true`** (עם שם
+המפתח — אביגיל ממצא 4: `"enabled":true` לבדו נותן false-positive גם על
+הארטיפקט הראשי, כי `deploy-config.json` מכיל
+`"obsidian-web-layout":{"install":true,"enabled":true}`). `target=main` +
+ארטיפקט-דמו, או `target=demo` + ארטיפקט-ראשי → `exit 1` עם הודעה מפורשת.
+ארגומנט חסר/שגוי → `exit 1` גם כן.
+
+**`src/deployments/cloudflare/package.json`** — 4 מפתחות (2 זוגות build+guard,
+אחד לכל פרופיל): `build:demo` (הסניפט המדויק מהבריף), `predeploy`
+(`npm run build && bash scripts/guard-deploy-target.sh main` — hook מובנה
+של npm, רץ **אוטומטית** לפני `npm run deploy`), `predeploy:demo` (אותו דבר
+לפרופיל הדמו), ו-`deploy`/`deploy:demo` שצומצמו ל-`wrangler deploy` בלבד
+(הבנייה עברה ל-pre-hook, כדי שהשומר יבדוק תמיד את הארטיפקט **הטרי ביותר**
+ולא שאריות מבנייה קודמת — סדר-הפעולות היה שגוי בטיוטה הראשונה: guard לפני
+build היה בודק ארטיפקט ישן; תוקן לפני commit).
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — 5 טסטים
+חדשים לשומר: חוסם דמו→main, מאשר דמו→demo, חוסם main→demo, מאשר main→main,
+דוחה ארגומנט חסר.
+
+**`src/deployments/cloudflare/README.md`** — סעיף "Deploy" הורחב: טבלת שני
+הפרופילים (main/demo, קובץ-קונפיג, חוויית-מבקר), פקודות `build:demo`/
+`deploy`/`deploy:demo`, הערה מפורשת ש**טופולוגיית היעד עצמה** (פרויקט CF
+שני, דומיין) **לא** נקבעה בסלייס הזה (`wrangler.toml` לא נגעתי בו — מחוץ
+ל-scope, §2), וסעיף שמסביר את השומר + העוגן המדויק.
+
+### בדיקות
+
+`bun test test/*.test.js` — 39/39 ירוק (34 + 5 חדשים). `npm test`
+(client-mobile) — 96/96, regression-free.
+
+**‏פקודות ה-deploy עצמן (`wrangler deploy` האמיתי) לא רצו** — כנדרש בבריף.
+מה שכן הרצתי (בטוח, לא מפרסם כלום): `npm run predeploy` ו-
+`npm run predeploy:demo` בנפרד — שניהם עברו (`exit 0`, "guard: artifact
+matches target ... — OK") ומוכיחים שה-hook השרשור בונה+שומר עובד מקצה
+לקצה בלי לגעת ב-`wrangler deploy` עצמו. גם: DoD#2 (שתי הבניות, exit 0),
+DoD#9 (`OW_PROFILE=nope` → exit 1), DoD#12 (`sha256sum app.js` זהה בשלושה
+מקומות — `vendor/`, ארטיפקט-ראשי, ארטיפקט-דמו), DoD#14 (`git status --short
+| grep vendor` → ריק).
+
+### חריגות
+
+אין (מלבד תיקון-סדר פנימי בין build ל-guard, מתועד למעלה — לא נחשף
+החוצה, לא נגע ב-git history שקדם ל-commit הזה).
+
+## 2026-07-28 — slice/demo-origin-split — Commit 4: קישור מהדמו לפריסה הראשית
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/template.js`** — שורה אחת (+ separator) בתחתית
+תוכן `Welcome.md` (ב-`TEMPLATE_FILES`, לא `user-data/demo-vault/Welcome.md` —
+זו כספת-פיתוח מקומית נפרדת שאינה חלק מפריסת ה-CF, לא נגעתי בה): "This is a
+demo vault; to create your own vault → **obsidian-online.pages.dev**"
+(אנגלית, כמו כל תוכן הדמו). ה-URL — `https://obsidian-online.pages.dev` —
+אושר ע"י המשתמשת (§9 שאלה 2). קישור-כתוכן בלבד, אפס קוד/CSS — עובר
+אוטומטית דרך מנגנון הזריעה-מחדש (Commit 3) כמו כל שינוי אחר ב-`template.js`.
+
+### בדיקות
+
+approach: none (תוכן טקסט טהור). `node --check` + בניית דמו עברו (`npm run
+build`/`OW_PROFILE=demo npm run build` — exit 0). אימות תוכן:
+`example-vault.json` שנבנה מכיל את הקישור בסוף `Welcome.md`. `git status`
+מאשר ששונה קובץ אחד בלבד (`template.js`) — `user-data/demo-vault/Welcome.md`
+לא נגע. `npm test` 96/96, `bun test test/*.test.js` 34/34 — regression-free.
+
+### חריגות
+
+אין.
+
+## 2026-07-28 — slice/demo-origin-split — תיקון calev-heavy NO-GO (Commit 3 phase) — 2 ממצאים
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-commit3-calev.md`
+(NO-GO, 4 ממצאים: 2 באגים אמיתיים + 2 הערות-ניסוח שאינן קוד — DoD#4/Commit 2
+כבר דווח כחריגה בשעתו, ו-"זריעת דמו לכל כספת local ריקה" — כלב אישר במפורש
+שזו התנהגות פרה-קיימת מוכרת בבריף, לא באג חדש). תוקנו שני הבאגים באותו phase
+(1-2 ממצאים → תיקון, לא escalation):
+
+### NBug1 (blocker) — זריעה-מחדש אחרי redeploy מגישה תוכן ישן
+
+**הבעיה**: ה-Service Worker (`sw.js`) מגיש GET-ים סטטיים cache-first, ממופתח
+לפי `BUILD_ID`. מיד אחרי redeploy, ה-SW **הקודם** עדיין עשוי לשלוט בעמוד
+(takeover אסינכרוני — `skipWaiting`+`clients.claim` לא מיידיים) — כך ש-
+`fetch('/example-vault.json')` בבלוק הזריעה-מחדש (Commit 3) יכול לפגוע ב-
+cache **הישן** ולקבל את תוכן ה-build **הקודם**, בעוד `window.__owDemoContent`
+(שנקרא מ-`index.html` החדש) כבר מדווח על ה-hash **החדש** — התוכן הישן נכתב,
+המפתח נחתם עם ה-hash החדש, והמצב **קבוע** (הזריעה-מחדש לא תרוץ שוב לעבור-
+build הזה). נמדד ע"י calev: 2 מ-3 ריצות.
+
+**התיקון**: `seedExampleVault(store, opts)` מקבל `opts.cacheBust` — כשניתן,
+מוסיף `?v=<cacheBust>` ל-URL. cache-first תואם URL מדויק בלבד ⇒ query
+חדש = תמיד cache miss (בין אם ה-SW הישן או החדש מיירט) ⇒ fetch רשת אמיתי,
+ללא תלות באיזה SW שולט. `boot.js` מעביר `cacheBust: window.__owDemoContent`
+בבלוק הזריעה-מחדש (לא בבלוק הזריעה-הראשונה — שם אין בעיית cache-staleness
+מתועדת, ה-URL נשאר כפי שהיה, backward-compatible).
+
+**אימות מחדש (playwright-cli, אותו תרחיש בדיוק שבו calev נכשל)**: build A →
+טעינה, עריכת `Welcome.md`, יצירת `My Note.md` → שינוי `Welcome.md` ב-
+`template.js` (בוטל מיד אחרי, `git diff` ריק) → build B (hash שונה) →
+החלפת הארטיפקט המוגש **על אותו origin** (מדמה redeploy אמיתי) → **5 ריצות
+reload רצופות**: כל חמש הראו את תוכן ה-build **החדש** (`REDEPLOY-MARKER-B`),
+`My Note.md` שרד בכולן, `ow-demo-content` תואם את ה-hash החדש.
+
+### NBug2 — כשל-fetch שקט מעדכן את המפתח בכל זאת
+
+**הבעיה**: `seedExampleVault` לא הבחינה בין "כתב קבצים בהצלחה" ל"דילג/נכשל
+בשקט" (gate/fetch-failure — `if (!files) return;` בלי לזרוק). שני הקוראים
+ב-`boot.js` עדכנו את `ow-demo-content` ללא תנאי אחרי הקריאה, ולכן כישלון
+שקט (רשת נופלת, 500 וכו') **עדיין** סימן את הניסיון כ"בוצע" — בניגוד מפורש
+לבריף ("במקרה כישלון אל תעדכן את המפתח — שהניסיון יחזור בבוט הבא").
+
+**התיקון**: `seedExampleVault` עכשיו מחזירה `true` רק כשבאמת כתבה קבצים,
+`false` בכל נתיב-דילוג. שני הקוראים ב-`boot.js` מעדכנים את המפתח **רק**
+כש-`true` חוזר.
+
+**אימות מחדש**: ניקוי כל ה-SW caches (כדי לא לפגוע ב-cache-hit מריצות
+קודמות), `ow-demo-content` נקבע ידנית ל-`FORCE_MISMATCH`, `route()` על
+`**/example-vault.json*` → status 500 → reload → `ow-demo-content` **נשאר**
+`FORCE_MISMATCH` (לא עודכן), `My Note.md` שרד. הסרת ה-route + reload נוסף →
+המפתח התעדכן בהצלחה ל-hash הנכון (retry עבד).
+
+### בדיקות (TDD, red-green)
+
+6 טסטים חדשים ב-`seed-example-vault.test.js` (RED תחילה מול הקוד הישן):
+ערך-חזרה `true`/`false` לפי הצלחה/דילוג/כישלון-fetch/כישלון-רשת, ו-
+`cacheBust` מוסיף `?v=` ל-URL (עם ובלי — backward compat). `npm test`:
+96/96 (90 + 6 חדשים). `bun test test/*.test.js`: 34/34.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 3: זריעה-מחדש כשהתוכן השתנה
+
+### מה בוצע? (TDD — red-green)
+
+**`src/client-mobile/seed-example-vault.js`** — `seedExampleVault(store, opts)`
+מקבל `opts.force`: כש-`true`, מדלג על שער ה-stat (`Welcome.md` קיים? → לא
+נכתב שוב) וכותב מחדש את כל קבצי-התבנית. הדילוג על `.obsidian/` (finding 1)
+**נשאר גם ב-force** — לא נפתח מחדש (קונפיג הפלאגינים בבעלות בלעדית של
+seedSystemPlugins). רק paths שקיימים בתבנית נכתבים — קובץ שהמבקר יצר בעצמו
+(לא בתבנית) אף פעם לא נכתב/נמחק, force או לא.
+
+**`src/client-mobile/test/seed-example-vault.test.js`** — 3 טסטים חדשים
+(RED תחילה — נכשלו מול הקוד הישן, ואז GREEN אחרי המימוש): force דורס
+`Welcome.md` קיים; force עדיין מדלג על `.obsidian/`; force לא נוגע בקובץ
+שאינו בתבנית (`My Note.md`). 5 הטסטים הקיימים נשארו ירוקים ללא שינוי.
+
+**`src/client-mobile/boot.js`** — שני שינויים בבלוק הזריעה הקיים + בלוק חדש:
+
+1. 🔴 **זריעה כפולה בבוט הראשון (אביגיל ממצא 7)**: כתיבת המפתח
+   `localStorage['ow-demo-content'] = window.__owDemoContent` נוספה **בתוך**
+   הבלוק הקיים, מיד אחרי `seedExampleVault(seedStore)` שמצליחה — בלעדי זה,
+   בבוט הראשון של הדמו `localStorage` ריק, הבלוק החדש (למטה) היה רואה "שונה"
+   ומריץ `force:true` מיד אחרי הזריעה הראשונה (זריעה כפולה מיותרת).
+2. 🔴 **guard על הכתיבה ההיא (אביגיל סבב 2, ממצא 1)**: `VAULT_ID===DEMO_ID`
+   — הבלוק הקיים רץ על **כל** כספת local/folder ריקה (גם כספת שהמבקר יצר
+   לעצמו בדומיין הדמו — זו התנהגות פרה-קיימת, לא תוקנה כאן, ראה "חריגות"
+   למטה). בלי ה-guard על הכתיבה, כספת כזו הייתה כותבת את ה-hash הנוכחי
+   ל-`ow-demo-content` (מפתח אחד לכל המקור, לא פר-כספת) ⇒ כשכספת הדמו
+   האמיתית נטענת, ה-hash כבר "מסומן כמעודכן" והזריעה-מחדש לא הייתה רצה
+   לעולם — באג שקט שאין לו טסט/DoD, רק ה-guard.
+3. **בלוק חדש ונפרד** מיד אחרי הבלוק הקיים: כשכל התנאים מתקיימים (`seedStore`,
+   `window.__owSeedExampleVault`, `seedExampleContent`, `demoVault.enabled!==false`,
+   `VAULT_ID===DEMO_ID`, `window.__owDemoContent` קיים, ושונה מהמסומן
+   ב-`localStorage`) — קורא ל-`seedExampleVault(seedStore,{force:true})` ואז
+   מעדכן את המפתח. כישלון לא חוסם פתיחה ולא מעדכן מפתח (retry בבוט הבא).
+
+### בדיקות
+
+`cd src/client-mobile && npm test` — 90/90 ירוק (87 + 3 חדשים).
+`bun test test/*.test.js` — 34/34 ירוק (regression-free).
+
+**ידני (playwright-cli, verifier-phase לפי §8 — הקומיט היחיד שכותב לכספת של
+מבקר)**: בנוי `OW_PROFILE=demo`, שרת מקומי (`wrangler pages dev`), עריכת
+`app.vault` API ישירות (מהיר יותר מקליקים ב-UI, אותה תוצאה):
+- **DoD#5**: ערכתי `Welcome.md`, יצרתי `My Note.md`, שיניתי סמן-בדיקה בתוכן
+  `Welcome.md` ב-`template.js` (בוטל אחרי הבדיקה — `git diff` ריק), בניתי
+  מחדש, `reload()` → `Welcome.md` חדש (התוכן המעודכן), `My Note.md` שרד
+  ללא שינוי. `ow-demo-content` ב-localStorage התעדכן ל-hash החדש.
+- **DoD#6**: ערכתי `Welcome.md`, `reload()` פעמיים ברצף בלי לשנות template →
+  העריכה שרדה (אין דריסה מיותרת — ה-hash לא השתנה אז התנאי לא מתקיים).
+- **DoD#11**: יצרתי כספת local אמיתית (`/starter` → Create new vault → App
+  storage) על בניית הדמו, הוספתי `My Real Note.md`, `reload()` → הקובץ שרד
+  ללא שינוי, `ow-demo-content` ב-localStorage לא הושפע (ה-guard
+  `VAULT_ID===DEMO_ID` על שתי נקודות-הכתיבה חוסם כל מגע בכספת הזאת).
+צילום: `/tmp/demo-origin-split/phase3-reseed-verified.png`.
+
+### חריגות
+
+**לא תוקן, מדווח במפורש**: הבלוק ה**קיים** (מלפני הסלייס הזה) שמזרע תוכן-דמו
+לכל כספת local/folder ריקה על בניית הדמו (לא רק לכספת הדמו — `isVaultEmptyForSeed`
++ `config.seedExampleContent`, בלי `VAULT_ID===DEMO_ID`) ממשיך לעבוד כך: כספת
+local חדשה שהמבקר יוצר לעצמו על בניית הדמו **כן** מקבלת את `Welcome.md`/`Features/*`
+בזריעה-ראשונית (נמדד ישירות ב-DoD#11 — הכספת שיצרתי קיבלה `Welcome.md` מיד
+עם היצירה). הבריף מציין זאת במפורש כמצב-קיים ("הבלוק הקיים רץ על כל כספת
+local/folder ריקה — גם כספת שהמבקר יצר לעצמו") ומבקש guard רק על **נקודת
+הכתיבה ל-localStorage**, לא על הזריעה עצמה — כך יישמתי. DoD#11 (כפי שנוסח)
+בודק את מה שקורה **אחרי** שכבר יש קובץ בכספת (לא ריקה יותר) ועובר: לא תוקן,
+לא סטייה מהבריף, אך מדווח לביקורת calev-heavy הסופית לוודא שההבנה שלי
+תואמת את הכוונה.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 2: פתיחה-אוטומטית של הדמו
+
+### מה בוצע?
+
+**`src/client-mobile/boot.js`** —
+1. 🔴 **אילוץ סדר (הכשל הצפוי, אביגיל)**: `DEMO_ID` הוגדר עד כה **אחרי** בלוק
+   ניתוב-הכניסה (שורה ~105 לשעבר) — שימוש בו שם היה נותן `undefined`. הגדרת
+   `DEMO_ID` הועלתה לפני הבלוק (מיד אחרי `navigateToVault`); `ensureDemo()`
+   והקריאה `if (VAULT_ID === DEMO_ID) ensureDemo();` נשארו במקומן — רק ההגדרה
+   זזה, לא הלוגיקה.
+2. בבלוק `else if (!VAULT_ID)` — הענף שהיה תמיד `/starter` כשאין כספת-אחרונה,
+   מוסיף עכשיו תנאי (ES5 guard pattern, כמו `ensureDemo`):
+   `demoVault.autoOpen === true && demoVault.enabled !== false` → הפניה
+   ל-`/vault/<DEMO_ID>` במקום ל-`/starter`. `forceStarter` (`/starter`)
+   ממשיך לעקוף הכל — נשאר דרך המילוט היחידה למסך-הפתיחה גם בדומיין הדמו.
+
+### בדיקות — ידניות (playwright-cli, שני הפרופילים)
+
+**ברירת-מחדל** (DoD#3): `/` → `/starter`, מסך "Create a vault"/"Use my existing
+vault" נקי, `find "Demo"` — אין תוצאות, `localstorage-list` — רק
+`mobile-external-vaults`/`ow-known-vault-ids` (ריקים), אין `0000demo0000demo`.
+צילום: `/tmp/demo-origin-split/phase2-default-starter.png`.
+
+**דמו** (DoD#4): `/` → הפניה אוטומטית ל-`/vault/0000demo0000demo`, אפס
+לחיצות, `Welcome.md`/`How It Works`/`Features` נמצאים ב-file-explorer (זרעו
+כבר — הבדיקה המלאה של רצף הזריעה עצמו ב-DoD#5/#6 שייכת ל-Commit 3).
+צילום: `/tmp/demo-origin-split/phase2-demo-autoopen.png`. **הערה**: המסך שנפתח
+הוא "New tab" הריק של Obsidian (אין `workspace.json` מזורע — `.obsidian/`
+מודלג במכוון, seed-example-vault.js finding 1), לא `Welcome.md` פתוח על המסך;
+הקובץ קיים וניתן לפתיחה בקליק על השם ברשימה. זו התנהגות זהה למה שהיה קורה גם
+לפני הסלייס הזה בלחיצה על כפתור "כספת דמו" הקיים (`ensureDemo`+`navigateToVault`,
+ללא לוגיקת פתיחת-קובץ) — Commit 2 לא נגע ולא היה אמור לגעת בזה (הארכיטקטורה ב-§3
+מראה יעד `/vault/<demoId>` בלבד, בלי note-path). מדווח כאן במפורש — לא הכרעתי
+בעצמי שזה בסדר, calev-heavy הסופי יבדוק את הניסוח המדויק של DoD#4.
+
+**regression** (DoD#10): `/starter` על בניית הדמו **לא** מפנה לדמו — מציג את
+מסך הבחירה הנייטיבי (במקרה הזה: vault-chooser עם ערך "Demo" קיים, כי הכספת
+כבר נוצרה בטאב אחר על אותו origin — `forceStarter` חוסם את ה-autoOpen כצפוי).
+צילום: `/tmp/demo-origin-split/phase2-demo-starter-regression.png`.
+
+`cd src/client-mobile && npm test` — 87/87 ירוק (regression-free, קובץ זה לא
+נבדק ב-node:test — DOM-only, מאומת ידנית). `bun test test/*.test.js` — 34/34
+ירוק.
+
+### חריגות
+
+ראה ההערה בסעיף "Welcome.md מרונדר" למעלה — לא תוקן, מדווח לביקורת הסופית.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 1: hash של תוכן הדמו מוזרק בבניה
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — בלוק "example-vault.json
+(static)" הוזז מלהיות **אחרי** בלוק ה-`OW_BACKEND_INJECT` להיות **לפניו** — ה-hash
+נגזר מתוכן `example-vault.json` אחרי שהוא נכתב לדיסק, אז חייב לרוץ אחרי. בלוק
+ה-`OW_BACKEND_INJECT` מוסיף `window.__owDemoContent=<hash>` ל-snippet הקיים —
+`sha256sum` של `example-vault.json`, 16 תווים ראשונים, מחושב לפני קריאת ה-`node -e`
+ומועבר כ-env var (`DEMO_CONTENT_HASH`). מוזרק בשתי הבניות (לא-מזיק בברירת-המחדל,
+שום דבר לא קורא אותו שם) — כך שההבדל היחיד בין הארטיפקטים נשאר קובץ הקונפיג
+(DoD#7).
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — הבדיקה הבייט-בבייט של
+ה-snippet עודכנה: מחשבת את אותו hash (`sha256sum` על `example-vault.json` שכבר
+נבנה) ומצפה לו ב-snippet.
+
+### בדיקות
+
+`bun test test/build-assets.test.js` — 3/3 ירוק. ידני: `OW_PROFILE=demo npm run build`
+→ `__owDemoContent="e0b00163a6abd341"`, זהה ל-`sha256sum example-vault.json | cut -c1-16`.
+שתי בניות רצופות (ברירת-מחדל, ללא `OW_PROFILE`) → אותו hash בשתיהן (דטרמיניסטי, לא
+תלוי ב-BUST). `bun test test/*.test.js` (34/34) ו-`client-mobile npm test` (87/87)
+נשארו ירוקים — regression-free.
+
+### חריגות
+
+אין.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 0: `OW_PROFILE` + קונפיג הדמו
+
+### מה בוצע?
+
+**`src/config/deploy-config.demo.json`** (חדש) — קובץ קונפיג מלא (לא overlay) לפרופיל
+הדמו: `seedExampleContent:true`, `demoVault.enabled:true` + `autoOpen:true`.
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — הוספת `OW_PROFILE` (שורה 39
+לשעבר, כעת בלוק חדש לפני הבדיקה הקיימת): ריק/לא-מוגדר → קובץ ברירת-המחדל (כמו היום);
+`OW_PROFILE=demo` → `deploy-config.demo.json`; ערך לא-קיים → **כשל-רועש** (`exit 1`, לא
+נפילה שקטה לברירת-מחדל — profile שגוי חייב להפיל את הבניה, לא לפרוס דמו לפרודקשן
+בשוגג).
+
+**`src/config/deploy-config.json`** — `seedExampleContent` ו-`demoVault.enabled` הפכו
+ל-`false` (ברירת-המחדל היא כעת "בלי דמו" — §9 שאלה 1: החלטה מאושרת מראש בבריף).
+
+**`src/client-mobile/deploy-config.js`** — `DEFAULTS` עודכן להיות מראה מדויקת של
+`deploy-config.json` החדש (`seedExampleContent:false`, `demoVault.enabled:false`);
+ההערה בשורה 31 עודכנה מ"Mirrors src/config/deploy-config.json" ל"מראה של פרופיל
+ברירת-המחדל" (עם שני profiles השם הישן דו-משמעי).
+
+**`src/client-mobile/test/deploy-config.test.js`** — טסט אדום מובטח (אביגיל ממצא 2)
+תוקן: assertion על `seedExampleContent`/`demoVault.enabled` עודכן ל-`false`. נוסף טסט
+חדש (אביגיל ממצא 3): `assert.deepStrictEqual(DEFAULTS, require('../../config/deploy-config.json'))`
+— לפני הקומיט הזה שום טסט לא באמת קרא את ה-JSON, רק השווה ליטרלים קשיחים; drift בין
+שני הקבצים לא היה נתפס.
+
+### בדיקות
+
+`cd src/client-mobile && npm test` — 87/87 ירוק (כולל 2 טסטים חדשים ב-deploy-config.test.js).
+`cd src/deployments/cloudflare && bun test test/build-assets.test.js` — 3/3 ירוק.
+ידני: `npm run build` → `seedExampleContent:false,"demoVault":{"enabled":false,...}`;
+`OW_PROFILE=demo npm run build` → `seedExampleContent:true,"demoVault":{"enabled":true,...,"autoOpen":true}`;
+`OW_PROFILE=nope npm run build` → `exit=1` עם הודעת שגיאה מפורשת.
+
+### חריגות
+
+אין.
+
 ## 2026-07-27 — slice/zero-patches — Commit 3: §3ד — `template.js:92` (ההצהרה הציבורית) + README
 
 ### מה בוצע?

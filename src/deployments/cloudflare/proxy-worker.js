@@ -19,8 +19,8 @@
 // Cache API note (brief finding 3 / §9 Q0): caches.default is a no-op on
 // *.workers.dev (documented CF limitation) — it's only active on a
 // custom-domain/route. Functional either way; caching is purely an
-// optimization. See README for the routes/wrangler.toml uncomment needed in
-// prod to get cache hits.
+// optimization. To get real cache hits in prod, attach a custom domain to the
+// Pages project (a dashboard step — no route config lives in this repo).
 
 // Simple allow-list of hostnames we are willing to proxy. Keeps this from
 // becoming an open proxy.

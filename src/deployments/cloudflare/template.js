@@ -52,6 +52,8 @@ export const TEMPLATE_FILES = new Map([
 
 > **Obsidian's desktop app — running in your browser, no Electron needed.**
 
+**This is a demo vault.** [Create your own →](https://obsidian-online.pages.dev)
+
 This is a live demo of **obsidian-web**, an open-source project that runs Obsidian's original renderer in a standard browser by replacing every Capacitor/Electron dependency with lightweight browser-native shims.
 
 **Everything works in the browser:** edit notes, create folders, rename files. Your changes are stored **locally in your browser** (via [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)) — private to you and never sent to a server. They survive a page reload and stick around until you clear this site's browsing data.
