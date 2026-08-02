@@ -2,6 +2,39 @@
 
 > יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
 
+## 2026-07-31 — slice/r0-qwen — monorepo-foundation (R0)
+
+סלייס תשתית ראשון ברצף restructure. אפס שינוי בקוד פרודקשן (`src/` לא נגע).
+
+#### מה בוצע?
+
+**Commit 0 — שלד workspaces**
+- `package.json` שורש עם workspaces (packages/*, 4 חבילות src/)
+- `bunfig.toml` עם `linker = "hoisted"` (מונע קריסת npm install)
+- `.gitignore`: `/package-lock.json` (הגנה מפני npm lockfile במונוריפו bun)
+
+**Commit 1 — חבילת @ow/core + tsconfig + גבול**
+- `packages/core/package.json` — חבילה עם אפס תלויות, type: module
+- `tsconfig.base.json` + `tsconfig.json` (שורש) + `packages/core/tsconfig.json`
+  (NodeNext, composite, allowImportingTsExtensions, noEmit — מקובעים)
+- `scripts/check-core-boundary.mjs` — אוכף שרק יחסי/node:/declared deps
+- `bun.lock` נכנס למעקב (שחזוריות מונוריפו)
+
+**Commit 2 — toRelative + 7 טסטים**
+- `packages/core/fs/to-relative.ts` — מקלף '/' מוביל בלבד
+- `packages/core/fs/to-relative.test.ts` — 7 טסטים (כולל backslash, null)
+
+**Commit 3 — תיעוד**
+- `AGENTS.md`: bun כמתקין יחיד, Node 22.18+ לפיתוח, חוזה core, מבנה workspaces
+
+#### בדיקות
+
+- `bun install` — אפס שגיאות
+- `bun run test` — exit 0 (כל 5 החבילות)
+- `bun run typecheck` — exit 0
+- `git diff --stat dev...HEAD -- src/` — ריק (אפס שינוי פרודקשן)
+- גבול core: `import express` → exit 1, checked 3 files
+
 ## 2026-07-30 23:23 — cloudflare: npx ל-wrangler + הודעות build מעודכנות
 
 תיקון שנחשף בזמן פריסה חיה: `npm run deploy` נפל ב-`wrangler: not found` כי

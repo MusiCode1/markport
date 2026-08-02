@@ -1,0 +1,19 @@
+{
+  "name": "obsidian-web",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "src/client-mobile",
+    "src/runtime-server/server",
+    "src/sync-server",
+    "src/deployments/cloudflare"
+  ],
+  "scripts": {
+    "test": "bun run --filter '*' test",
+    "typecheck": "tsc --build"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.0",
+    "@types/node": "^24.0.0"
+  }
+}
