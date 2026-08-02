@@ -164,7 +164,7 @@
     const id = slash !== -1 ? p.slice(0, slash) : p;
     if (window.__owLocalVaults && window.__owLocalVaults.get(id)) return id;
     let known = [];
-    try { known = JSON.parse(localStorage.getItem('ow-known-vault-ids') || '[]'); } catch (e) {}
+    try { known = JSON.parse(localStorage.getItem('ow-known-vault-ids') || '[]'); } catch (e) { }
     return known.indexOf(id) !== -1 ? id : null;
   }
 
@@ -190,7 +190,7 @@
       type: e.isDirectory ? 'directory' : 'file',
       size: e.size,
       mtime: e.mtime,
-      uri:   '',
+      uri: '',
       ctime: e.mtime,
     };
   }
@@ -403,17 +403,17 @@
       }
       const s = await res.json();
       return {
-        type:  s.isDirectory ? 'directory' : 'file',
-        size:  s.size,
+        type: s.isDirectory ? 'directory' : 'file',
+        size: s.size,
         mtime: s.mtime,
         ctime: s.mtime,
-        uri:   '',
+        uri: '',
       };
     },
 
     async rename(opts) {
       const from = fullPath({ path: opts.from, directory: opts.directory });
-      const to   = fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory });
+      const to = fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory });
       const res = await fetch('/api/fs/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -432,7 +432,7 @@
 
     async copy(opts) {
       const from = fullPath({ path: opts.from, directory: opts.directory });
-      const to   = fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory });
+      const to = fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory });
       const res = await fetch('/api/fs/copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -459,9 +459,9 @@
     async verifyIcloud() { return {}; },   // iOS iCloud check — not applicable
     async open() { return {}; },           // Android file opener — not applicable
 
-    async checkPerms()        { return { publicStorage: 'granted' }; },
-    async requestPermissions(){ return { publicStorage: 'granted' }; },
-    async requestPerms()      { return { publicStorage: 'granted' }; },
+    async checkPerms() { return { publicStorage: 'granted' }; },
+    async requestPermissions() { return { publicStorage: 'granted' }; },
+    async requestPerms() { return { publicStorage: 'granted' }; },
     // opfs-ux: File System Access API polyfill for the native "Open folder
     // as vault" flow (brief §3ג). Chromium-only (feature-detected below —
     // the native onClick handler treats a thrown Error whose message
@@ -533,7 +533,7 @@
                 cb({ path: msg.path });
               });
             }
-          } catch (_) {}
+          } catch (_) { }
         };
         ws.onclose = () => { window.__owCapacitorWatcher = null; };
         window.__owCapacitorWatcher = { ws, _listeners: new Set() };
@@ -612,7 +612,7 @@
       if (eventName === 'change') {
         if (!window.__owCapacitorWatcher) {
           // HttpFilesystem, not the Filesystem Proxy — see §4 Commit 2.2.
-          HttpFilesystem.startWatch({}).catch(() => {});
+          HttpFilesystem.startWatch({}).catch(() => { });
         }
         // Defer until watcher is ready
         setTimeout(() => {
@@ -656,13 +656,13 @@
     if (typeof store.rename === 'function') {
       wrapped.rename = (opts) => store.rename(Object.assign({}, opts, {
         from: fullPath({ path: opts.from, directory: opts.directory }),
-        to:   fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory }),
+        to: fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory }),
       }));
     }
     if (typeof store.copy === 'function') {
       wrapped.copy = (opts) => store.copy(Object.assign({}, opts, {
         from: fullPath({ path: opts.from, directory: opts.directory }),
-        to:   fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory }),
+        to: fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory }),
       }));
     }
     return wrapped;
@@ -770,22 +770,30 @@
     keys: () => Promise.resolve({ keys: [] }),
   };
 
+  let terms = (localStorage.getItem('obsidian-terms') || window.__obsidianTerms || '');
+
   const App = {
     // version — read lazily (inside the function body, not at module-eval
     // time) from window.__owObsidianVersion, the single source of truth
     // written by scripts/update-obsidian-mobile.js (docs/plans/
     // electron-shim-foundation.md §3.0). The '1.12.7' fallback only matters
     // if obsidian-version.js somehow failed to load before this is called.
-    getInfo:              () => Promise.resolve({ name: 'Obsidian', id: 'md.obsidian', build: '0', version: (window.__owObsidianVersion || '1.12.7') }),
-    getState:             () => Promise.resolve({ isActive: true }),
-    getLaunchUrl:         () => Promise.resolve(null),
-    addListener:          (opts) => Promise.resolve({ remove: noop }),
-    removeAllListeners:   noop,
-    exitApp:              noop,
-    minimizeApp:          noop,
-    setQuickActions:      noop,
-    getFonts:             () => Promise.resolve({ fonts: [] }),
-    takeScreenshot:       () => Promise.resolve({ base64String: '' }),
+    getInfo: () => Promise.resolve({
+      name: 'Obsidian',
+      id: 'md.obsidian',
+      build: '0',
+      terms,
+      version: (window.__owObsidianVersion || '1.12.7')
+    }),
+    getState: () => Promise.resolve({ isActive: true }),
+    getLaunchUrl: () => Promise.resolve(null),
+    addListener: (opts) => Promise.resolve({ remove: noop }),
+    removeAllListeners: noop,
+    exitApp: noop,
+    minimizeApp: noop,
+    setQuickActions: noop,
+    getFonts: () => Promise.resolve({ fonts: [] }),
+    takeScreenshot: () => Promise.resolve({ base64String: '' }),
     isInstalledFromStore: () => Promise.resolve({ isFromStore: false }),
     async requestUrl(opts) {
       const { url, method, contentType, headers, body, binary } = opts;
@@ -798,7 +806,7 @@
       // the user's own hosts — stays a DIRECT fetch, so the server is never in
       // the sync data path (preserves the direct-fetch sync architecture).
       let __owHost = '';
-      try { __owHost = new URL(url, location.href).hostname; } catch (_) {}
+      try { __owHost = new URL(url, location.href).hostname; } catch (_) { }
       if (/(^|\.)(github\.com|githubusercontent\.com|obsidian\.md)$/.test(__owHost)) {
         const pr = await fetch('/api/proxy-request', {
           method: 'POST',
@@ -831,15 +839,15 @@
         headers: reqHeaders,
         body: reqBody,
         credentials: 'omit',   // ‏native requestUrl ‏לא ‏שולח cookies; ‏auth ‏עובר ‏ב-Authorization header.
-                             // ‏`include` ‏שובר ‏endpoints ‏עם wildcard CORS (GitHub) — ‏אומת ‏ש-LiveSync→CouchDB
-                             // ‏משתמש ‏ב-basic-auth (‏לא cookies), ‏אז omit ‏בטוח. ‏ראה §6.
+        // ‏`include` ‏שובר ‏endpoints ‏עם wildcard CORS (GitHub) — ‏אומת ‏ש-LiveSync→CouchDB
+        // ‏משתמש ‏ב-basic-auth (‏לא cookies), ‏אז omit ‏בטוח. ‏ראה §6.
       });
       const respHeaders = {};
       res.headers.forEach((v, k) => { respHeaders[k] = v; });
       const respBuffer = await res.arrayBuffer();
       return { status: res.status, headers: respHeaders, body: arrayBufferToBase64(respBuffer) };
     },
-    setBackgroundColor:   noop,
+    setBackgroundColor: noop,
   };
 
   const SplashScreen = {
@@ -950,7 +958,7 @@
           pluginId,
           methodName,
           success,
-          data:  success ? dataOrError : undefined,
+          data: success ? dataOrError : undefined,
           error: success ? undefined : { message: dataOrError && dataOrError.message || String(dataOrError), code: dataOrError && dataOrError.code },
           save: false,
         });
