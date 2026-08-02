@@ -113,6 +113,8 @@ const TEXT_EXTENSIONS = new Set([
 // Plugin main.js files: small ones (<~500KB) load fast; large ones (>500KB)
 // are better fetched on demand rather than bloating the bootstrap payload.
 const MAX_CONTENT_BYTES = 500 * 1024; // 500 KB
+// Directories that should always be ignored to prevent bloating the bootstrap cache.
+const IGNORED_DIR_NAMES = new Set(['.git', 'node_modules', '.tmp', 'dist', 'out', 'bower_components']);
 
 function isTextFile(filename, size) {
   if (!TEXT_EXTENSIONS.has(path.extname(filename).toLowerCase())) return false;
@@ -141,6 +143,7 @@ async function walkDir(dir, root, fsCache, dirsCache, walkHidden = false, progre
   const entryStats = await Promise.all(
     entries.map(async (e) => {
       if (!walkHidden && e.name.startsWith('.')) return null;
+      if (e.isDirectory() && IGNORED_DIR_NAMES.has(e.name)) return null;
       try {
         const s = await fsp.stat(path.join(dir, e.name));
         return {
