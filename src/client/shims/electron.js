@@ -315,6 +315,13 @@
     'update', 'check-update', 'disable-update', 'insider-build',
     'cli', 'disable-gpu', 'adblock-lists', 'adblock-frequency',
     'get-icon', 'get-sandbox-vault-path', 'get-documents-path',
+    // 'terms': app.js gates its entire boot on this returning Obsidian's
+    // exact EULA-acceptance string — a mismatch (e.g. our old `null`) makes
+    // it call window.close() and return before window.app is ever created,
+    // which browsers no-op (can't close a tab they didn't open), silently
+    // freezing boot at "Loading Obsidian (N/N)" forever with no error.
+    // 'policy': enterprise policy object, just Object.freeze()'d — {} is fine.
+    'terms', 'policy',
   ]);
 
   const ipcRenderer = {

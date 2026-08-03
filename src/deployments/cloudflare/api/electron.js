@@ -7,11 +7,22 @@
 
 const APP_VERSION = '1.12.7';
 
+// Must match app.js's hardcoded EULA string exactly, or app.js calls
+// window.close() and boot silently freezes with no window.app and no error
+// (browsers refuse to close a tab they didn't open — see server/api/electron.js).
+const OBSIDIAN_TERMS = 'I understand and agree that I am not allowed to '
+  + 'distribute the Obsidian application, in any form, without explicit '
+  + 'approval from the Obsidian team. I also understand that Obsidian is '
+  + 'a registered trademark, and I cannot use it without explicit '
+  + 'permission granted by the Obsidian team.';
+
 const SIMPLE_VALUES = {
   'is-dev':         false,
   'is-quitting':    false,
   'resources':      '',
   'frame':          'native',
+  'terms':          OBSIDIAN_TERMS,
+  'policy':         {},
   'version':        APP_VERSION,
   'update':         '',
   'check-update':   false,

@@ -98,6 +98,28 @@ function createElectronRouter(vaultRegistry, fallbackVaultRoot) {
     res.json({ value: 'native' });
   });
 
+  // ipcRenderer.sendSync('terms')
+  // app.js gates its ENTIRE boot on this returning Obsidian's exact
+  // EULA-acceptance string — any other value (including our old `null`)
+  // makes it call window.close() and return before window.app is created.
+  // Browsers refuse to close a tab they didn't open, so that's a silent
+  // no-op: boot freezes forever at "Loading Obsidian (N/N)" with no error.
+  // Must match app.js byte-for-byte — do not edit this string.
+  const OBSIDIAN_TERMS = 'I understand and agree that I am not allowed to '
+    + 'distribute the Obsidian application, in any form, without explicit '
+    + 'approval from the Obsidian team. I also understand that Obsidian is '
+    + 'a registered trademark, and I cannot use it without explicit '
+    + 'permission granted by the Obsidian team.';
+  router.get('/terms', (req, res) => {
+    res.json({ value: OBSIDIAN_TERMS });
+  });
+
+  // ipcRenderer.sendSync('policy') — enterprise policy object; app.js just
+  // Object.freeze()s whatever comes back, so an empty object is sufficient.
+  router.get('/policy', (req, res) => {
+    res.json({ value: {} });
+  });
+
   // ipcRenderer.sendSync('documents-dir') / 'desktop-dir'
   router.get('/documents-dir', (req, res) => {
     res.json({ value: path.join(os.homedir(), 'Documents') });
