@@ -502,10 +502,31 @@
         // *synchronous* IPC call; navigating mid-call, before sendSync even
         // returns `true` to its caller, would abandon whatever the caller
         // still does with that return value this same turn.
+        window.__owVaultNavPending = true;   // see the 'starter' channel below
         setTimeout(() => { location.href = '/vault/' + encodeURIComponent(id); }, 0);
         return true;   // ⚠️ MUST be exactly `true` — `!0!==sendSync(...)` shows an error Notice otherwise.
       }
       if (channel === 'starter') {
+        // A vault navigation already in flight WINS over this one. Assigning
+        // location.href only schedules a navigation — the current document
+        // keeps running, and so does the bundle. Two callers reach this
+        // channel from a document that is already leaving for a vault, both
+        // via `App.openVaultChooser`:
+        //   - `initializeWithAdapter`'s desktop-only empty-vault probe
+        //     (`readRaw("")` → `"ENOENT"===code` → `vault=null,
+        //     openVaultChooser(!0)`), and
+        //   - Vault's own 'closed' handler.
+        // Both fire while the chooser's register() flow is tearing itself
+        // down after boot.js intercepted its `mobile-selected-vault` write
+        // and navigated to `/vault/<id>` (see navigateToVault in boot.js).
+        // Letting this through replaces that navigation with /starter, i.e.
+        // "Open vault" silently returns you to the vault list — measured,
+        // non-deterministic, and dependent on one `/api/fs/read` round-trip's
+        // latency, which is why it reproduced only sometimes.
+        if (window.__owVaultNavPending) {
+          console.warn('[obsidian-web] ignoring starter navigation — already opening a vault');
+          return null;
+        }
         location.href = '/starter';
         return null;
       }

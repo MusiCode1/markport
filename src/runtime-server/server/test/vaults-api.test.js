@@ -334,3 +334,32 @@ test('vault/:id/* route serves the mobile shell for a nested note deep link', as
   const body = await response.text();
   assert.match(body, /shell/);
 });
+
+test('github/:owner/:repo route serves the mobile shell, bare and with a note path', async (t) => {
+  const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'obsidian-web-'));
+  t.after(() => fsp.rm(tmp, { recursive: true, force: true }));
+
+  const clientMobilePath = path.join(tmp, 'client-mobile');
+  await fsp.mkdir(clientMobilePath);
+  await fsp.writeFile(path.join(clientMobilePath, 'index.html'), '<html><body>shell</body></html>');
+
+  const server = await startTestServer({
+    clientMobilePath,
+    obsidianPath: path.join(tmp, 'obsidian'),
+    registryPath: path.join(tmp, 'vaults.json'),
+    vaultPath: tmp,
+  });
+  t.after(server.close);
+
+  // The shareable vault URL — boot.js resolves the repository client-side and
+  // hands off to /vault/<id>. A 404 here would make the link dead on arrival,
+  // which is the one thing it exists to avoid.
+  for (const route of [
+    '/github/notnilcn/ggdd',
+    '/github/notnilcn/ggdd/Game%20Design%20Docs/01%20Executive%20Summary',
+  ]) {
+    const response = await fetch(server.baseUrl + route, { redirect: 'manual' });
+    assert.equal(response.status, 200, `route should serve the shell: ${route}`);
+    assert.match(await response.text(), /shell/);
+  }
+});

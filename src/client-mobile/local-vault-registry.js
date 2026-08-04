@@ -50,18 +50,38 @@
     return Array.from(arr).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
   }
 
+  // storageOf(entry) — WHERE the bytes live, as opposed to `type`, which says
+  // where the content CAME FROM and which actions apply to it. The two were
+  // one field until a GitHub repository could be cloned into a picked
+  // directory ('github' + 'folder'), a combination a single string cannot
+  // express. Derived, never stored, for every entry written before the field
+  // existed: `type:'folder'` has always meant a picked directory, everything
+  // else has always meant OPFS — so an old registry needs no migration.
+  function storageOf(v) {
+    if (v && v.storage) return v.storage;
+    return (v && v.type === 'folder') ? 'folder' : 'opfs';
+  }
+
   var api = {
     list: function () {
       var map = load();
       return Object.entries(map)
-        .map(function (entry) { return { id: entry[0], name: entry[1].name, createdAt: entry[1].createdAt, type: entry[1].type || 'local' }; })
+        .map(function (entry) {
+          return {
+            id: entry[0],
+            name: entry[1].name,
+            createdAt: entry[1].createdAt,
+            type: entry[1].type || 'local',
+            storage: storageOf(entry[1]),
+          };
+        })
         .sort(function (a, b) { return b.createdAt - a.createdAt; });
     },
     get: function (id) {
       var map = load();
       var v = map[id];
       if (!v) return null;
-      return { name: v.name, createdAt: v.createdAt, type: v.type || 'local' };
+      return { name: v.name, createdAt: v.createdAt, type: v.type || 'local', storage: storageOf(v) };
     },
     has: function (id) {
       return !!this.get(id);
@@ -71,12 +91,16 @@
     // minting a new uuid every time. Falls back to uuid() when omitted —
     // zero behavior change for existing callers (create-vault interceptor,
     // folder-vault flow), brief §6 risk.
+    // opts.storage ('folder') — only needed when it does NOT follow from the
+    // type: a 'github' vault cloned into a picked directory rather than into
+    // OPFS. Omitted, storageOf() derives it, so no existing caller changes.
     create: function (name, opts) {
       var map = load();
       var id = (opts && opts.id) || uuid();
       map[id] = { name: name || 'Untitled', createdAt: Date.now(), type: (opts && opts.type) || 'local' };
+      if (opts && opts.storage) map[id].storage = opts.storage;
       save(map);
-      return { id: id, name: map[id].name, type: map[id].type };
+      return { id: id, name: map[id].name, type: map[id].type, storage: storageOf(map[id]) };
     },
     rename: function (id, name) {
       var map = load();

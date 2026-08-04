@@ -484,6 +484,53 @@ document.createElement('webview').loadURL             // undefined
 
 ## בעיות שנפתרו (ארכיון)
 
+### F-010: `obsidian-git` (וכל bundle שמריח Node) נכשל ב-"Failed to load plugin" ✅ תוקן 2026-08-04
+
+**תסמין:** ב-vault עם `obsidian-git` v2.38.6 מותקן, הפעלת התוסף מ-Settings לא עושה כלום —
+הוא נשאר כבוי ומופיע "Failed to load plugin". שאר התוספים בvault נטענים כרגיל.
+
+**איך מצאנו:** `app.plugins.enablePlugin()` בולע את השגיאה; `await app.plugins.loadPlugin('obsidian-git')`
+מ-DevTools זורק אותה במלואה:
+```
+TypeError: Cannot read properties of undefined (reading 'from')
+    at w (plugin:obsidian-git:101:16588)
+```
+המיקום הוא `nodeWrap` של **js-sha256** (bundled לתוך main.js של התוסף):
+`var Buffer = require('buffer').Buffer; ... if (Buffer.from && …)`.
+
+**שתי סיבות-שורש, שתיהן ב-`client-mobile/boot.js`:**
+
+1. **סדר-אתחול.** מפת ה-`modules` ש-`window.require` מגישה נבנתה עם
+   `'buffer': { Buffer: window.Buffer }` ו-`'process': window.process` — **לפני**
+   שתי ההשמות `window.Buffer = …` / `window.process = …` שהופיעו כ-60 שורות
+   אחריה. המפה תופסת **by value**, ולכן `require('buffer').Buffer` ו-`require('process')`
+   החזירו `undefined` לנצח, לכל תוסף. (השורש המיידי של ה-TypeError.)
+2. **`process.versions.node = '0.0.0'`.** זה ה-sniff הקנוני של כל UMD bundle
+   (`typeof process === 'object' && process.versions && process.versions.node`);
+   ערך truthy שולח ספריות למסלול ה-Node שלהן, ומשם ל-`require('fs'|'buffer'|'crypto')`
+   אמיתי. אנחנו דפדפן — במקרה הטוב יש shim. js-sha256 לקח בדיוק את המסלול הזה.
+   גם אילו תוקן רק (1), הוא היה מגיע ל-`crypto.createHash(…).digest('hex')` **סינכרוני**,
+   שה-shim שלנו לא יכול לספק (WebCrypto async-only) ומחזיר `''` — כלומר hashes שגויים
+   בשקט, גרוע יותר מכישלון רועש.
+
+**תיקון (`src/client-mobile/boot.js`):** הזזת `window.process` + `window.Buffer` אל
+**מעל** מפת ה-`modules`, והסרת המפתח `node:` מ-`process.versions` (`electron: '30.0.0'`
+נשאר — הוא weight-bearing, ראה `docs/plans/electron-shim-foundation.md` §3.0).
+נבדק: אין ב-`vendor/obsidian-mobile/app.js` אף קריאה ל-`versions.node`.
+בלי המפתח, js-sha256 לוקח את מסלול ה-JS-הטהור שלו — בדיוק מה שקורה ב-Obsidian mobile
+אמיתי, שאין בו `process` בכלל.
+
+**אישור:** `obsidian-git` נטען, נשמר enabled, ו-Source Control view עולה; טעינה נקייה
+מחדש טוענת אותו מ-`community-plugins.json` בלי שגיאות. 143 טסטים ב-`src/client-mobile`
+ו-31 ב-`runtime-server/server` עוברים.
+
+**שיעור כללי:** `window.require` מגישה אובייקטים שנתפסו by-value בזמן בניית המפה —
+כל shim חדש חייב להיות מוגדר **לפני** אותה מפה. ובאופן רחב יותר: להצהיר על יכולת
+Node שאין לנו (`versions.node`) מזיק יותר משלא להצהיר עליה, כי ספריות מדלגות בגללה
+על מסלול-הדפדפן שכן היה עובד.
+
+---
+
 ### F-005: אינדקס מטא-דאטה תקוע לנצח (`inProgressTaskCount` תקוע על 3) ✅ תוקן 2026-05-06
 
 **הבאג הקריטי שחסם את כל פעולות ה-rename דרך UI ועוד.**
@@ -1295,6 +1342,64 @@ delete cache.dirs[parent];
    הבחירה תלויה במה שיתגלה כצוואר-בקבוק בפועל אחרי שה-LiveSync יתחיל לרוץ. עדיף למדוד לפני שמחליטים מאשר לבחור עכשיו ולשלם תחזוקה על פתרון שאולי לא צריך.
 
 Pitfall #5 בתכנון ה-bootstrap cache מסמן את זה במפורש כ-"out of scope ל-v1; document".
+
+---
+
+## שכפול repo לספרייה אמיתית — שני קירות של הדפדפן {#github-folder-clone}
+
+**תאריך:** 2026-08-04 · **סטטוס:** נפתר (שני הקירות ממופים, שניהם מדודים)
+
+### קיר 1 — Chromium מסרב לתת לאתר את Downloads / Desktop / Documents
+
+**תסמין:** בבחירת תיקייה ל-clone (`showDirectoryPicker`), בחירת `Downloads` או
+`Desktop` עצמם נכשלת עם דיאלוג של Chrome: *"<origin> can't open this folder
+because it contains system files"*.
+
+**מה ידוע בוודאות:** זו **מדיניות של Chromium**, לא באג ולא הרשאה שאפשר לבקש.
+ה-blocklist של File System Access
+(`ChromeFileSystemAccessPermissionContext`, `kDontBlockChildren`) חוסם את
+**התיקייה עצמה** של הבית / Desktop / Documents / Downloads, ומתיר כל תיקייה
+**בתוכן**. אין API שעוקף את זה, ואין דרך להבחין תכנותית בין "המשתמש ביטל" לבין
+"המשתמש נתקל בקיר" — Chromium מדווח על שניהם כ-`AbortError`.
+
+**מה עשינו:** אומרים את זה מראש בדיאלוג, ושוב אחרי ביטול של הבוחר
+(`OW_BLOCKED_FOLDER_HINT` ב-`boot.js`). `startIn:'downloads'` נשאר — שם רוצים
+שה-repo ינחת, פשוט צריך לרדת רמה אחת (או ללחוץ "New folder" בדיאלוג עצמו).
+
+### קיר 2 — פרוטוקול git עצמו חסום ב-CORS, ולכן `.git` נבנה ולא נמשך
+
+**מה ידוע בוודאות (נמדד 2026-08):**
+
+| endpoint | CORS | מסקנה |
+|---|---|---|
+| `api.github.com` | `*` | metadata זמין |
+| `raw.githubusercontent.com` | `*` | גופי-קבצים זמינים, ולא נספרים ב-rate limit |
+| `codeload.github.com` (zip/tar) | רק `render.githubusercontent.com` | ארכיון לא זמין מדף |
+| `github.com/<o>/<r>.git/info/refs?service=git-upload-pack` | **אין header כלל** | פרוטוקול ה-packfile לא זמין מדף |
+
+לכן `git clone` אמיתי מהדפדפן אינו אפשרי בלי CORS-proxy צד-שלישי — שדרכו יעברו
+ה-repo של המשתמש ובrepo פרטי גם ה-token. לא נעשה. במקום זה
+`storage/git-writer.js` **בונה** את ה-objects מאותן תשובות REST, ומאמת כל אחד
+מול ה-sha ש-GitHub דיווח (mismatch ⇒ לא נכתב כלום).
+
+**המכשול היחיד שנשאר — ה-commit object:** ה-REST API מנרמל
+`author.date`/`committer.date` ל-UTC (`…Z`) ומוחק את סיומת ה-`±hhmm` שהיא חלק
+מהבתים של ה-object. בנייה נאיבית נותנת sha שגוי — נמדד על 4 repos, תמיד שגוי.
+שני מסלולים, שניהם מאומתים מול ה-sha האמיתי:
+
+- **commit חתום** ⇒ `verification.payload` הוא ה-object עצמו פחות ה-`gpgsig`;
+  משחילים את `verification.signature` חזרה (כל שורה אחרי הראשונה בהזחת רווח
+  אחד, **כולל** ה-newline הסופי — בלעדיו ה-sha יוצא שגוי).
+- **commit לא-חתום** ⇒ ה-instant ידוע במדויק (שניות-unix לא תלויות באזור), רק
+  הטקסט `±hhmm` חסר; ~105 ערכים חוקיים. מנסים, ומקבלים רק את מה שה-sha מאשר.
+  מדוד: מעבר author==committer פותר תוך ~200 hashes.
+
+מדידה על 18 commits מ-6 repos: 17 שוחזרו בדיוק. היחיד שנכשל
+(`rust-lang/rust`, merge של bors) נושא header שה-API לא חושף (`mergetag`) —
+שם נופלים ל-snapshot mode, שמתועד ב-`git-writer.js`.
+
+**אימות:** `git fsck`, `git status` (נקי), `git log`, `git fetch --unshallow`
+על clone אמיתי — כולם עוברים.
 
 ---
 

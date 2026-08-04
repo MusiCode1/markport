@@ -55,6 +55,16 @@
     return btoa(s);
   }
 
+  // A vault-root `.git` is repository plumbing, not vault content: it belongs
+  // to git (storage/git-writer.js writes one for GitHub vaults, and any folder
+  // the user picks may already be a checkout), and Obsidian has no use for it.
+  // Excluded from the two RECURSIVE walks only — a real repository holds one
+  // loose object per file version, so walking it would double (or worse) the
+  // cost of every vault-open snapshot and every rescan, to build a listing
+  // whose every entry is then ignored. Root-level only: a `.git` deeper in the
+  // tree is a submodule's, and not ours to decide about.
+  const VAULT_WALK_SKIP_AT_ROOT = { '.git': true };
+
   function capError(code, message) {
     const e = new Error(message || code);
     e.code = code;
@@ -224,6 +234,11 @@
     function emitChange(relPath) {
       if (!changeCb) return;
       if (Date.now() < __owSuppressWatch) return; // our own write — swallow the echo
+      // Same exclusion as the two walks above, and for the same reason: the
+      // vault listing never contained `.git`, so announcing a change inside it
+      // would point Obsidian at a path it does not know exists — and a single
+      // `git checkout` would fire thousands of them.
+      if (VAULT_WALK_SKIP_AT_ROOT[String(relPath).split('/')[0]]) return;
       changeCb({ path: vaultId + '/' + relPath });
     }
 
@@ -233,6 +248,7 @@
       const map = new Map();
       async function walk(handle, prefix) {
         for await (const [name, child] of handle.entries()) {
+          if (!prefix && VAULT_WALK_SKIP_AT_ROOT[name]) continue;
           const relPath = prefix ? prefix + '/' + name : name;
           if (child.kind === 'directory') {
             map.set(relPath, { dir: true, size: 0, mtime: 0 });
@@ -526,6 +542,7 @@
         const children = [];
         async function walk(dirHandle, prefix) {
           for await (const [name, handle] of dirHandle.entries()) {
+            if (!prefix && VAULT_WALK_SKIP_AT_ROOT[name]) continue;
             const relPath = prefix ? prefix + '/' + name : name;
             if (handle.kind === 'directory') {
               children.push({ name: relPath, type: 'directory', size: 0, mtime: 0, ctime: 0, uri: '' });

@@ -22,6 +22,91 @@ obsidian-web loads Obsidian's original renderer (`app.js`) completely unmodified
 - Real-time sync across tabs via WebSocket — **Node.js server mode only** (`/api/watch`); not available in the client-only (OPFS) deployment, which has no server to push events from
 - RTL / Unicode support
 
+### Where a vault can come from
+
+The entry screen offers three ways in, all of which end up as the same kind of vault as far as
+Obsidian is concerned:
+
+| Option | Storage | Notes |
+|---|---|---|
+| **Create new vault** | OPFS, inside the browser | Nothing to set up; lives until you clear site data |
+| **Open folder as vault** | A real directory on your disk | Chromium only (`showDirectoryPicker`); picks up external edits |
+| **Open GitHub repository** | A folder on your disk, or OPFS | Any public repo; private repos with a token |
+
+#### GitHub repositories as vaults
+
+Paste `https://github.com/owner/repo` (or `owner/repo`, a `/tree/<branch>` URL, or
+`owner/repo#branch`) and the repository is downloaded and opened as an ordinary vault — full
+editing, search, graph, backlinks, attachments, and the repo's own `.obsidian/` config. Only the
+first open touches the network; afterwards it loads locally and works offline.
+
+- **Where it lands** is your choice in the same dialog:
+  - *A folder on this device* (the default on Chromium) — the file dialog opens at your downloads
+    folder, and a folder named after the repository is created inside whatever you pick, so
+    choosing Downloads gets you `Downloads/<repo>/`. The vault is then real files you can open in
+    any editor or back up. Reopening the app re-asks for access to that folder once per session,
+    the same as any folder vault.
+
+    **Chrome will not let a website use `Downloads`, `Desktop`, `Documents` or your home folder
+    themselves** — picking one shows *"…can't open this folder because it contains system files"*.
+    That is a browser policy with no way around it; choose a folder **inside** one of them, or
+    press *New folder* in the file dialog. Folders elsewhere on disk are unaffected.
+  - *This browser's storage* (OPFS) — nothing to confirm, but the files exist only inside the
+    browser profile and go away with the site's data. This is the only option on Firefox and
+    Safari, which have no directory picker; there the row is hidden.
+
+  Both are ordinary vaults afterwards, and the same repository can be open as one of each.
+- **A folder download is a real clone**, `.git` included — `git status` is clean straight away,
+  `git log` shows the actual upstream commit, and `git pull` / `git fetch --unshallow` work. It is
+  the same thing `git clone --depth 1 --single-branch` produces, built locally: GitHub's git
+  transport sends no CORS headers, so the browser cannot speak the packfile protocol, and routing
+  a repository (and a private repo's token) through a third-party CORS proxy is not a trade this
+  project makes. Every object is checked against the sha GitHub reported, and a mismatch means no
+  `.git` is written at all rather than a broken one. Rarely — for a commit carrying a header the
+  REST API does not expose — the history cannot be reproduced exactly; the clone then holds one
+  snapshot commit over the identical tree, says so in the sync summary, and `git fetch origin`
+  fills in the real history. Vaults downloaded before this existed gain their `.git` on the next
+  *Pull from GitHub*, without re-downloading the files. OPFS vaults get no `.git`: nothing can
+  open one there, and it would only cost a second copy of every file against the browser quota.
+- **Edits are local.** Nothing is pushed back to GitHub — this is a read path, not a git client;
+  the `.git` above is a starting point for your own git, not something the app commits to.
+- **Pulling later** is an explicit action: the command palette entry *"Pull from GitHub"* (also a
+  toolbar button in the file explorer, when the vault's plugins leave one there). A pull writes
+  files that changed upstream, removes files deleted upstream, and **never overwrites a note you
+  edited locally** — those are reported as kept-because-edited and left alone.
+- **Private repositories** need a [personal access token](https://github.com/settings/tokens) with
+  `repo` scope, entered in the same dialog. It is stored in this browser's `localStorage` and sent
+  only to `github.com`.
+- **Rate limits** are not normally a concern: syncing costs 2 `api.github.com` calls, and file
+  bodies come from `raw.githubusercontent.com`, which isn't metered against the anonymous
+  60-requests/hour API budget. A token raises that budget anyway.
+- Files over 25 MB, symlinks, and submodules are not written into the working directory, and are
+  reported in the sync summary. In a folder download they are still listed in git's index, marked
+  assume-unchanged, so `git status` stays clean instead of reporting deletions you did not make
+  (an over-sized file's content is absent from the object store too, so only a `git fetch` from
+  the remote can bring it in; symlinks and submodules are complete).
+
+#### Sharing a vault as a link
+
+A GitHub-backed vault has a URL anyone can open:
+
+```
+https://obsidian-online.pages.dev/github/<owner>/<repo>
+https://obsidian-online.pages.dev/github/<owner>/<repo>/<note path>
+```
+
+The first visit clones the repository into that browser and opens it (with the note, if the link
+names one); later visits reuse the vault that's already there, local edits and all. Add
+`?ref=<branch>` to pin a branch — without it, the repository's own default branch is used.
+
+This is the only shareable form of a vault URL. A `/vault/<id>` link — the one in the address bar
+while you're editing — is not: the id is a key into *your* browser's vault registry, so on someone
+else's machine it resolves to nothing.
+
+Share links carry no token, so a **private** repository can't open from one. Following such a link
+lands on a message with the dialog one click away, where the recipient enters their own token
+locally.
+
 ### Fast bootstrap (Node.js server mode)
 
 Against the Node.js server, the browser version can load faster than the desktop app. Instead of Obsidian reading dozens of config files one by one from disk, everything is served in a single HTTP request (`/api/bootstrap`) — all files, directories, and metadata arrive at once, before Obsidian even starts running. When it calls `statSync` or `readFileSync`, the answer is already waiting in memory. **The client-only (OPFS) deployment doesn't use this path** — there's no HTTP round-trip for vault reads at all; the vault is read directly from the browser's local storage.
@@ -38,6 +123,7 @@ The client-only deployment (and local/folder vaults on the Node server) are back
 | Vault storage — write (`createWritable`) | ✅ | ✅ | ⚠️ shipped much later than `getDirectory` — check your Safari version before relying on it |
 | Folder vaults (`showDirectoryPicker`) | ✅ | ❌ | ❌ |
 | Auto-refresh on external folder change (`FileSystemObserver`) | ✅ | ❌ | ❌ — falls back to refresh on tab focus |
+| GitHub repository vaults | ✅ | ✅ | ✅ — into OPFS, which needs only `fetch` + OPFS write; downloading one into a folder on disk needs the picker, so it is Chromium-only |
 
 **OPFS requires a secure context** (`https://` or `localhost`). Over plain HTTP on a bare IP address, `navigator.storage.getDirectory` is `undefined` and vault creation fails silently — this applies to local development too, not just production.
 
@@ -135,8 +221,8 @@ too, via its own Worker route (`index.js`) that returns the same app shell — s
 "Cloudflare (client-only) deployment" below; that deployment is not a plain static host.
 
 `/mobile` is **not** part of the Cloudflare (client-only) deployment — it's a route this Node
-server adds; the static deployment's Worker serves `/`, `/starter`, `/vault/*`, and
-`/api/proxy-request` (see "Cloudflare (client-only) deployment" below), but not `/mobile`.
+server adds; the static deployment's Worker serves `/`, `/starter`, `/vault/*`, `/github/*`,
+and `/api/proxy-request` (see "Cloudflare (client-only) deployment" below), but not `/mobile`.
 
 ## Obsidian Version
 
@@ -199,8 +285,8 @@ things a plain static host can't:
   `githubusercontent.com`/`obsidian.md` requests (community-plugin installs, plus one
   automatic deprecated-plugins check on vault load — those hosts don't send CORS headers).
   A sync server or any other host is never routed through it
-- `GET /starter` and `/vault/*` — SPA-fallback routes that return the same app shell as `/`, so
-  deep links and bookmarks don't 404
+- `GET /starter`, `/vault/*` and `/github/*` — SPA-fallback routes that return the same app shell
+  as `/`, so deep links, bookmarks and shared repository links don't 404
 
 Everything else is served as a static asset (`env.ASSETS`). See
 `src/deployments/cloudflare/README.md` for the full picture (system plugins, proxy caching, known
@@ -235,7 +321,8 @@ Browser
   ├─ vault storage: OPFS (client-side only, never leaves the browser)
   └─ HTTP → CF Worker (index.js)
               ├─ POST /api/proxy-request  → edge proxy (GitHub/obsidian.md, CORS)
-              ├─ GET /starter, /vault/*   → same app shell as / (SPA fallback)
+              ├─ GET /starter, /vault/*,  → same app shell as / (SPA fallback)
+              │      /github/*
               └─ everything else          → static assets (CF CDN)
 ```
 
@@ -243,7 +330,7 @@ Browser
 
 | File | Purpose |
 |------|---------|
-| `src/deployments/cloudflare/index.js` | Worker entry: `/api/proxy-request` + `/starter`/`/vault/*` fallback, else static assets |
+| `src/deployments/cloudflare/index.js` | Worker entry: `/api/proxy-request` + `/starter`/`/vault/*`/`/github/*` fallback, else static assets |
 | `src/deployments/cloudflare/proxy-worker.js` | The CORS-safe outbound proxy implementation |
 | `src/deployments/cloudflare/template.js` | Demo vault content — seeded client-side into a new visitor's own OPFS vault on first visit |
 | `src/config/deploy-config.json` / `deploy-config.demo.json` | The two build profiles — app and demo (`OW_PROFILE`) |
