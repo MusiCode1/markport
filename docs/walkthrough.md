@@ -1,0 +1,1492 @@
+# Walkthrough — obsidian-web
+
+> יומן-ביצוע כרונולוגי (אליעזר). רציונל ארכיטקטוני חי ב-docs/decisions (ריפו brief-driven-slices), לא כאן.
+
+## 2026-08-02 — boot watchdog: מסך-כשל מובן במקום ספינר נצחי
+
+Obsidian 1.13.4 חשפה חור בחיווי: הבאנדל נטען בהצלחה, זורק `throw new Error` **ריק**
+בזמן ריצה, והספינר נשאר תקוע על "Loading Obsidian mobile (14/14)" לנצח — בלי שום
+רמז למשתמש. `s.onerror` הקיים מכסה רק כשל-**רשת** של `app.js`, לא כשל-ריצה.
+
+#### מה בוצע?
+
+**1. `src/client-mobile/boot.js` — boot watchdog**
+
+- `startBootWatchdog()` נתלה על ה-`onload` של `app.js` (עוגן `src === appJsSrc` שכבר
+  קיים שם) ולא על רגע ההזרקה — אחרת רשת איטית מייצרת התראת-שווא.
+- הבדיקה היא על **DOM מרונדר**: `BOOT_RENDERED_SELECTORS` = איחוד שני ה-selectors
+  ששתי זרימות ההמתנה כבר משתמשות בהן (`.workspace`,
+  `.mobile-vault-chooser-screen`, `.mobile-onboarding`).
+- `owWhenAppReady` **לא שונה** — ה-timeout שלו שקט במכוון (vault-name-display §3)
+  ו-slices אחרים נשענים על כך; הוא גם בודק `window.app` שנקבע לפני שה-UI מרונדר.
+- `bootFailureMessage()` מסתעף לפי `window.__owObsidianVersion`: `>= 1.13` מקבל הסבר
+  ספציfי על שער-ההפעלה; כל השאר מקבל הודעה גנרית שמכסה גם כשלים לא-מוכרים.
+- `__owReportPlatformFailure` מוסיף מחלקה `ow-failed` ל-`#ow-loading`.
+
+**2. `src/client-mobile/index.html` — תצוגת הכשל**
+
+- `.ow-status` קיבל `max-width: 44ch`, `text-align: center`, `padding-inline`.
+  בלעדיהם הודעה ארוכה רחבה מה-viewport, ו-`align-items:center` של האב גולש
+  משני הצדדים — הטקסט נחתך בקצה (נצפה בפועל).
+- `#ow-loading.ow-failed .ow-spinner { display: none }` — ספינר שממשיך להסתובב
+  מתחת ל-"did not start" הוא חיווי סותר.
+- הטקסט מתבהר ל-0.85 במצב כשל (מ-0.5, שהוא גוון של טקסט-טעינה עמום).
+
+**3. `docs/plans/restructure/ROADMAP.md`**
+
+- החלטה חוצת-סלייסים 10 + רשומת האילוץ החיצוני עם טבלת המדידה מול 1.12.7.
+- R-browser-gate: סומן שה-watchdog הוא הזרע שלו — אות-ההצלחה והטיפול ב-flakiness
+  כבר פתורים שם.
+
+#### מדידה
+
+בקרה נקייה, אותה כספת רשומה ואותה המתנה: **1.12.7** — בוחר-הכספות מרונדר במלואו,
+אפס שגיאות `app.js`. **1.13.4** — תקוע, 4 שגיאות. `native-bridge.js` זהה בייט-בייט
+בין הגרסאות, אותם 11 פלאגיני Capacitor, ובדיוק **שער `terms` אחד** בבאנדל.
+
+#### בדיקות
+
+`client-mobile` 96/96 · `cloudflare` 40/40 (מריצות בנייה אמיתית שנוגעת ב-`index.html`).
+אומת חי בדפדפן: המסך מוצג ממורכז, עוטף, בלי ספינר.
+
+#### חריגות
+
+- הבאנר התחתון נשאר מיושר-לשמאל ומלא-רוחב — לא נגעתי. מרכוז בבאנר רחב פוגע
+  בקריאוּת, והוא המנגנון ששורד אחרי הסרת ה-overlay.
+- ההודעה נשענת על `obsidian-version.js` (קובץ מיוצר) ולא על הבאנדל עצמו. אם השניים
+  נפרדים — נצפה בפועל בזמן הפיתוח — תוצג ההודעה הגנרית במקום המדויקת.
+
+## 2026-07-30 23:23 — cloudflare: npx ל-wrangler + הודעות build מעודכנות
+
+תיקון שנחשף בזמן פריסה חיה: `npm run deploy` נפל ב-`wrangler: not found` כי
+`wrangler` אינו מותקן גלובלית בסביבת הפריסה — כל הריצות עד כה עברו דרך `npx`
+באופן ידני. שלושת הסקריפטים עברו ל-`npx wrangler` כדי למנוע תלות בהתקנה
+גלובלית. במקביל, הודעות "Next" בסוף הבנייה (`build-assets.sh`) עודכנו לשקף את
+הפקודות הנכונות (`npm run deploy`, `npm run deploy:demo`, `npm run dev`) במקום
+הפניות הישנות ל-`wrangler deploy` / `wrangler dev`.
+
+#### מה בוצע?
+
+**1. `src/deployments/cloudflare/package.json`**
+
+- `deploy`, `deploy:demo`, `dev` — שלושתם עברו מ-`wrangler …` ל-`npx wrangler …`.
+
+**2. `src/deployments/cloudflare/scripts/build-assets.sh`**
+
+- שלוש שורות "Next" בסוף הפלט עודכנו מ-`wrangler deploy` / `wrangler dev`
+  ל-`npm run deploy` (APP), `npm run deploy:demo` (DEMO), `npm run dev` (local).
+
+#### בדיקות
+
+`bun test` 40/40 — regression-free.
+
+## 2026-07-29 — slice/demo-origin-split — calev-heavy round 3 (דלתא) — GO + תיקון README
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-round3-calev.md`
+(**GO**, 9/9 DoD — DoD#15/#17/#13 + regression DoD#3/#4/#10 + DoD#5/#6/#7
+שנוספו ביוזמת כלב, **1 ממצא בלבד, מינורי, לא-חוסם**).
+
+**מה תוקן כאן** (ממצא 1 — זול, נובע ישירות מ-Commit 7 שלי): `README.md`
+(`src/deployments/cloudflare/`) עדיין תיאר בשני מקומות כפתור "כספת דמו"
+שנמחק ב-Commit 7 (`installDemoVaultButton`) כאילו הוא עדיין קיים ותוקף.
+עודכן: (1) "What the Worker does now" — מתאר עכשיו את זרימת ה-auto-open
+בפועל (`demoVault.autoOpen`, `/vault/<demoId>/Welcome`, אפס לחיצות) במקום
+כפתור-שאיננו. (2) "Example / demo vault content" — אותו תיקון, וגם ציון
+שהזריעה-מחדש קורית על שינוי `template.js` (Commit 3) ושהקישור לראשי יושב
+עכשיו בראש הפתק (Commit 8). כלב ציטט את §0 של הבריף עצמו (ה"קפאת" ענף
+demo-and-docs-truth "כדי למנוע הצהרות-שווא") כהנמקה לתקן — אותה דוקטרינה
+חלה כאן. `npm test` 96/96, `bun test` 40/40 (שינוי-README, regression-free).
+
+**‏מה כלב אימת ‏(‏ולא ‏רק ‏ב-grep)**: `data-ow-injected` ‏עדיין ‏קיים ‏בקוד
+‏אחרי ‏המחיקה — ‏כלב ‏לא ‏הסתפק ‏בכך: ‏הזריק ‏כפתור-בדיקה ‏עם ‏הסימון ‏לתוך
+`.mobile-onboarding` (‏אותה ‏צורה ‏שנחטפה ‏ב-NO-GO ‏ההיסטורי) ‏ולחץ ‏עליו —
+‏ה-handler ‏שלו ‏רץ, ‏ה-interceptor ‏לא ‏חטף. ‏האינטגריטי ‏של ‏ה-guard ‏אומת
+‏פונקציונלית, ‏לא ‏רק ‏טקסטואלית.
+
+## 2026-07-29 — slice/demo-origin-split — Commit 8: הקישור לראשי עובר לראש Welcome.md
+
+החלטת המשתמשת. הקישור ישב בתחתית הפתק (footer-style) — עכשיו הוא הדבר הראשון
+שמבקר קורא אחרי הכותרת והמשפט הפותח.
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/template.js`** — תוכן `Welcome.md` בלבד:
+- הועברה שורה חדשה מיד אחרי ה-blockquote הפותח (`> **Obsidian's desktop
+  app…**`) ולפני "This is a live demo of **obsidian-web**…":
+  `**This is a demo vault.** [Create your own →](https://obsidian-online.pages.dev)`
+  (ניסוח-הזמנה, לא footer — לשיקולי, בשני האילוצים שהמשתמשת קבעה: אנגלית,
+  אותו URL).
+- **נמחק** המופע הישן בתחתית הפתק (`This is a demo vault; to create your
+  own vault → …`, אחרי `#demo #welcome`) — מופע יחיד, לא שכפול.
+  `grep -c "obsidian-online.pages.dev" template.js` → 1.
+
+### בדיקות
+
+approach: none (טקסט טהור, כמו Commit 4 המקורי). `npm test` 96/96, `bun test
+test/*.test.js` 40/40 — regression-free.
+
+**ידני — DoD#5 עם שינוי-תוכן אמיתי (לא מסונתז)**, כהזדמנות שהמשתמשת ציינה:
+בניתי ארטיפקט A (`git stash` על `template.js` בלבד → חזרה לגרסת Commit 7,
+בנייה, `cp -r` הצידה, `git stash pop` להחזיר את Commit 8) ← טעינה, עריכת
+`Welcome.md`, יצירת `My Note.md` ← `git stash pop` + בנייה אמיתית של B (hash
+חדש `c5138c4b3d460be6`, שונה מ-`0b49eae00bd69969` של A) ← החלפת הארטיפקט
+המוגש על אותו origin (מדמה redeploy אמיתי) ← reload → `Welcome.md` נדרס
+לתוכן **B** (הקישור מופיע עכשיו ליד הראש, מרונדר — צילום `c8-link-top.png`),
+`My Note.md` (תוכן המבקר) שרד מילה-במילה. `fullMatches` של ה-URL המלא בקובץ
+= **1** (לא 2 — worktree נשאר נקי, `git stash` לא השאיר שאריות).
+
+### חריגות
+
+אין. עדכנתי גם את DoD#13 בבריף לשקף מיקום+מופע-יחיד, והוספתי §4 Commit 8
+לבריף עצמו (המשתמשת תיארה את הקומיט בהודעה, לא ערכה את הקובץ ישירות הפעם —
+הוספתי section תואם-סגנון ל-Commit 6/7 כדי שהבריף יישאר עקבי כמקור-אמת).
+
+## 2026-07-29 — slice/demo-origin-split — Commit 7: מחיקת כפתור "כספת דמו"
+
+החלטת המשתמשת (מחליפה את Commit 6ב, שרק תרגם את הכפתור). עם הפיצול לדמו הכפתור
+איבד את הסיבה לקיומו — הוא נועד לאפשר למבקר באתר הראשי לנסות דמו; עכשיו לדמו יש
+מקור משלו. מוחקת גם את ממצא 1 מסבב calev-heavy 2 (חפיפה לבורר-השפה ב-390×844)
+בלי לגעת ב-CSS.
+
+### מה בוצע?
+
+**`src/client-mobile/boot.js`**:
+- נמחקה הפונקציה `installDemoVaultButton()` במלואה (כולל בלוק ההערות שמעליה
+  שתיאר את הכפתור) והקריאה אליה (`installDemoVaultButton();`).
+- 🔴 **מה שלא נמחק**: `if (btn.hasAttribute('data-ow-injected')) return;`
+  ב-`installCreateVaultInterceptor` — המוסכמה משרתת כפתור מוזרק שני
+  (`showGrantScreen`, `data-ow-injected="grant-access"`) שנשאר חי.
+- שלוש הערות שהפנו ל-`installDemoVaultButton` (שכבר לא קיימת) — בהוראת
+  הבריף — **נוסחו מחדש** בלי למחוק את הקוד שמתחתיהן: ה-guard ב-interceptor
+  (עכשיו מתאר את הכפתור שנמחק כדוגמה היסטורית + מפנה ל-`showGrantScreen`),
+  ההערה ב-`installExternalStorageGate` (דוגמת-MutationObserver כללית
+  במקום ספציפית), וההערה ב-`showGrantScreen` עצמה.
+
+### בדיקות
+
+`npm test` (client-mobile) 96/96, `bun test test/*.test.js` (cloudflare) 40/40
+— regression-free (השינוי לא נגע בצד ה-CF). גם `grep` שהבריף מפרט במפורש:
+`grep "ow-demo-vault-btn\|installDemoVaultButton"` → ריק; `grep "data-ow-injected"`
+→ עדיין 4 מופעים (guard + setAttribute × 2 + הערה).
+
+**ידני (playwright-cli, שני viewports)**: DoD#15 (הוחלף) — בבניית הדמו, `/starter`
+ב-1280×800 **וב-390×844** → `find "Demo vault"` אין תוצאות,
+`document.querySelectorAll('[data-ow-injected]').length === 0`. צילומים
+`c7-dod15-desktop.png`/`-mobile.png` — אין כפתור, אין חפיפה (כי אין מה שיחפוף).
+DoD#17 (חדש, regression) — `/starter` → Create a vault → Continue without
+sync → Configure vault (App storage) → Create a vault → נחיתה מוצלחת ב-
+`/vault/<id-אמיתי>` — האשף עובד מקצה-לקצה, האינטרספטור לא נתקע/לא חוטף.
+
+### חריגות
+
+אין. הבריף ציין במפורש שממצא 2 של calev סבב 2 (ענף ה-resume בלי `/Welcome`)
+**נשאר בכוונה** — ראה §"סטיות מהתכנון" בבריף לניסוח ההחלטה.
+
+## 2026-07-29 — slice/demo-origin-split — calev-heavy round 2 (דלתא) — GO
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-round2-calev.md`
+(**GO**, 6/6 פריטי-דלתא: DoD#4/#15/#16 + regression DoD#3/#7/#10, **0 regressions**,
+**0 באגים חוסמי-merge**). Commit `a5f735b` הוא הבסיס שנבדק.
+
+**3 ממצאים, כולם מוסרים להכרעת מרדכי במפורש (לא תיקנתי אף אחד)**:
+1. 🔴 `_headers` (Commit 6ג) כנראה **חסר-תוקף בפריסה האמיתית** — הארטיפקט רץ
+   ב-Cloudflare Pages **Advanced mode** (`_worker.js/` קיים), ותיעוד Cloudflare
+   קובע ש-`_headers` לא חל על תגובות שנוצרות ע"י Pages Functions — וכל תגובה
+   כאן (כולל `/`) עוברת דרך `index.js`. DoD#16 **עובר** כפי שנוסח (קובץ קיים,
+   בייט-מדויק, רק בדמו) — מה שמוטל בספק הוא **ההצדקה** בבריף ("פרויקט Pages
+   אחד במקום שניים"). לא קוד שלי לתקן — טופולוגיה, מחוץ ל-scope (§2/§7).
+2. 🟡 במובייל 390×844, הכפתור "Demo vault" (רחב יותר מ-"כספת דמו" ב-~20px)
+   לא חופף לשורת-הגרסה (DoD#15 עובר) — אבל **כן** חופף לבורר-השפה של Obsidian
+   (הגלובוס + 63px משמאל). קדם-קיים בצורתו, הוחמר ע"י הטקסט הארוך יותר. הבריף
+   אוסר לגעת ב-CSS/מיקום בפונקציה הזו (שני סבבי NO-GO היסטוריים) — לא נגעתי.
+3. 🟡 Commit 6א הוסיף `/Welcome` רק לענף autoOpen (אין כספת-אחרונה); ענף
+   ה-resume (יש כספת-אחרונה) עדיין מפנה ל-`/vault/<id>` חשוף — "אפס לחיצות"
+   למבקר-חוזר נשען על שחזור `workspace.json` של Obsidian, לא על הניתוב שלנו.
+   אם הבוט הראשון נקטע בחלון-זמן ספציפי (נמדד: 8 כניסות רצופות בלי המתנה,
+   3/3), "New tab" ריק יכול להידבק לצמיתות. לא מציאותי בהפרעות סבירות (5/5
+   תרחישי-הפרעה רגילים התאוששו) ו-DoD#4 עובר נקי כפי שנוסח — מדווח לשקיפות,
+   לא תוקן (הרחבת התיקון לענף השני היא שינוי-קוד מחוץ למה שהתבקש ב-Commit 6).
+
+## 2026-07-29 — slice/demo-origin-split — Commit 6: סבב runtime-gate
+
+מרדכי ערך את הבריף ישירות (§4 Commit 6 חדש, DoD#15/#16 חדשים, DoD#11 נוסח-מחדש)
+אחרי שקרא את דוח calev-heavy הסופי (PARTIAL) במלואו. שלושה פריטים:
+
+### א. יעד-הניתוב של הפתיחה-האוטומטית → `/vault/<demoId>/Welcome`
+
+**`src/client-mobile/boot.js`** — בלוק הפתיחה-האוטומטית (Commit 2): היעד השתנה
+מ-`/vault/<DEMO_ID>` ל-`/vault/<DEMO_ID>/Welcome`. זו הכרעת מרדכי (מאמצת את
+המלצת calev-heavy מהדוח הסופי): הסתירה הפנימית בבריף בין DoD#4 ("`Welcome.md`
+מרונדר") לבין §4 Commit 2 המקורי (יעד בלי note-path) — נפתרה **בקוד**, לא
+בריכוך-הניסוח. עדכנתי גם את התיעוד הצמוד (הערת routing entry) לעקביות.
+
+### ב. הכפתור "כספת דמו" → `Demo vault`
+
+**`src/client-mobile/boot.js`** (`ow-demo-vault-btn`, `installDemoVaultButton`)
+— שורת `btn.textContent` בלבד שונתה. קוד פרה-קיים שלא נגעתי בו בשאר הסלייס —
+אבל מרדכי הכריע שהוא נכנס ל-scope כי הסלייס הזה הופך אותו לגלוי למבקרים
+אנגלית-בלבד. **לא נגעתי בשום דבר אחר בפונקציה** (מיקום/CSS/MutationObserver
+נושאים שני סבבי NO-GO היסטוריים — כמצוין בבריף ובהערות בגוף הקוד).
+
+### ג. `_headers` — רק בבניית הדמו
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — בלוק חדש לפני
+"Summary": `if [[ "$OW_PROFILE" == "demo" ]]` כותב `$PUBLIC_DIR/_headers` עם
+`/*\n  X-Robots-Tag: index, follow\n`. הרקע (מדוד ע"י מרדכי, מתועד בבריף):
+Cloudflare מוסיף `noindex` אוטומטית לפריסות branch-alias preview; `_headers`
+דורס את זה — כך שהדמו יכול לחיות בפרויקט Pages **אחד** ולא שניים (טופולוגיה,
+מחוץ ל-scope). הבניה הראשית לא מקבלת את הקובץ.
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — טסט חדש (DoD#16):
+`_headers` חסר בבניית ברירת-המחדל, קיים ומדויק-תוכן בבניית הדמו.
+
+**`docs/plans/demo-origin-split.md`** — עדכנתי את הליך ה-DoD#7 (ההשוואה בין
+הארטיפקטים) לציין ש-`_headers` מצטרף להבדלים הצפויים (רק ב-`/tmp/art-demo`).
+
+### בדיקות
+
+`npm test` (client-mobile) 96/96, `bun test test/*.test.js` (cloudflare) 40/40
+(39 + 1 חדש). DoD#7 המלא הורץ מחדש: `diff -r -x system-plugins` על שני
+ארטיפקטים טריים → **בדיוק** שלושה הבדלים: `_headers` (רק בדמו), `index.html`
+(שורת הקונפיג + BUST), `sw.js` (BUST). DoD#16 ידני: `ls public/_headers` —
+לא קיים בברירת-המחדל, קיים ומדויק בדמו.
+
+**ידני בדפדפן (playwright-cli, שני viewports)** — DoD#4: פרופיל נקי לגמרי →
+`/` → הפניה אוטומטית ל-`/vault/0000demo0000demo/Welcome`, `document.title`
+= `"Welcome - Obsidian Web"`, `Welcome.md` מרונדר על המסך, אפס לחיצות (צילום
+`round2-dod4-desktop.png`). DoD#10: `/starter` על בניית הדמו לא מפנה (regression,
+נבדק מחדש כי הקוד ליד שונה). DoD#15: כפתור "Demo vault" (אנגלית) קיים במסך
+ה-onboarding (כספת-דמו עדיין לא נוצרה), ב-1280×800 וב-390×844 — אין חפיפה
+לשורת-הגרסה בשני הגדלים (צילומים `round2-dod15-desktop.png`/`-mobile.png`).
+DoD#3: הכפתור **לא** קיים בבניית ברירת-המחדל.
+
+### תקלת-תשתית שנתקלתי בה (לא קוד, מדווח לשקיפות)
+
+`wrangler pages dev` בסביבה המשותפת הזו הגיש תוכן **שגוי** (build אחר, לא
+ה-directory שהצבעתי אליו) גם אחרי ניקוי `.wrangler/` מקומי וגלובלי — ייחסתי
+את זה לזיהום cache משותף בין ריצות/סוכנים על אותה מכונה (`/tmp/.wrangler`
+מכיל שאריות מ-thread-ים אחרים, `wrangler-dev2/3/4` וכו' שלא שלי). אימתתי
+שהארטיפקטים על הדיסק היו נכונים תמיד (`grep`/`diff` ישירות על הקבצים) — הבעיה
+הייתה רק בשכבת ה-serving. עקפתי עם שרת-סטטי מינימלי משלי (`/tmp/demo-origin-split/spa-server.js`,
+לא committed) לצורך האימות הידני בלבד; שום דבר מזה לא נכנס ל-git.
+
+## 2026-07-28 — slice/demo-origin-split — תיקון קל אחרי verifier-slice (calev-heavy PARTIAL)
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-calev.md`
+(**PARTIAL**, 13/14 DoD, **0 blockers, 0 regressions**, 5 ממצאים — **0 חוסמים merge**).
+
+**‏מה תוקן כאן** (ממצא 5 — זול, קשור ישירות לקוד שכתבתי ב-Commit 3): `boot.js`,
+בלוק הזריעה-מחדש — נתיב-כישלון שקט (`seedExampleVault` מחזירה `false` בלי
+לזרוק, למשל `/example-vault.json` נכשל) לא הפיק שום `console.warn`, בניגוד
+לניסוח המפורש בבריף (§4 Commit 3: "try/catch + console.warn"). ה**התנהגות
+המהותית** (אל תעדכן את המפתח, retry בבוט הבא) כבר הייתה נכונה ואומתה —
+נוסף רק log-line לאבחון בשטח. `npm test` 96/96, `bun test` 39/39.
+
+**‏מה לא תוקן, ‏ומדוע** (‏שאר 4 הממצאים — ‏כולם 🟢/🟡, ‏מוסרים ‏להכרעת ‏מרדכי,
+‏לא ‏קוד ‏שלי ‏לתקן ‏ביוזמתי):
+- **DoD#4** (‏ממצא 1, 🟡) — ‏calev-heavy ‏חלק ‏על ‏המסגור ‏"‏ניסוח ‏בלבד" ‏שלי ‏ושל
+  ‏הפאזה ‏הקודמת: ‏זו ‏סתירה **‏בתוך ‏הבריף ‏עצמו** ‏(DoD#4 ‏מבטיח `Welcome.md`
+  ‏מרונדר; §4 Commit 2 ‏מנחה ‏רק ‏ניתוב ‏ל-`/vault/<demoId>` ‏בלי note-path) —
+  ‏המליץ ‏על ‏שינוי ‏יעד-הניתוב ‏ל-`/vault/<demoId>/Welcome` (‏אימת ‏שזה ‏כבר
+  ‏עובד ‏בדפדפן ‏נקי). ‏זו **‏הכרעה ‏ארכיטקטונית** (‏שינוי ‏יעד-ניתוב, ‏שינוי-DoD,
+  ‏או ‏שניהם) — ‏לא ‏שלי ‏לקבל ‏לבד. ‏מוסר ‏למרדכי.
+- **‏כפתור עברית "‏כספת דמו"** (‏ממצא 3, 🟢) — ‏קוד **‏פרה-קיים ‏שלא נגעתי בו**
+  (‏אומת: `git diff dev..HEAD -- src/client-mobile/boot.js` ‏לא ‏מזכיר את
+  `ow-demo-vault-btn`) — ‏סותר את §6 ("‏כל טקסט-מבקר באנגלית") ‏רק ‏עכשיו ‏כי
+  ‏הסלייס ‏הזה ‏הופך ‏את ‏הדמו ‏למקור-ציבורי. ‏תיקון-טקסט ‏של ‏פיצ'ר ‏שלא ‏נכלל
+  ‏ב-scope ‏הסלייס (‏ה-Reading list ‏מזכיר ‏אותו ‏רק ‏כ-"‏קיים", ‏אין ‏commit ‏שנוגע
+  ‏בו) — ‏שינוי-scope ‏חד-צדדי, ‏לא ‏שלי ‏להחליט. ‏מוסר ‏למרדכי.
+- **‏טופולוגיית `deploy`/`deploy:demo`** (‏ממצא 4, 🟢) — **‏מתועד ‏במפורש** ‏כ-
+  placeholder ‏ב-README (Commit 5) ‏ומחוץ ‏ל-scope ‏לפי §2/§7 — ‏אין ‏מה ‏לתקן
+  ‏בקוד ‏הסלייס ‏הזה, ‏תלוי ‏ביצירת ‏פרויקט CF ‏שני ‏אחרי merge.
+- **DoD#11 ‏ניסוח** (‏ממצא 2, 🟢) — ‏זהה ‏למה ‏שכבר ‏דיווחתי ‏ב-Commit 3
+  (‏התנהגות ‏פרה-קיימת ‏מוכרת ‏בבריף). ‏חידוד-מילים ‏בלבד, ‏למרדכי.
+
+## 2026-07-28 — slice/demo-origin-split — סיכום סלייס
+
+**7 commits** על `slice/demo-origin-split` (`966bf04`..`31c55c2`), base `dev`
+`71e4265`: Commit 0 (`OW_PROFILE`+קונפיג-דמו) → Commit 1 (hash דמו בבניה) →
+Commit 2 (פתיחה-אוטומטית) → Commit 3 (זריעה-מחדש) → **תיקון calev-heavy
+NO-GO** (2 ממצאים אמיתיים, Commit 3 phase) → Commit 4 (קישור לראשי) →
+Commit 5 (סקריפטי פריסה + שומר). ראה רשומות מפורטות למטה, מהחדש לישן.
+
+**טסטים**: התחלנו מ-86 (client-mobile) + 34 (cloudflare) = 120. סיימנו ב-96
++ 39 = **135** (15 טסטים חדשים: 2 ב-deploy-config, 9 ב-seed-example-vault,
+5 ב-guard, 1 net לשינויי-snippet ב-build-assets). כולם ירוקים בכל commit.
+
+**Verifier-phase (§8, אחרי Commit 3)**: calev-heavy — סבב ראשון NO-GO (4
+ממצאים: 2 באגים אמיתיים + 2 הערות-ניסוח), 2 הבאגים תוקנו באותו phase
+(policy: 1-2 ממצאים → תיקון, לא escalation). דוח:
+`reports/obsidian-web/demo-origin-split-commit3-calev.md`.
+
+**סטיות מהתכנון**: ראה `docs/plans/demo-origin-split.md` §"סטיות מהתכנון"
+(מעודכן שם, לא כאן — זה יומן-ביצוע). תמצית: אין סטיות ארכיטקטוניות; שני
+תיקוני-קוד מ-calev-heavy (בטווח 1-2, לא escalation); שתי הערות-ניסוח
+(DoD#4/DoD#11) לא-קוד, מדווחות למרדכי.
+
+**DoD verifiable (§5, טבלה מלאה בבריף)**: כל 14 הפריטים אומתו ידנית לאורך
+הביצוע (ראה רשומות פר-commit למטה) — כולל ה-**הליך המדויק** של DoD#7
+(`cp -r` הצידה + `diff -r -x system-plugins`): ההבדל בין שני הארטיפקטים
+המלאים הוא **אך ורק** `index.html` (שורת הקונפיג + BUST) ו-`sw.js` (BUST) —
+בדיוק כפי שהבריף חזה.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 5: סקריפטי פריסה + שומר
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/scripts/guard-deploy-target.sh`** (חדש) —
+`bash scripts/guard-deploy-target.sh <main|demo> [artifact-dir]`. בודק את
+`index.html` שנבנה מול העוגן **`"demoVault":{"enabled":true`** (עם שם
+המפתח — אביגיל ממצא 4: `"enabled":true` לבדו נותן false-positive גם על
+הארטיפקט הראשי, כי `deploy-config.json` מכיל
+`"obsidian-web-layout":{"install":true,"enabled":true}`). `target=main` +
+ארטיפקט-דמו, או `target=demo` + ארטיפקט-ראשי → `exit 1` עם הודעה מפורשת.
+ארגומנט חסר/שגוי → `exit 1` גם כן.
+
+**`src/deployments/cloudflare/package.json`** — 4 מפתחות (2 זוגות build+guard,
+אחד לכל פרופיל): `build:demo` (הסניפט המדויק מהבריף), `predeploy`
+(`npm run build && bash scripts/guard-deploy-target.sh main` — hook מובנה
+של npm, רץ **אוטומטית** לפני `npm run deploy`), `predeploy:demo` (אותו דבר
+לפרופיל הדמו), ו-`deploy`/`deploy:demo` שצומצמו ל-`wrangler deploy` בלבד
+(הבנייה עברה ל-pre-hook, כדי שהשומר יבדוק תמיד את הארטיפקט **הטרי ביותר**
+ולא שאריות מבנייה קודמת — סדר-הפעולות היה שגוי בטיוטה הראשונה: guard לפני
+build היה בודק ארטיפקט ישן; תוקן לפני commit).
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — 5 טסטים
+חדשים לשומר: חוסם דמו→main, מאשר דמו→demo, חוסם main→demo, מאשר main→main,
+דוחה ארגומנט חסר.
+
+**`src/deployments/cloudflare/README.md`** — סעיף "Deploy" הורחב: טבלת שני
+הפרופילים (main/demo, קובץ-קונפיג, חוויית-מבקר), פקודות `build:demo`/
+`deploy`/`deploy:demo`, הערה מפורשת ש**טופולוגיית היעד עצמה** (פרויקט CF
+שני, דומיין) **לא** נקבעה בסלייס הזה (`wrangler.toml` לא נגעתי בו — מחוץ
+ל-scope, §2), וסעיף שמסביר את השומר + העוגן המדויק.
+
+### בדיקות
+
+`bun test test/*.test.js` — 39/39 ירוק (34 + 5 חדשים). `npm test`
+(client-mobile) — 96/96, regression-free.
+
+**‏פקודות ה-deploy עצמן (`wrangler deploy` האמיתי) לא רצו** — כנדרש בבריף.
+מה שכן הרצתי (בטוח, לא מפרסם כלום): `npm run predeploy` ו-
+`npm run predeploy:demo` בנפרד — שניהם עברו (`exit 0`, "guard: artifact
+matches target ... — OK") ומוכיחים שה-hook השרשור בונה+שומר עובד מקצה
+לקצה בלי לגעת ב-`wrangler deploy` עצמו. גם: DoD#2 (שתי הבניות, exit 0),
+DoD#9 (`OW_PROFILE=nope` → exit 1), DoD#12 (`sha256sum app.js` זהה בשלושה
+מקומות — `vendor/`, ארטיפקט-ראשי, ארטיפקט-דמו), DoD#14 (`git status --short
+| grep vendor` → ריק).
+
+### חריגות
+
+אין (מלבד תיקון-סדר פנימי בין build ל-guard, מתועד למעלה — לא נחשף
+החוצה, לא נגע ב-git history שקדם ל-commit הזה).
+
+## 2026-07-28 — slice/demo-origin-split — Commit 4: קישור מהדמו לפריסה הראשית
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/template.js`** — שורה אחת (+ separator) בתחתית
+תוכן `Welcome.md` (ב-`TEMPLATE_FILES`, לא `user-data/demo-vault/Welcome.md` —
+זו כספת-פיתוח מקומית נפרדת שאינה חלק מפריסת ה-CF, לא נגעתי בה): "This is a
+demo vault; to create your own vault → **obsidian-online.pages.dev**"
+(אנגלית, כמו כל תוכן הדמו). ה-URL — `https://obsidian-online.pages.dev` —
+אושר ע"י המשתמשת (§9 שאלה 2). קישור-כתוכן בלבד, אפס קוד/CSS — עובר
+אוטומטית דרך מנגנון הזריעה-מחדש (Commit 3) כמו כל שינוי אחר ב-`template.js`.
+
+### בדיקות
+
+approach: none (תוכן טקסט טהור). `node --check` + בניית דמו עברו (`npm run
+build`/`OW_PROFILE=demo npm run build` — exit 0). אימות תוכן:
+`example-vault.json` שנבנה מכיל את הקישור בסוף `Welcome.md`. `git status`
+מאשר ששונה קובץ אחד בלבד (`template.js`) — `user-data/demo-vault/Welcome.md`
+לא נגע. `npm test` 96/96, `bun test test/*.test.js` 34/34 — regression-free.
+
+### חריגות
+
+אין.
+
+## 2026-07-28 — slice/demo-origin-split — תיקון calev-heavy NO-GO (Commit 3 phase) — 2 ממצאים
+
+דוח: `/home/user/Projects/obsidian-web/reports/obsidian-web/demo-origin-split-commit3-calev.md`
+(NO-GO, 4 ממצאים: 2 באגים אמיתיים + 2 הערות-ניסוח שאינן קוד — DoD#4/Commit 2
+כבר דווח כחריגה בשעתו, ו-"זריעת דמו לכל כספת local ריקה" — כלב אישר במפורש
+שזו התנהגות פרה-קיימת מוכרת בבריף, לא באג חדש). תוקנו שני הבאגים באותו phase
+(1-2 ממצאים → תיקון, לא escalation):
+
+### NBug1 (blocker) — זריעה-מחדש אחרי redeploy מגישה תוכן ישן
+
+**הבעיה**: ה-Service Worker (`sw.js`) מגיש GET-ים סטטיים cache-first, ממופתח
+לפי `BUILD_ID`. מיד אחרי redeploy, ה-SW **הקודם** עדיין עשוי לשלוט בעמוד
+(takeover אסינכרוני — `skipWaiting`+`clients.claim` לא מיידיים) — כך ש-
+`fetch('/example-vault.json')` בבלוק הזריעה-מחדש (Commit 3) יכול לפגוע ב-
+cache **הישן** ולקבל את תוכן ה-build **הקודם**, בעוד `window.__owDemoContent`
+(שנקרא מ-`index.html` החדש) כבר מדווח על ה-hash **החדש** — התוכן הישן נכתב,
+המפתח נחתם עם ה-hash החדש, והמצב **קבוע** (הזריעה-מחדש לא תרוץ שוב לעבור-
+build הזה). נמדד ע"י calev: 2 מ-3 ריצות.
+
+**התיקון**: `seedExampleVault(store, opts)` מקבל `opts.cacheBust` — כשניתן,
+מוסיף `?v=<cacheBust>` ל-URL. cache-first תואם URL מדויק בלבד ⇒ query
+חדש = תמיד cache miss (בין אם ה-SW הישן או החדש מיירט) ⇒ fetch רשת אמיתי,
+ללא תלות באיזה SW שולט. `boot.js` מעביר `cacheBust: window.__owDemoContent`
+בבלוק הזריעה-מחדש (לא בבלוק הזריעה-הראשונה — שם אין בעיית cache-staleness
+מתועדת, ה-URL נשאר כפי שהיה, backward-compatible).
+
+**אימות מחדש (playwright-cli, אותו תרחיש בדיוק שבו calev נכשל)**: build A →
+טעינה, עריכת `Welcome.md`, יצירת `My Note.md` → שינוי `Welcome.md` ב-
+`template.js` (בוטל מיד אחרי, `git diff` ריק) → build B (hash שונה) →
+החלפת הארטיפקט המוגש **על אותו origin** (מדמה redeploy אמיתי) → **5 ריצות
+reload רצופות**: כל חמש הראו את תוכן ה-build **החדש** (`REDEPLOY-MARKER-B`),
+`My Note.md` שרד בכולן, `ow-demo-content` תואם את ה-hash החדש.
+
+### NBug2 — כשל-fetch שקט מעדכן את המפתח בכל זאת
+
+**הבעיה**: `seedExampleVault` לא הבחינה בין "כתב קבצים בהצלחה" ל"דילג/נכשל
+בשקט" (gate/fetch-failure — `if (!files) return;` בלי לזרוק). שני הקוראים
+ב-`boot.js` עדכנו את `ow-demo-content` ללא תנאי אחרי הקריאה, ולכן כישלון
+שקט (רשת נופלת, 500 וכו') **עדיין** סימן את הניסיון כ"בוצע" — בניגוד מפורש
+לבריף ("במקרה כישלון אל תעדכן את המפתח — שהניסיון יחזור בבוט הבא").
+
+**התיקון**: `seedExampleVault` עכשיו מחזירה `true` רק כשבאמת כתבה קבצים,
+`false` בכל נתיב-דילוג. שני הקוראים ב-`boot.js` מעדכנים את המפתח **רק**
+כש-`true` חוזר.
+
+**אימות מחדש**: ניקוי כל ה-SW caches (כדי לא לפגוע ב-cache-hit מריצות
+קודמות), `ow-demo-content` נקבע ידנית ל-`FORCE_MISMATCH`, `route()` על
+`**/example-vault.json*` → status 500 → reload → `ow-demo-content` **נשאר**
+`FORCE_MISMATCH` (לא עודכן), `My Note.md` שרד. הסרת ה-route + reload נוסף →
+המפתח התעדכן בהצלחה ל-hash הנכון (retry עבד).
+
+### בדיקות (TDD, red-green)
+
+6 טסטים חדשים ב-`seed-example-vault.test.js` (RED תחילה מול הקוד הישן):
+ערך-חזרה `true`/`false` לפי הצלחה/דילוג/כישלון-fetch/כישלון-רשת, ו-
+`cacheBust` מוסיף `?v=` ל-URL (עם ובלי — backward compat). `npm test`:
+96/96 (90 + 6 חדשים). `bun test test/*.test.js`: 34/34.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 3: זריעה-מחדש כשהתוכן השתנה
+
+### מה בוצע? (TDD — red-green)
+
+**`src/client-mobile/seed-example-vault.js`** — `seedExampleVault(store, opts)`
+מקבל `opts.force`: כש-`true`, מדלג על שער ה-stat (`Welcome.md` קיים? → לא
+נכתב שוב) וכותב מחדש את כל קבצי-התבנית. הדילוג על `.obsidian/` (finding 1)
+**נשאר גם ב-force** — לא נפתח מחדש (קונפיג הפלאגינים בבעלות בלעדית של
+seedSystemPlugins). רק paths שקיימים בתבנית נכתבים — קובץ שהמבקר יצר בעצמו
+(לא בתבנית) אף פעם לא נכתב/נמחק, force או לא.
+
+**`src/client-mobile/test/seed-example-vault.test.js`** — 3 טסטים חדשים
+(RED תחילה — נכשלו מול הקוד הישן, ואז GREEN אחרי המימוש): force דורס
+`Welcome.md` קיים; force עדיין מדלג על `.obsidian/`; force לא נוגע בקובץ
+שאינו בתבנית (`My Note.md`). 5 הטסטים הקיימים נשארו ירוקים ללא שינוי.
+
+**`src/client-mobile/boot.js`** — שני שינויים בבלוק הזריעה הקיים + בלוק חדש:
+
+1. 🔴 **זריעה כפולה בבוט הראשון (אביגיל ממצא 7)**: כתיבת המפתח
+   `localStorage['ow-demo-content'] = window.__owDemoContent` נוספה **בתוך**
+   הבלוק הקיים, מיד אחרי `seedExampleVault(seedStore)` שמצליחה — בלעדי זה,
+   בבוט הראשון של הדמו `localStorage` ריק, הבלוק החדש (למטה) היה רואה "שונה"
+   ומריץ `force:true` מיד אחרי הזריעה הראשונה (זריעה כפולה מיותרת).
+2. 🔴 **guard על הכתיבה ההיא (אביגיל סבב 2, ממצא 1)**: `VAULT_ID===DEMO_ID`
+   — הבלוק הקיים רץ על **כל** כספת local/folder ריקה (גם כספת שהמבקר יצר
+   לעצמו בדומיין הדמו — זו התנהגות פרה-קיימת, לא תוקנה כאן, ראה "חריגות"
+   למטה). בלי ה-guard על הכתיבה, כספת כזו הייתה כותבת את ה-hash הנוכחי
+   ל-`ow-demo-content` (מפתח אחד לכל המקור, לא פר-כספת) ⇒ כשכספת הדמו
+   האמיתית נטענת, ה-hash כבר "מסומן כמעודכן" והזריעה-מחדש לא הייתה רצה
+   לעולם — באג שקט שאין לו טסט/DoD, רק ה-guard.
+3. **בלוק חדש ונפרד** מיד אחרי הבלוק הקיים: כשכל התנאים מתקיימים (`seedStore`,
+   `window.__owSeedExampleVault`, `seedExampleContent`, `demoVault.enabled!==false`,
+   `VAULT_ID===DEMO_ID`, `window.__owDemoContent` קיים, ושונה מהמסומן
+   ב-`localStorage`) — קורא ל-`seedExampleVault(seedStore,{force:true})` ואז
+   מעדכן את המפתח. כישלון לא חוסם פתיחה ולא מעדכן מפתח (retry בבוט הבא).
+
+### בדיקות
+
+`cd src/client-mobile && npm test` — 90/90 ירוק (87 + 3 חדשים).
+`bun test test/*.test.js` — 34/34 ירוק (regression-free).
+
+**ידני (playwright-cli, verifier-phase לפי §8 — הקומיט היחיד שכותב לכספת של
+מבקר)**: בנוי `OW_PROFILE=demo`, שרת מקומי (`wrangler pages dev`), עריכת
+`app.vault` API ישירות (מהיר יותר מקליקים ב-UI, אותה תוצאה):
+- **DoD#5**: ערכתי `Welcome.md`, יצרתי `My Note.md`, שיניתי סמן-בדיקה בתוכן
+  `Welcome.md` ב-`template.js` (בוטל אחרי הבדיקה — `git diff` ריק), בניתי
+  מחדש, `reload()` → `Welcome.md` חדש (התוכן המעודכן), `My Note.md` שרד
+  ללא שינוי. `ow-demo-content` ב-localStorage התעדכן ל-hash החדש.
+- **DoD#6**: ערכתי `Welcome.md`, `reload()` פעמיים ברצף בלי לשנות template →
+  העריכה שרדה (אין דריסה מיותרת — ה-hash לא השתנה אז התנאי לא מתקיים).
+- **DoD#11**: יצרתי כספת local אמיתית (`/starter` → Create new vault → App
+  storage) על בניית הדמו, הוספתי `My Real Note.md`, `reload()` → הקובץ שרד
+  ללא שינוי, `ow-demo-content` ב-localStorage לא הושפע (ה-guard
+  `VAULT_ID===DEMO_ID` על שתי נקודות-הכתיבה חוסם כל מגע בכספת הזאת).
+צילום: `/tmp/demo-origin-split/phase3-reseed-verified.png`.
+
+### חריגות
+
+**לא תוקן, מדווח במפורש**: הבלוק ה**קיים** (מלפני הסלייס הזה) שמזרע תוכן-דמו
+לכל כספת local/folder ריקה על בניית הדמו (לא רק לכספת הדמו — `isVaultEmptyForSeed`
++ `config.seedExampleContent`, בלי `VAULT_ID===DEMO_ID`) ממשיך לעבוד כך: כספת
+local חדשה שהמבקר יוצר לעצמו על בניית הדמו **כן** מקבלת את `Welcome.md`/`Features/*`
+בזריעה-ראשונית (נמדד ישירות ב-DoD#11 — הכספת שיצרתי קיבלה `Welcome.md` מיד
+עם היצירה). הבריף מציין זאת במפורש כמצב-קיים ("הבלוק הקיים רץ על כל כספת
+local/folder ריקה — גם כספת שהמבקר יצר לעצמו") ומבקש guard רק על **נקודת
+הכתיבה ל-localStorage**, לא על הזריעה עצמה — כך יישמתי. DoD#11 (כפי שנוסח)
+בודק את מה שקורה **אחרי** שכבר יש קובץ בכספת (לא ריקה יותר) ועובר: לא תוקן,
+לא סטייה מהבריף, אך מדווח לביקורת calev-heavy הסופית לוודא שההבנה שלי
+תואמת את הכוונה.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 2: פתיחה-אוטומטית של הדמו
+
+### מה בוצע?
+
+**`src/client-mobile/boot.js`** —
+1. 🔴 **אילוץ סדר (הכשל הצפוי, אביגיל)**: `DEMO_ID` הוגדר עד כה **אחרי** בלוק
+   ניתוב-הכניסה (שורה ~105 לשעבר) — שימוש בו שם היה נותן `undefined`. הגדרת
+   `DEMO_ID` הועלתה לפני הבלוק (מיד אחרי `navigateToVault`); `ensureDemo()`
+   והקריאה `if (VAULT_ID === DEMO_ID) ensureDemo();` נשארו במקומן — רק ההגדרה
+   זזה, לא הלוגיקה.
+2. בבלוק `else if (!VAULT_ID)` — הענף שהיה תמיד `/starter` כשאין כספת-אחרונה,
+   מוסיף עכשיו תנאי (ES5 guard pattern, כמו `ensureDemo`):
+   `demoVault.autoOpen === true && demoVault.enabled !== false` → הפניה
+   ל-`/vault/<DEMO_ID>` במקום ל-`/starter`. `forceStarter` (`/starter`)
+   ממשיך לעקוף הכל — נשאר דרך המילוט היחידה למסך-הפתיחה גם בדומיין הדמו.
+
+### בדיקות — ידניות (playwright-cli, שני הפרופילים)
+
+**ברירת-מחדל** (DoD#3): `/` → `/starter`, מסך "Create a vault"/"Use my existing
+vault" נקי, `find "Demo"` — אין תוצאות, `localstorage-list` — רק
+`mobile-external-vaults`/`ow-known-vault-ids` (ריקים), אין `0000demo0000demo`.
+צילום: `/tmp/demo-origin-split/phase2-default-starter.png`.
+
+**דמו** (DoD#4): `/` → הפניה אוטומטית ל-`/vault/0000demo0000demo`, אפס
+לחיצות, `Welcome.md`/`How It Works`/`Features` נמצאים ב-file-explorer (זרעו
+כבר — הבדיקה המלאה של רצף הזריעה עצמו ב-DoD#5/#6 שייכת ל-Commit 3).
+צילום: `/tmp/demo-origin-split/phase2-demo-autoopen.png`. **הערה**: המסך שנפתח
+הוא "New tab" הריק של Obsidian (אין `workspace.json` מזורע — `.obsidian/`
+מודלג במכוון, seed-example-vault.js finding 1), לא `Welcome.md` פתוח על המסך;
+הקובץ קיים וניתן לפתיחה בקליק על השם ברשימה. זו התנהגות זהה למה שהיה קורה גם
+לפני הסלייס הזה בלחיצה על כפתור "כספת דמו" הקיים (`ensureDemo`+`navigateToVault`,
+ללא לוגיקת פתיחת-קובץ) — Commit 2 לא נגע ולא היה אמור לגעת בזה (הארכיטקטורה ב-§3
+מראה יעד `/vault/<demoId>` בלבד, בלי note-path). מדווח כאן במפורש — לא הכרעתי
+בעצמי שזה בסדר, calev-heavy הסופי יבדוק את הניסוח המדויק של DoD#4.
+
+**regression** (DoD#10): `/starter` על בניית הדמו **לא** מפנה לדמו — מציג את
+מסך הבחירה הנייטיבי (במקרה הזה: vault-chooser עם ערך "Demo" קיים, כי הכספת
+כבר נוצרה בטאב אחר על אותו origin — `forceStarter` חוסם את ה-autoOpen כצפוי).
+צילום: `/tmp/demo-origin-split/phase2-demo-starter-regression.png`.
+
+`cd src/client-mobile && npm test` — 87/87 ירוק (regression-free, קובץ זה לא
+נבדק ב-node:test — DOM-only, מאומת ידנית). `bun test test/*.test.js` — 34/34
+ירוק.
+
+### חריגות
+
+ראה ההערה בסעיף "Welcome.md מרונדר" למעלה — לא תוקן, מדווח לביקורת הסופית.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 1: hash של תוכן הדמו מוזרק בבניה
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — בלוק "example-vault.json
+(static)" הוזז מלהיות **אחרי** בלוק ה-`OW_BACKEND_INJECT` להיות **לפניו** — ה-hash
+נגזר מתוכן `example-vault.json` אחרי שהוא נכתב לדיסק, אז חייב לרוץ אחרי. בלוק
+ה-`OW_BACKEND_INJECT` מוסיף `window.__owDemoContent=<hash>` ל-snippet הקיים —
+`sha256sum` של `example-vault.json`, 16 תווים ראשונים, מחושב לפני קריאת ה-`node -e`
+ומועבר כ-env var (`DEMO_CONTENT_HASH`). מוזרק בשתי הבניות (לא-מזיק בברירת-המחדל,
+שום דבר לא קורא אותו שם) — כך שההבדל היחיד בין הארטיפקטים נשאר קובץ הקונפיג
+(DoD#7).
+
+**`src/deployments/cloudflare/test/build-assets.test.js`** — הבדיקה הבייט-בבייט של
+ה-snippet עודכנה: מחשבת את אותו hash (`sha256sum` על `example-vault.json` שכבר
+נבנה) ומצפה לו ב-snippet.
+
+### בדיקות
+
+`bun test test/build-assets.test.js` — 3/3 ירוק. ידני: `OW_PROFILE=demo npm run build`
+→ `__owDemoContent="e0b00163a6abd341"`, זהה ל-`sha256sum example-vault.json | cut -c1-16`.
+שתי בניות רצופות (ברירת-מחדל, ללא `OW_PROFILE`) → אותו hash בשתיהן (דטרמיניסטי, לא
+תלוי ב-BUST). `bun test test/*.test.js` (34/34) ו-`client-mobile npm test` (87/87)
+נשארו ירוקים — regression-free.
+
+### חריגות
+
+אין.
+
+## 2026-07-28 — slice/demo-origin-split — Commit 0: `OW_PROFILE` + קונפיג הדמו
+
+### מה בוצע?
+
+**`src/config/deploy-config.demo.json`** (חדש) — קובץ קונפיג מלא (לא overlay) לפרופיל
+הדמו: `seedExampleContent:true`, `demoVault.enabled:true` + `autoOpen:true`.
+
+**`src/deployments/cloudflare/scripts/build-assets.sh`** — הוספת `OW_PROFILE` (שורה 39
+לשעבר, כעת בלוק חדש לפני הבדיקה הקיימת): ריק/לא-מוגדר → קובץ ברירת-המחדל (כמו היום);
+`OW_PROFILE=demo` → `deploy-config.demo.json`; ערך לא-קיים → **כשל-רועש** (`exit 1`, לא
+נפילה שקטה לברירת-מחדל — profile שגוי חייב להפיל את הבניה, לא לפרוס דמו לפרודקשן
+בשוגג).
+
+**`src/config/deploy-config.json`** — `seedExampleContent` ו-`demoVault.enabled` הפכו
+ל-`false` (ברירת-המחדל היא כעת "בלי דמו" — §9 שאלה 1: החלטה מאושרת מראש בבריף).
+
+**`src/client-mobile/deploy-config.js`** — `DEFAULTS` עודכן להיות מראה מדויקת של
+`deploy-config.json` החדש (`seedExampleContent:false`, `demoVault.enabled:false`);
+ההערה בשורה 31 עודכנה מ"Mirrors src/config/deploy-config.json" ל"מראה של פרופיל
+ברירת-המחדל" (עם שני profiles השם הישן דו-משמעי).
+
+**`src/client-mobile/test/deploy-config.test.js`** — טסט אדום מובטח (אביגיל ממצא 2)
+תוקן: assertion על `seedExampleContent`/`demoVault.enabled` עודכן ל-`false`. נוסף טסט
+חדש (אביגיל ממצא 3): `assert.deepStrictEqual(DEFAULTS, require('../../config/deploy-config.json'))`
+— לפני הקומיט הזה שום טסט לא באמת קרא את ה-JSON, רק השווה ליטרלים קשיחים; drift בין
+שני הקבצים לא היה נתפס.
+
+### בדיקות
+
+`cd src/client-mobile && npm test` — 87/87 ירוק (כולל 2 טסטים חדשים ב-deploy-config.test.js).
+`cd src/deployments/cloudflare && bun test test/build-assets.test.js` — 3/3 ירוק.
+ידני: `npm run build` → `seedExampleContent:false,"demoVault":{"enabled":false,...}`;
+`OW_PROFILE=demo npm run build` → `seedExampleContent:true,"demoVault":{"enabled":true,...,"autoOpen":true}`;
+`OW_PROFILE=nope npm run build` → `exit=1` עם הודעת שגיאה מפורשת.
+
+### חריגות
+
+אין.
+
+## 2026-07-27 — slice/zero-patches — Commit 3: §3ד — `template.js:92` (ההצהרה הציבורית) + README
+
+### מה בוצע?
+
+**`src/deployments/cloudflare/template.js:92`** — זו ההצהרה שמופיעה בדף הדמו הציבורי
+(§0א בבריף), והייתה שגויה כשנכתבה (patch עדיין היה קיים). אחרי Commit 1 היא נכונה
+כשלעצמה ("completely unmodified"), אך §3ד מבקש גם לשקול משפט שמסביר *איך* מושג
+התנהגות-הפלטפורמה בלי לגעת בקובץ — נוסף: "byte-for-byte identical to Obsidian's own
+Android bundle, zero build-time patches" + משפט שמפנה ל-`client-mobile/platform-bridge.js`
+(`Object.defineProperty` interception) כהסבר. **לא נגעתי ב-`platform-bridge.js` עצמו** —
+רק בפרוזה שמתארת אותו.
+
+**`README.md`** — ארבע ההצהרות שנשארו מ-Commit 2 (במכוון נדחו לכאן): שורות 7, 45, 106,
+242 — "one documented patch remains" / "applies one documented build-time patch" /
+"apply a small set of documented patches" → "zero build-time patches" /
+"byte-identical to the APK" / "does not modify... unmodified", עם הפניה ל-
+`client-mobile/platform-bridge.js` בשורה 106. שורות 110 ו-204 (הוראות למשתמש להריץ
+`node scripts/update-obsidian-mobile.js && node scripts/patch-obsidian-mobile.js`)
+**לא שונו** — הפקודה עדיין תקינה ובטוחה (patch-obsidian-mobile.js הוא no-op עם
+`PATCHES=[]`), אין בה הצהרה שגויה.
+
+### בדיקות
+
+`bun test`: 143/138/5/4 — זהה. `node --check src/deployments/cloudflare/template.js` —
+עבר (קובץ template literals עם JS מסביב).
+
+### סריקה סופית (DoD#9) — אפס אתרים שמתארים patches שלא קיימים, היקף `obsidian-web`
+
+```
+grep -rniE "one documented (build-time )?patch|patch #4|the ONE remaining...|4 patches|3 of the 4 patches remain"
+```
+שני hits בלבד נותרו, שניהם תקינים במכוון:
+- `docs/investigations.md:544` — בלוק היסטורי עם "עדכון 2026-07-27" שמצהיר נכון על ההווה.
+- `AGENTS.md:56` — "4 patches that used to exist" (past tense, היסטורי, לא הצהרת-הווה).
+
+### חריגות
+
+- מוצא (א) (§1ג, אתרי-מתכון) קיים גם ב-`docs-repo` (ריפו נפרד) — **לא בהיקף הסלייס
+  הזה** (DoD#9 מתוחם ל-`obsidian-web`). מדווח כאן כדי שמרדכי יפתח קומיט נפרד שם.
+
+## 2026-07-27 — slice/zero-patches — Commit 2: §3ג — ניקוי תיעוד (רחב מ-grep על השם)
+
+### מה בוצע?
+
+חיפוש לפי מושג (`patch`, `unmodified`, `documented`, `4 patches`, `3 of the`,
+`__owPlatformOverrides`, "still remains"/"patch #4"), לא לפי שם — היקף: ריפו `obsidian-web`
+בלבד, `*.md`+`*.js`+`*.html`, מחריג `node_modules`/`.tmp`/`vendor`. תוקנו רק הצהרות
+שמתיימרות לתאר את **ההווה**; יומן-חקירה היסטורי (`docs/investigations.md`, רובו) נשאר
+כפי-שהיה, עם **הוספת** הערות-עדכון מתוארכות (לא שכתוב) באותו סגנון שכבר קיים בקובץ.
+
+- **`AGENTS.md`** ("Before you touch the bundle") — "One patch... still remains" → אפס
+  patches, `PATCHES=[]` כתשתית.
+- **`docs/architecture.md`** — "patch יחיד ותיעודי" → "אפס patches", זהה-בייט ל-APK.
+- **`PLAN.md`** (חמש הצהרות — נעדר מהבריף המקורי, נכנס בסבב 2): שורה 21 (מבנה תיקיות),
+  §Mobile (שורות ~190-194), טבלת `Key files` (`vendor/obsidian-mobile/`,
+  `update-obsidian-mobile.js`, `patch-obsidian-mobile.js`).
+- **`src/client-mobile/shims/electron.js`** (הערת-קוד ליד `vault`/`vault-list`) —
+  "patch #4, still in place" → מפנה ל-`platform-bridge.js`'s `isDesktopApp` locking.
+- **`src/client-mobile/platform-bridge.js`** (הערת-כותרת) — "The 4th patch... is NOT
+  replaced... until the vault-panel slice removes it" → "was NOT replaced... until
+  zero-patches removed it outright".
+- **`scripts/patch-obsidian-mobile.js`** (הערת-כותרת) — "down to ONE documented patch...
+  blocked on a separate slice... see this patch's own doc block below" (הבלוק ההוא כבר
+  לא קיים, נמחק ב-Commit 1) → מתאר את המצב הנוכחי (`PATCHES=[]`) ומפנה ל-"HOW TO FIX".
+- **`src/client-mobile/boot.js`** (הערת-כותרת) — "patch יחיד ותיעודי... עדיין קיים" →
+  "אפס build-time patches". **אתר שלא היה ברשימת-הדוגמאות של הבריף** — נמצא ע"י הסריקה
+  הרחבה שהבריף דרש ("לא רשימה סגורה").
+- **`docs/investigations.md`** — שורה 53 (סעיף "Current state", לא יומן-היסטורי — מתוקן
+  ישירות, לא רק עדכון-מתוארך); הוספת "עדכון 2026-07-27" לשני הבלוקים ההיסטוריים (שורה
+  ~544 ו-~780) שכבר נשאו "עדכון 2026-07-26"; **שלושת אתרי-המתכון** (§1ג, DoD#9 מוצא-א):
+  - שורה 799 (Hooks bullet): `{ isMobile: false }` → `{ isMobile: false, isDesktop: true }`
+  - שורה 1045 (דוגמת-קוד): אותו תיקון + הערה שמסבירה **למה** (`computeWant` גוזר
+    `isDesktopApp` מ-`overrides.isDesktop`, לא מ-`overrides.isMobile`)
+  - שורה 1058 (טבלת `layout-mode`, שורת `desktop`): אותו תיקון
+  - ⚠️ שורה 1057 (שורת `mobile`) **לא** תוקנה — `{ isMobile: true }` בלבד אינו דיברגנטי
+    (ראה מדידה למטה) — עקבי עם §8 בבריף (סבב 5, ממצא #7).
+
+### אימות עצמאי של DoD#5א ומוצא (א) — למה התיקון נכון (לא רק "כי הבריף אמר")
+
+הרצתי את `platform-bridge.js`'s `computeWant()` האמיתי (Node, לא בדפדפן) בשלוש צורות-קלט:
+
+```
+overrides={isMobile:false} בלבד            → want={isMobile:false, isDesktopApp:false}
+                                              !isMobile===true  אבל  isDesktopApp===false
+                                              ⇒ דיברגנטי (בדיוק כפי שהבריף טוען)
+overrides={isMobile:false, isDesktop:true} → want={isMobile:false, isDesktopApp:true}
+                                              !isMobile===true  ו-  isDesktopApp===true
+                                              ⇒ לא דיברגנטי — התיקון עובד
+overrides={isMobile:true} (המתכון ל-mobile) → want={isMobile:true, isDesktopApp:false}
+                                              !isMobile===false ו-  isDesktopApp===false
+                                              ⇒ לא דיברגנטי — למה שורה 1057 לא נזקקת לתיקון
+```
+
+וגם מסלול-המוצר האמיתי (`boot.js:252-259`, שני הצורות `layout.isMobile===true/false`):
+שני הכיוונים מציבים `isMobile`/`isDesktop`/`isDesktopApp` בעקביות מלאה
+(`isDesktop===isDesktopApp===!isMobile` תמיד) — **מאשש ישירות את DoD#5א**: הדיברגנציה
+בלתי-נגישה ממסלול-מוצר, נגישה רק דרך המתכון הידני (מה שתוקן כאן).
+
+בנוסף אימתתי מבנית את §1ד (המסלול השישי): `pump()` קורא ל-`capture(P)` (שורה 355)
+**בלי try/catch** מסביבו; בתוך `capture()`, `isDesktopApp` הוא **האחרון** ברשימת
+`LOCKED_FLAGS` (`['isMobile','isMobileApp','isDesktop','isDesktopApp']`) — חריגה מ-`orig()`
+(`Object.defineProperty`) על אחד הדגלים הקודמים תשאיר את `isDesktopApp` לא-נעול בלי שה-
+`reportCaptureFailure`/באנר יופעלו (ה-`finally` עדיין משחזר את `Object.defineProperty`,
+אבל לא מגיע ל-warning). תיאורטי (תלוי שדגל אחד יהיה לא-`configurable` בבאנדל של Obsidian) —
+לא נבדק בדפדפן חי, לא חוסם, מתועד כפי שהבריף דרש.
+
+### בדיקות
+
+`node --check` על כל 4 קובצי ה-JS שנגעתי בהם (`patch-obsidian-mobile.js`,
+`platform-bridge.js`, `shims/electron.js`, `boot.js`) — עברו. `bun test` (מהשורש) —
+143/138/5/4, **זהה** ל-baseline ולתוצאת Commit 1 (אין שינוי — אלו קבצי תיעוד/הערות,
+`platform-bridge.js`'s own logic לא נגעתי בו, רק בהערת-הכותרת).
+
+### חריגות
+
+- `README.md` ו-`src/deployments/cloudflare/template.js:92` **לא** נגעתי בהם כאן —
+  נדחו במכוון ל-Commit הבא (§3ד), יחד עם המשפט המפנה ל-`platform-bridge.js`
+  שהבריף מבקש לשקול שם.
+- מוצא (א) חוצה גם את ריפו `docs-repo` (אתרי-מתכון זהים שם) — **לא בהיקף הסלייס הזה**
+  (DoD#9 מתוחם ל-`obsidian-web`); יתועד כאן כדי שמרדכי יפתח עבורו קומיט נפרד בריפו הנפרד.
+
+## 2026-07-27 — slice/zero-patches — Commit 1: §3א+§3ב — מחיקת ה-patch האחרון מ-`PATCHES`
+
+### מה בוצע?
+
+- **`scripts/patch-obsidian-mobile.js`** — הוסר כליל האובייקט `vault-profile-on-desktop-layout`
+  ממערך `PATCHES` (כולל ה-`find`/`replace`/`expectedMatches` וה-doc-comment הצמוד לו).
+  `PATCHES = []`. בלוק `HOW TO FIX A BROKEN PATCH` בראש הקובץ **נשאר** — ידע תפעולי לגרסה
+  הבאה, לפי §3ב בבריף. **הערת הכותרת של הקובץ (`As of ... down to ONE documented patch`)
+  לא נגעתי בה כאן** — מתוקנת ב-Commit הבא (§3ג, ניקוי-תיעוד רחב).
+- **`src/client-mobile/obsidian-version.js`** — נכתב-מחדש ע"י `update-obsidian-mobile.js`
+  (קובץ generated); התוכן (`1.12.7`) לא השתנה, רק נוסח-ההערה שלו התעדכן ל-תבנית הנוכחית
+  של הסקריפט (drift לא-קשור לסלייס הזה, אך תוצר-לוואי אמיתי של ההרצה — נשמר).
+
+### DoD#0 — `applyPatches` על מערך ריק
+
+`node scripts/update-obsidian-mobile.js --version 1.12.7` (מפורש) רץ **בלי לזרוק**, ולא
+הדפיס אף שורת `patched: ...` (הלולאה על `PATCHES` ריקה) — "Done. obsidian-mobile/ is ready".
+
+### DoD#1 — ה-hash הקובע
+
+```
+sha256(vendor/obsidian-mobile/app.js) = e4594089a106754dcc93575160351f5e0747255a8f7348be4b8be25417b91606
+size                                  = 3,754,511 bytes
+```
+
+**זהה** ל:
+1. הערך שהבריף הצהיר עליו (נמדד פעמיים ע"י אביגיל/מרדכי).
+2. המדידה העצמאית שלי מ-`unzip` ישיר על `assets/public/app.js` מתוך `Obsidian-1.12.7.apk`
+   (**לפני** הרצת הסקריפט כלל — ראה הערך למעלה ב-"קרקע המדידה").
+
+`dev/vendor/obsidian-mobile/app.js` נשאר `4b1ccd3aaf7c6292fdb1c7d2dfca21e7f6272351354d4b797eb07b16257018cf`
+— **ללא שינוי** — אומת שוב אחרי ההרצה הזו (DoD#7ב).
+
+### ארבע הפקודות של §2א.3 — מדידה **אחרי** (על הבאנדל עם `PATCHES.length===0`)
+
+```
+grep -c 'window.__owPlatform='                     → 0
+grep -c '__owPlatformOverrides'                     → 0
+grep -c '!bn.isMobile){var i=e.vault.getName()'     → 0   (היה 1)
+grep -c 'bn.isDesktopApp){var i=e.vault.getName()'  → 1   (היה 0)
+```
+
+**הזוג הדו-כיווני התהפך בשני הכיוונים** — השער עובר. (⚠️ `grep -c 'vault-profile'` **לא**
+שימש כאן — הוא היה מחזיר `1` בשני המצבים דרך `workspace-sidedock-vault-profile`, מחלקת-CSS
+של Obsidian, ולכן אינו יכול להיכשל — סבב 5 בבריף.)
+
+### בדיקות
+
+`bun test` (מהשורש, `/home/user/Projects/obsidian-web/worktrees/zero-patches`) — baseline
+נמדד **על ה-base, לפני כל שינוי בסלייס**: **143 טסטים / 138 עוברים / 5 נכשלים / 4 שגיאות**
+(אחרי `npm install` ב-`src/runtime-server/server` שהיה חסר ב-worktree הטרי — `express` וכו').
+תואם בדיוק לטווח שהבריף מצטט (§4 DoD#8). אחרי הקומיט הזה: אותה תוצאה בדיוק (143/138/5/4) —
+אין שינוי, כצפוי (זהו קובץ סקריפט build-time, אין לו טסט ייעודי; האימות האמיתי הוא ה-hash
++ ארבע ה-greps למעלה).
+
+### חריגות
+
+- `src/runtime-server/server/package-lock.json` השתנה (`npm install` הוסיף שדה `license`)
+  — **הוחזר** (`git checkout --`) לפני commit, לא קשור לסלייס.
+- אין חריגה מהותית אחרת. בדיוק לפי §3א+§3ב.
+
+## 2026-07-27 — slice/zero-patches — קרקע המדידה (§2, לפני Commit 1)
+
+### מה בוצע?
+
+לפני כל שינוי קוד, לפי §2ב+§2א בבריף:
+
+- **עותק מבודד**: `cp -a dev/vendor /tmp/zero-patches-vendor` ואז
+  `ln -sfn /tmp/zero-patches-vendor worktrees/zero-patches/vendor`. **לא** נגעתי ב-`dev/vendor`
+  ישירות — ה-symlink של הוורקטרי מצביע על `/tmp/...`, לא על `dev/vendor` (`readlink` אומת).
+- **`sha256` של `dev/vendor/obsidian-mobile/app.js` — נמדד לפני, ונמדד שוב אחרי כל הרצה של
+  `update-obsidian-mobile.js`**: `4b1ccd3aaf7c6292fdb1c7d2dfca21e7f6272351354d4b797eb07b16257018cf`
+  לפני ואחרי, בלי שינוי — `dev/vendor` שרד את כל ההרצות בסלייס הזה.
+- **מטמון ה-APK הועתק** מ-`dev/.tmp/cache/obsidian-releases/Obsidian-1.12.7.apk` (`.tmp/` הוא
+  פר-worktree — לא משותף) ל-`worktrees/zero-patches/.tmp/cache/obsidian-releases/`, ואומת
+  `sha256` זהה לשני הקבצים (`74a0741f…`) — נמנעה הורדה חוזרת (~15MB), אם כי הבדיקה גם אישרה
+  שיש חיבור-רשת חי (`GET https://api.github.com/...` הצליח).
+- **אימות עצמאי של DoD#1 לפני כל ריצת סקריפט**: `unzip` ישיר של `assets/public/app.js`
+  מתוך ה-APK הנ"ל נתן `sha256 = e4594089a106754dcc93575160351f5e0747255a8f7348be4b8be25417b91606`
+  ב-3,754,511 בתים — זהה לערך שהבריף הצהיר עליו, **לפני** שהרצתי סקריפט כלשהו של הפרויקט.
+
+### הרצת `node scripts/update-obsidian-mobile.js --version 1.12.7` (מפורש — לא ברירת-מחדל)
+
+הרצתי אותה **פעמיים**:
+
+1. **לפני §3א** (`PATCHES` עדיין מכיל את `vault-profile-on-desktop-layout`): הבנייה הטרייה
+   (מ-APK, לא ממטמון-vendor) הפיקה `sha256 = 4b1ccd3aaf7c6292fdb1c7d2dfca21e7f6272351354d4b797eb07b16257018cf`
+   — **זהה** לערך שנמדד ע"י מרדכי ב-§2 של הבריף. מאשר: סקריפט-ה-patch של הענף הזה
+   (`slice/desktop-layout-now`'s script, שממנו נוצר `slice/zero-patches`) עדיין תואם, ו-1
+   התאמה ל-regex (כצפוי, `expectedMatches: 1`).
+2. **אחרי §3א** (ראה למטה) — `sha256 = e4594089…`, DoD#1.
+
+### ארבע הפקודות של §2א.3 — מדידה **לפני** (על הבאנדל עם ה-patch עדיין בפנים)
+
+```
+grep -c 'window.__owPlatform='                     → 0
+grep -c '__owPlatformOverrides'                     → 0
+grep -c '!bn.isMobile){var i=e.vault.getName()'     → 1
+grep -c 'bn.isDesktopApp){var i=e.vault.getName()'  → 0
+```
+
+תואם למצופה: ה-patch עדיין הופך `bn.isDesktopApp` ל-`!bn.isMobile`.
+
+## 2026-07-27 — slice/desktop-layout-now — סבב-תיקון §10א: חיווט `window.electronWindow` (calev NO-GO ממצא #1)
+
+### מה בוצע?
+
+- **`src/client-mobile/shims/electron.js`** — נוצר `mainWindowInstance = makeWindow()` **instance
+  יחיד** (לא factory), מוגדר ליד `webContentsInstance`. `remote.getCurrentWindow()` הוחלף
+  מ-`makeWindow` (יצר proxy חדש בכל קריאה) ל-`() => mainWindowInstance` (אותו אובייקט תמיד).
+  בסוף הקובץ נוסף `global.electronWindow = mainWindowInstance` — **נקודת-חשיפה שלישית**,
+  לצד `global.electron`/`global.__owElectron` הקיימים.
+
+### למה זה תיקן את הרגרסיה שכלב הוכיח A/B
+
+§5ב בבריף המקורי טען ש"הבאנדל מציב את `window.electronWindow` בעצמו מ-
+`remote.getCurrentWindow()`" — **מדידה שגויה**. בדקתי בבאנדל: הפונקציה שעושה את ההצבה הזו
+(`e.electronWindow=i.remote.getCurrentWindow()`) יושבת בתוך `v$`, שרץ **רק על חלונות-בת**
+(popout/print-preview — מחוץ ל-scope, `canPopoutWindow` נעול `false`). על **החלון הראשי**
+שום דבר בבאנדל לא מציב את הגלובל — ב-Electron האמיתי preload script עושה את זה לפני
+שהרנדרר-סקריפט רץ. `WorkspaceRoot.prototype.focus` (`Px.prototype.focus`) קורא
+`this.win.electronWindow`, וב-`this.win === window` לחלון הראשי — ולכן ללא ההצבה, כל קריאה
+ל-`openFile`/`revealLeaf`/`setActiveLeaf(...,{focus:true})` בזמן ש-`document.hasFocus()===false`
+זרקה `TypeError: Cannot read properties of undefined (reading 'isMinimized')`.
+
+### שחזור חי לפני התיקון (git stash) ואימות אחריו
+
+הרצתי Chromium/Playwright מול `http://127.0.0.1:3593/vault/0000demo0000demo` (layout=desktop,
+`serviceWorkers:'block'`), עם `document.hasFocus` מוחלף ל-`() => false` (ללא stubbing נוסף) —
+אותה שיטת-שחזור שכלב תיעד ב-`22-iframe-unfocused.png`:
+
+| | לפני התיקון (`git stash`) | אחרי התיקון |
+|---|---|---|
+| `typeof window.electronWindow` | `"undefined"` | `"object"` |
+| `app.workspace.rootSplit.focus()` | **THROW** `TypeError: … reading 'isMinimized'` | no throw |
+| `leaf.openFile(f)` | **THROW** אותה שגיאה, הקובץ לא נפתח | no throw, `activeFile === 'CalevProbe2.md'` |
+
+בנוסף אימתתי ישירות שכל שיטות ה-alias שכלב ציין (`isMinimized`/`restore`/`isMaximized`/
+`unmaximize`/`minimize`/`setAlwaysOnTop`/`maximize`/`show`/`isFocused`/`isFullScreen`/
+`webContents`) וגם `remote.systemPreferences.getUserDefault`/`remote.app.relaunch` — כולן
+לא זורקות על `window.electronWindow` (היו כבר ממומשות ב-`makeWindow()`/`remote` מקומיים —
+החוט החסר היה רק בין `makeWindow()` לגלובל, כפי שדוח כלב אבחן: "צרכן ומוצא לב תקינים,
+הצנרת ביניהם לא נמתחה").
+
+### מדידה עצמאית (לא הסתמכתי על רשימת הבריף)
+
+הבריף הזהיר שגריפ נאיבי על `electronWindow` פספס 7 שיטות שנקראות דרך alias
+(`var w = this.win.electronWindow`). בדקתי ידנית בבאנדל את כל אתרי-הקריאה (11 מופעים) —
+כל השיטות שנקראות עליו כבר קיימות ב-`windowMethodReturns`/`windowStatefulMethods` הקיימים
+(שהיו שם עוד מ-Commit 2); לא נדרשה תוספת לטבלאות עצמן, רק חיווט הגלובל.
+
+### בדיקות
+
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי במספר — הקובץ הזה אין לו
+  טסטים ייעודיים; האימות האמיתי הוא ריצה חיה בדפדפן, כמתואר למעלה).
+- `node --check` על `shims/electron.js` — עבר.
+
+### חריגות
+
+- אין. תיקון ממוקד, בדיוק לפי §10א בבריף.
+
+## 2026-07-27 — slice/desktop-layout-now — סבב-תיקון §10ב: מדידה+תיעוד DoD#15 (calev NO-GO ממצא #2)
+
+### מה בוצע?
+
+- **`docs/investigations.md`** — שלושה ערכים חדשים תחת "בעיות פתוחות" (B-006/B-007/B-008),
+  לפי §10ב בבריף ("שלושת הנושאים, ל-`docs/investigations.md`"):
+  1. **B-006 — שער `isDesktopOnly` נפתח**: פלאגין `isDesktopOnly:true` עובר מ"סירוב מנומק +
+     תווית Unsupported" ל"נטען, ואז נופל מאוחר יותר על API לא-ממומש (`require('fs')===undefined`)".
+  2. **B-007 — `<webview>` בקנבס/Web Viewer**: `document.createElement('webview')` הוא
+     `HTMLUnknownElement` בדפדפן (אין `isLoading`/`loadURL`/`getWebContentsId`) — אך הפלאגין
+     הפנימי `webviewer` כבוי כברירת-מחדל, ולכן הנתיב השבור לא נגיש היום.
+  3. **B-008 — מפתחות `sec:`**: אין רגרסיה — טאב "Keychain" קיים גם ב-base (`717d193`),
+     18 טאבי-הגדרות זהים בין base לסלייס.
+
+### מדידה עצמאית (לא הועתק מדוח כלב)
+
+- **B-006**: grep ישיר על `vendor/obsidian-mobile/app.js` — שני אתרי-הקריאה
+  (`!bn.isDesktopApp&&u.isDesktopOnly` / `!bn.isDesktopApp&&n.isDesktopOnly`) + אימות-חי:
+  שתלתי פלאגין `isDesktopOnly:true`, `enablePlugin()` החזיר `true`, `require('fs')` בתוכו
+  `undefined`.
+- **B-007**: אימות-חי — `document.createElement('webview').constructor.name ===
+  'HTMLUnknownElement'`, `.isLoading`/`.loadURL` שניהם `undefined`; `app.internalPlugins
+  .plugins.webviewer.enabled === false`.
+- **B-008**: הרצתי שרת נפרד על ה-**base** (`worktrees/runtime-platform-descriptors`,
+  commit `717d193`, port 3594) והשוויתי את רשימת טאבי ה-Settings מול הסלייס (port 3593) —
+  18/18 זהים בייט-בבייט (לא הסתמכתי על ההשוואה שכלב כבר עשה).
+
+### בדיקות
+
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי — commit תיעוד בלבד).
+
+### חריגות
+
+- אין. §10ב מפורש: "למדוד ולתעד — לא לחסום. אין כאן שינוי התנהגות" — שלושתם תועדו כפתוחים,
+  לא תוקנו.
+
+## 2026-07-27 — slice/desktop-layout-now — סבב-תיקון §10ג: תיקון DoD#14 — הבדיקה המכריעה הישנה הייתה ריקה בלינוקס (calev NO-GO ממצא #3)
+
+### מה בוצע?
+
+- **`docs/walkthrough.md`** — תוקנה רשומת Commit 6 (DoD#14): הטענה "קליק כפול על כותרת-טאב
+  מפעיל בפועל state אמיתי" סומנה במפורש כירוק-מזויף, עם הפניה לממצא ולתיקון.
+- **אין שינוי קוד** — §10ג הוא תיקון-בדיקה (methodology), לא באג-קוד: הקוד עצמו
+  (`makeWindow()`, alias-methods, `remote.systemPreferences`) היה תקין כל הזמן; מה
+  שהיה שגוי הוא **הבדיקה שקבעתי כ"מכריעה"** ב-DoD#14 המקורי.
+
+### הבעיה שנמצאה (NF3 בדוח כלב)
+
+`DoD#14`'s "הבדיקה המכריעה" המקורית — "קליק כפול על כותרת-טאב, לא זורק TypeError" —
+**ריקה בלינוקס**: הבאנדל רושם את ה-listener הזה רק תחת
+`function Ox(e){ bn.isMacOS && bn.isDesktopApp && e.addEventListener("dblclick", …) }`.
+בלינוקס `bn.isMacOS===false` ⇒ ה-listener **לא נרשם בכלל** ⇒ הקליק-הכפול "עבר" כי אין
+שום קוד שמאזין לו ויכול לזרוק — לא כי `window.electronWindow` היה תקין. **בדיוק באותו
+רגע `window.electronWindow` היה `undefined`** (ראה §10א למעלה) — כלומר ה-DoD "עבר" בזמן
+שהפיצ'ר שהוא אמור לבדוק היה שבור.
+
+### הבדיקה המכריעה החדשה — כבר בוצעה ותועדה ב-§10א
+
+הבריף (§10ג) מגדיר את הבדיקה הנכונה: לגרום ל-`document.hasFocus()===false` (לא תלוי
+`isMacOS`) ואז לקרוא `openFile`. **זו בדיוק הבדיקה שכבר בוצעה ותועדה בקומיט הקודם
+(§10א)** — `document.hasFocus` הוחלף ל-`() => false`, `leaf.openFile(f)` נקרא, ואומת
+"no throw" גם לפני התיקון (THROW, כדי להוכיח שהבדיקה אכן רגישה) וגם אחריו (no throw).
+אין צורך לחזור על הריצה — היא כבר קיימת כעדות ב-commit של §10א
+(Evidence: `/tmp/desktop-layout-now/phase-10a/after-fix.png`).
+
+**בנוסף**, אימתתי גם את מסלול ה-macOS עצמו (הקוד שהיה "אמור" להיבדק על ידי הבדיקה
+הישנה) ישירות מול `remote.systemPreferences.getUserDefault`/`window.electronWindow`
+(ללא תלות ב-`bn.isMacOS`, שאין לו דרך-אמת בדפדפן): שתי הקריאות לא זורקות.
+
+### בדיקות
+
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי — אין שינוי-קוד בקומיט הזה).
+
+### חריגות
+
+- אין שינוי-קוד ב-commit הזה, לפי §10ג — "פגם בבריף שלי", לא בקוד. התיקון הוא תיעודי
+  (סימון הטענה השגויה + הפניה לבדיקה הנכונה שכבר בוצעה).
+
+## 2026-07-27 — slice/desktop-layout-now — סיכום סלייס (כולל סבב-תיקון §10)
+
+**עודכן אחרי calev-heavy NO-GO (13/17, 2 חוסמים+1 confusion) וסבב-תיקון ממוקד (§10,
+3 commits נוספים — §10א/§10ב/§10ג, ראה למעלה).**
+
+**11 commits** סה"כ (`slice/runtime-platform-descriptors..HEAD`): 8 המקוריים (§6 בבריף) +
+3 מסבב-התיקון. **86 pass / 0 fail** (`bun test` תחת `src/client-mobile`, ללא שינוי מהסבב
+הראשון — הסבב לא נגע בטסטים). **אימות-דפדפן חי** בשני הסבבים (Chromium/Playwright, Node
+runtime-server, secure context).
+
+**מה תוקן בסבב-התיקון (§10, לפי scope שאושר ע"י המשתמשת — שני האדומים בלבד)**:
+- **§10א (blocker, רגרסיה מוכחת A/B)**: `window.electronWindow` לא היה מחווט לחלון הראשי
+  ⇒ `TypeError` בכל `openFile`/`revealLeaf`/`setActiveLeaf` כש-`document.hasFocus()===false`.
+  שוחזר חי לפני התיקון (`git stash`) ואומת שנעלם אחריו.
+- **§10ב (blocker, spec-drift)**: DoD#15 ("מדידה ותיעוד") לא הופק כלל בסבב הראשון —
+  הושלם עכשיו ב-`docs/investigations.md` (B-006/B-007/B-008), עם מדידה עצמאית
+  (כולל הרצת שרת נפרד על ה-base להשוואת-אמת).
+- **§10ג (תיעודי)**: DoD#14 המקורי ("קליק כפול על כותרת-טאב") תוקן — הבדיקה הייתה
+  ריקה בלינוקס (ירוק-מזויף), הוחלפה בבדיקה לא-תלוית-פלטפורמה שכבר בוצעה כחלק מ-§10א.
+
+**שלושה ממצאים צהובים מדוח calev — נשארו כחוב מתועד, במכוון, לפי הנחיית המשתמשת**:
+NF4 (10 פקודות דסקטופ חדשות, חלקן no-op שקט), NF5 (§5א קוד-מת בחלון הראשי), NF6 (DoD#2
+לא בר-אימות בסביבה מקומית). **לא טופלו בסבב הזה.**
+
+**חריגה אחת מתועדת שנשארת ל-מרדכי**: תיקון `runtime-platform-descriptors.md` §3.2
+(docs-repo) — לא בוצע ע"י אליעזר, לפי הקונבנציה בבריפי A/B הקודמים.
+
+**מה עדיין פתוח (מוצהר בבריף עצמו, §9 שם, ומורחב ב-B-006/B-007/B-008)**: 76 מתוך 95
+שימושי `isDesktopApp` בבאנדל לא נדגמו ישירות. שער `isDesktopOnly` **נפתח בפועל** (B-006 —
+לא רק "פתוח לתיעוד", יש כאן שינוי-התנהגות מדוד). `<webview>` בקנבס (B-007) ומפתחות `sec:`
+(B-008) — מדידה/תיעוד בלבד, ללא רגרסיה.
+
+פרטים מלאים בתתי-הרשומות למטה: §10א/§10ב/§10ג (סבב-התיקון, למעלה) ו-Commit 1 עד Commit 8
+(הסבב המקורי, למטה).
+
+---
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 8: תיעוד
+
+### מה בוצע?
+
+- **`docs/investigations.md`** — סעיף `window.__owPlatform` runtime API (§ "שני
+  globals שונים — אל תבלבל ביניהם"): שתי הצהרות הפכו שקריות ותוקנו —
+  1. `window.__owPlatform.isDesktopApp // false ב-mobile bundle תמיד` → תוקן לתאר את
+     ההתנהגות הנוכחית (true בדסקטופ, false במובייל/אמולציה) + הפניה ל-§1.
+  2. `LOCKED_FLAGS = ['isMobile','isMobileApp','isDesktop']` (שלושה, עם הערה
+     "isDesktopApp נקרא ונענה בכוונה" — כלומר "מוותרים עליו במפורש") → עודכן לארבעה
+     דגלים, ההערה השקרית הוסרה.
+  **אותה מחלקת-טעות בדיוק כמו §1ג** (platform-bridge.js, Commit 5) — רק במסמך שני.
+
+### חריגות (מתועד, לא מבוצע כאן)
+
+- **§1ג מבקש גם תיקון ל-`runtime-platform-descriptors.md` §3.2** — מסמך ב-docs-repo
+  (לא בריפו הקוד הזה). **לא בוצע ע"י אליעזר**, לפי הקונבנציה שנקבעה בבריפים
+  הקודמים באותה שרשרת (`electron-shim-foundation.md`/`desktop-shell-shim.md` §6:
+  "ב-docs-repo, mordechai מעדכן, לא בני-commit מהסלייס"). **מדווח כאן ומופנה למרדכי**
+  (כבר סומן גם ב-Commit 5).
+- שאר `docs/investigations.md` (טבלת ה-Electron IPC של ה-desktop bundle הארכיוני,
+  §"Electron stubs שצריך לדעת") — **לא נגעו**: אלה הערות-חקירה היסטוריות על ה-desktop
+  client (`archive/desktop-runtime`), לא הצהרות על המצב הנוכחי של `client-mobile/`,
+  ותיקון מקיף שלהן חורג מ-scope הבריף (§1ג + הפניה בלבד).
+
+### בדיקות
+
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי — commit תיעוד בלבד).
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 7: הסרת חטיפת-הקליק על vault-switcher
+
+### מה בוצע?
+
+- **`src/client-mobile/boot.js`** — הוסר בלוק ה-`document.addEventListener('click', ...,
+  true)` שתפס קליק על `.workspace-drawer-vault-switcher` וחסם את ה-handler הנייטיב
+  (עגן: "── Vault switcher click → openVaultChooser ──"). ה-handler הנייטיב עכשיו
+  **פונקציונלי** (Commit 6 אימת: `vault`/`vault-list`/`vault-open` עובדים).
+- **⚠️ שלוש שורות "נשארות"**, כנדרש בבריף (§6 Commit 7): דריסת `app.vault.getName` ·
+  `refreshVaultProfileLabel` + הקריאה לה · ה-`<select>` "נהל כספות" (עגן:
+  `o.value === 'manage-vaults'`, פקד-מובייל, לא קשור). **אף אחת מהשלוש לא נגעה.**
+- עדכון הערה סמוכה (ליד `refreshVaultProfileLabel`) שהתייחסה ל-listener שהוסר —
+  נכתבה מחדש כדי לא להטעות (ההזהרה מפני דריסת textContent על ה-switcher עצמו
+  נשארת נכונה, רק ה"listener" שהיא מגנה עליו השתנה מהמיירט שהוסר לנתיב הנייטיב).
+
+### בדיקות
+
+- `node --check` על `boot.js` — עבר.
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא רגרסיה).
+- **בדיקת-דפדפן חיה (DoD#5, שהיה חסום עד לקומיט הזה)**: קליק על
+  `.workspace-drawer-vault-switcher` פותח **תפריט-DOM נייטיב** (לא שלנו — `class="menu"`
+  הרגילה של Obsidian, `menu-grabber`/`menu-scroll`/`menu-group`) עם "Demo" **וסימן ✓**
+  (`mod-checked`) על הכספת הנוכחית, ו-"Manage vaults..." שמנווט ל-`/starter` בקליק
+  אמיתי. ✅ **בדיוק לפי DoD#5.**
+- **רגרסיה במובייל**: `isMobile===true`, `<select>` הפוליפיל עדיין קיים ותקין, אפס
+  שגיאות-קונסולה חדשות.
+
+### חריגות
+
+- אין.
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 6: אימות מלא בדפדפן
+
+**סביבה**: Node runtime-server מקומי (`http://127.0.0.1:3577`, secure-context —
+127.0.0.1 נחשב trustworthy), Chromium (Playwright 1.61.1 מקומי, headless), כספת דמו
+OPFS (`0000demo0000demo`, נוצרת lazy דרך `/vault/0000demo0000demo`).
+⚠️ `SYSTEM_PLUGINS_SEED_DISABLED=obsidian-livesync` נדרש כדי ש-livesync ייזרע מקומית —
+ברירת-המחדל של השרת המקומי (לא CF) לא זורעת אותו כלל (התנהגות קיימת, לא קשורה לסלייס).
+
+### מה נבדק ואומת (לייב, לא בקוד)
+
+- **DoD#0** — `window.__owPlatform.isDesktopApp === true` בפריסת-דסקטופ, `=== false`
+  בפריסת-מובייל (נבדק בקונסולה, לא דרך `require('obsidian')`). ✅
+- **DoD#1** — ribbon, `.mod-left-split`, `.mod-right-split`, status bar קיימים;
+  `.mobile-navbar`/`.mobile-toolbar` נעדרים; `is-mobile` נעדר מ-`body`. ✅
+- **DoD#2** — `app.vault !== null`, `getName()==='Demo'`, `.workspace-leaf` קיים.
+  ⚠️ `getFiles().length === 0` — **לא רגרסיה**: `example-vault.json` קיים רק ב-build
+  של CF (מתועד כבר בקוד `boot.js`), אז כספת-הדמו המקומית ריקה במכוון בסביבת-הפיתוח
+  המקומית. נבדק גם קרוא+כתיבה אמיתיים (DoD#9, ראה למטה) שמוכיחים שהכספת אכן פעילה.
+- **DoD#3** — `resourcePathPrefix === "file:///"`, "Show debug info" מציג
+  `API version: 1.12.7` (לא ריק) ואין "installer version too low"/"Manual update
+  required". ✅
+- **DoD#4** — `canExportPdf === false`, `canPopoutWindow === false` **קפדני**. ✅
+- **DoD#7** — קליק-ימני בתוך העורך פותח `.menu.mod-context` (הבדיקה המכריעה של
+  §2.6א — לפני התיקון היה "לא קורה כלום"). ✅
+- **DoD#8** — מעבר `mobile`/`desktop`/`auto` (localStorage + reload) — כל שלושתם
+  עקביים (`isMobile`/`isDesktopApp`/`is-mobile`/`.mobile-navbar` תואמים), אפס שגיאות. ✅
+- **DoD#9** — יצירת קובץ + הקלדה אמיתית בעורך (מקלדת, לא API בלבד) + reload —
+  התוכן שרד. ✅
+- **DoD#11** — `obsidian-livesync` מופעל ידנית (`enablePluginAndSave`) — אפס שגיאות
+  חדשות. `window.require('electron')` (הנתיב שפלאגין-real מקבל) מחזיר אובייקט אמיתי
+  עם `ipcRenderer`. ✅
+- **DoD#12** — הזרקת `delete window.__owPlatformOverrides` (route interception על
+  בקשת `app.js`, לפני שהוא רץ — **חובה** `serviceWorkers:'block'` בקונטקסט, אחרת
+  ה-SW עוקף את ה-interception) → הבאנר `#ow-platform-warning` מופיע עם הטקסט הנכון,
+  `isDesktopApp === false` (לא נעול, לא crash). ✅
+- **DoD#13** — הדלקת `nativeMenus` (`vault.setConfig` + `saveConfig()` + reload,
+  1000ms debounce על `requestSaveConfig` — נדרש להמתין/לקרוא ל-save מפורשות) → קליק-ימני
+  על tab-header פותח `.menu.mod-context` (השim שלנו, `remote.Menu.buildFromTemplate`)
+  **במיקום הקליק בדיוק** (לא 0,0). ✅ מאשש את תיקון §5ד.
+- **DoD#14** — קליק כפול על כותרת-טאב לא זורק (מפעיל בפועל את
+  `remote.systemPreferences.getUserDefault` → `electronWindow.isMaximized()`/`maximize()`
+  — state אמיתי, לא no-op). כל שיטות ה-alias (`isMinimized`/`restore`/`isMaximized`/
+  `unmaximize`/`minimize`/`setAlwaysOnTop`/`webContents`) נבדקו ישירות — אף אחת לא זרקה.
+  `remote.app.relaunch()` לא זרק. ✅
+  ⚠️ **תוקן 2026-07-27 (calev NO-GO ממצא #1+#3, §10א/§10ג)**: הטענה "מפעיל בפועל" הייתה
+  **ירוק-מזויף** — ה-listener הזה רשום ב-`vendor/obsidian-mobile/app.js` תחת
+  `bn.isMacOS&&bn.isDesktopApp` בלבד; **בלינוקס הוא לא נרשם בכלל**, אז הקליק-הכפול "עבר"
+  כי אין מה שיזרוק, לא כי `electronWindow` עבד. ה-alias-methods שכן נבדקו ישירות עדיין
+  תקינים (זו לא הייתה שגיאה), אבל `window.electronWindow` עצמו **היה `undefined`** באותו
+  רגע — ראה תיקון §10א למטה ואת הבדיקה המכריעה החדשה (§10ג).
+- **DoD#5** — **נדחה במכוון ל-אחרי Commit 7** (כפי שהבריף דורש: חטיפת-הקליק ב-`boot.js`
+  עדיין קיימת, ומפנה ל-`/starter` **דרך ה-`starter` channel שממומש כבר** — אישרתי את
+  זה ישירות: קליק על `.workspace-drawer-vault-switcher` נחת על `/starter`, מוכיח
+  ש-`sendSync('starter')` עובד).
+- **מסך-בדיקה כללי (חלק מ-DoD#10)** — Settings, Command palette (`Ctrl+P`), Search
+  (`Ctrl+Shift+F`), About tab — כולם נפתחים, אפס `pageerror` חדשות.
+
+### רעש שאינו רגרסיה (נמדד ומתועד, לא תוקן)
+
+- **"A network error occurred." × 8** ו-404 על שני קובצי `.woff2` — **מופיע גם
+  בפריסת-מובייל הטהורה** (`isDesktopApp` לא מעורב כלל, נבדק ישירות) — רעש קיים-מראש
+  של סביבת-הבדיקה הזו (ככל-הנראה fetch חיצוני שנכשל ברשת הסנדבוקס של הריצה), **לא
+  רגרסיה מהסלייס הזה**.
+
+### חריגות
+
+- אין קוד חדש ב-commit הזה — אימות בלבד, לפי §6 Commit 6 בבריף.
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 5: הדלקת הדגל (isDesktopApp) + lockConst + עדכון טסטים + חיווט DoD#12
+
+### מה בוצע?
+
+- **`src/client-mobile/platform-bridge.js`**:
+  - `LOCKED_FLAGS` — נוסף `'isDesktopApp'` (4 דגלים במקום 3).
+  - `computeWant()` — **שני** מסלולי-היציאה מחזירים `isDesktopApp` עכשיו: מסלול
+    ה-emulate-mobile (early return) → `isDesktopApp: false` **קפדני** · המסלול הרגיל →
+    `isDesktopApp: !!overrides.isDesktop` (מגזרת isDesktop, לא נקרא מ-`overrides.isDesktopApp`
+    ישירות — אותה גישה כמו isMobileApp הקבוע).
+  - **§1ג** — ההערה שליד `LOCKED_FLAGS` נכתבה מחדש: כבר לא טוענת ש-`isDesktopApp` הוא no-op
+    (זה היה נכון לפני שהיה shim ל-`window.electron`; עכשיו זה שקר).
+  - **§4** — `lockConst(P, key, value)` חדש (אותה צורת `defineProperty`/`set` no-op כמו
+    `lockFlag`, בלי תלות ב-`want`) — נקרא **תמיד** (בשני הענפים של `capture`, גם כש-`want`
+    הוא `null`): `lockConst(P, 'canExportPdf', false)` ו-`lockConst(P, 'canPopoutWindow', false)`.
+  - **DoD#12** — הענף `overrides-missing` (`want === null`) עבר מ-`warnOnce(...)`
+    (console-only) ל-`reportCaptureFailure(...)` — עכשיו יש גם באנר-משתמש, לא רק console.warn.
+- **`src/client-mobile/boot.js`** — `window.__owPlatformOverrides.isDesktopApp` עבר מ-`false`
+  קבוע ל-`!layout.isMobile` (עקבי עם `isDesktop`). ההערה בת-3-השורות ליד השדה נכתבה מחדש
+  (אותה מחלקה כמו §1ג — הנימוק הישן, "הריצה תמיד דפדפן", כבר לא נכון).
+- **`src/client-mobile/test/platform-bridge.test.js`** (§1ד) — **6 ה-assertions שנשברו
+  תוקנו** (לא נמחקו): 5× `deepEqual(want, {...})` קיבלו `isDesktopApp` בליטרל הצפוי ·
+  ה-assertion של `LOCKED_FLAGS.sort()` עודכן ל-4 איברים. **נוספו 4 טסטים חדשים** (כיסוי
+  מפורש ל-`isDesktopApp === false`/`=== true` בשני המסלולים, כולל את המקרה הקריטי של
+  §1א — emulate מתוך overrides של desktop).
+
+### בדיקות
+
+- `bun test` תחת `src/client-mobile` — **86 pass / 0 fail** (עלה מ-84 → 86, מעל ה-baseline
+  76 — DoD#16 "מספר טסטים ≥ base" מתקיים, בלי "רצפה" של מחיקת assertions).
+- `node --check` על כל הקבצים שנגעו בהם — עבר.
+- **טרם בוצעה בדיקת-דפדפן חיה** — DoD#0 (`Platform.isDesktopApp`), DoD#4
+  (`canExportPdf`/`canPopoutWindow`), DoD#12 (הזרקת `undefined` ל-`__owPlatformOverrides`
+  ובדיקת הבאנר) דורשים סביבה חיה — Commit 6.
+
+### חריגות
+
+- **מתועד ולא מבוצע ע"י אליעזר**: §1ג מבקש גם לתקן את `runtime-platform-descriptors.md`
+  §3.2 (המסמך ב-docs-repo, לא בריפו הזה) — לפי הקונבנציה שנקבעה בבריפים הקודמים באותה
+  שרשרת (`electron-shim-foundation.md`/`desktop-shell-shim.md` §6: "ב-docs-repo, mordechai
+  מעדכן, לא בני-commit מהסלייס"), התיקון הזה מדווח כאן ומופנה למרדכי, לא מבוצע כ-commit
+  בריפו הקוד.
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 4: ערוצי vault*/starter/help + context-menu round-trip + clipboard.readImage
+
+### מה בוצע?
+
+- **`shims/electron.js`** — `sendSync`:
+  - `vault` → `{ path: api.vaultPath(__owVaultId, (registry.get(id)||{}).name) }`.
+  - `vault-list` → מפה `{ [id]: {path} }` על `registry.list()` (רק local/folder — server
+    לא מופיע, מוסכם ב-desktop-shell-shim.md §2.4).
+  - `vault-open` → מחלץ `id` מ-`/^\/ow\/([^/]+)\//` (שם-כספת עשוי להכיל `/`, לא נסמכים על
+    שאר המחרוזת), מנווט ל-`/vault/<id>` (setTimeout-0), **מחזיר `true` בדיוק**.
+  - `starter` → `location.href = '/starter'`. `help` → `window.open('https://help.obsidian.md/')`.
+  - `vault-remove`/`vault-move` — **לא מומשו בכוונה** (0 קריאות בבאנדל, נמדד).
+- **`send('context-menu')`** — שודרג מ-no-op שקט ל-**round-trip אמיתי**: מגיב ב-microtask
+  עם `{webContentsId, editFlags:{canCut,canCopy,canPaste,...}, misspelledWord:''}` דרך
+  `ipcRenderer.emit`. בלעדיו — תפריט-ההקשר בעורך "לא קורה כלום" (§2.6א, מצב-כשל שקט).
+- **`remote.webContents.fromId`/`getFocusedWebContents`** — מחזירים עכשיו את
+  `webContentsInstance` האמיתי (לא `null`) כדי ש-`.cut()`/`.copy()`/`.paste()` על
+  תוצאת ה-context-menu round-trip לא יזרקו.
+- **`clipboard.readImage()`** — **סינכרוני** (לא Promise — הבאנדל קורא בלי await), מחזיר
+  `nativeImage` ריק (`isEmpty()===true`) כדי שנתיב ה"הדבקת תמונה" ידלג בחן במקום לזרוק.
+
+### בדיקות
+
+- `node --check` על `shims/electron.js` — עבר.
+- `bun test` תחת `src/client-mobile` — 84 pass / 0 fail (ללא רגרסיה; אין עדיין טסטים
+  ייעודיים ל-electron.js — האימות האמיתי בדפדפן, Commit 6).
+
+### חריגות
+
+- אין.
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 3: EISDIR בשורש-הכספת + api.vaultPath + בדיקות-יחידה
+
+### מה בוצע?
+
+- **`src/client-mobile/vault-root-path.js`** (חדש) — `isVaultRootPath(p)`, לוגיקה טהורה
+  (בלי DOM), דפוס dual-export זהה ל-`bootstrap-lookup.js`. מנרמל trailing slashes ובודק
+  `''`/`'.'` אחרי נירמול — **לא** `path === ''` בלבד (electron-shim-foundation.md §3.3:
+  הנתיב שנמדד בפועל הוא `"<id>//"`, לא `""`).
+- **`src/client-mobile/shims/capacitor-shim.js`** — ה-`Filesystem` Proxy (get trap) עוטף
+  את `readFile` ספציפית: אם `fullPath(opts)` הוא שורש-הכספת → `Promise.reject(EISDIR)`
+  במקום להמשיך ל-backend (server/local/folder — התיקון מגן על שלושתם דרך נקודת-ההשתלה
+  היחידה). שאר המתודות (כולל ה-`bind`) לא נגעו.
+- **`src/client-mobile/local-vault-registry.js`** — `api.vaultPath(id, name)` →
+  `'/ow/' + id + '/' + (name || id)`. חתימת שני-ארגומנטים במכוון (§3.4: `get(id)` לא מחזיר
+  `id`, כך ש-`vaultPath(get(id))` היה נותן `/ow/undefined/<name>`).
+- **`src/client-mobile/index.html`** — תג script חדש ל-`vault-root-path.js?v=1`, אחרי
+  `local-vault-registry.js`/`opfs-store.js`/`folder-handle-store.js` ולפני `capacitor-shim.js`.
+- **בדיקות-יחידה חדשות**: `test/vault-root-path.test.js` (שורש: `''`/`'/'`/`'.'`/`'//'`/`'///'`
+  → root; `'Welcome.md'`/`'Features/Backlinks.md'`/`'.obsidian/...'`/`'Features/'` → **לא**
+  root) · תוספת ל-`test/local-vault-registry.test.js` עבור `vaultPath` (כולל fallback ל-id).
+
+### בדיקות
+
+- `bun test` תחת `src/client-mobile` — **84 pass / 0 fail** (עלה מ-76 — 8 טסטים חדשים).
+- `node --check` על כל הקבצים שנגעו בהם — עבר.
+
+### חריגות
+
+- אין.
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 2: shims/electron.js (seed + §5א/§5ב) + boot.js רישום
+
+### מה בוצע?
+
+- **`src/client-mobile/shims/electron.js`** (חדש, 510→~530 שורות) — seeded מ-
+  `archive/desktop-runtime:src/client/shims/electron.js`, עם השינויים המחייבים
+  (electron-shim-foundation.md §3.1): הסרת **כל** מופעי `__owSyncJson` (טבלת-ערוצים
+  מקומית עם תשובה קנויה במקום XHR לשרת שלא קיים) · `remote.safeStorage` (4 מתודות) ·
+  export כפול (`window.electron` **וגם** `global.__owElectron`, אותו אובייקט) ·
+  `getCurrentWebContents().session.availableSpellCheckerLanguages` · הסרת ה-short-circuit
+  של `__owBootstrapCache.electron` · `nativeImage` + `clipboard.writeImage` (לא מגודר-דגל,
+  Web Viewer "העתק תמונה").
+- **§5א** — `sendSync('frame')` מחזיר **תמיד** `'native'`, ללא תלות בכתיבה דרך Settings
+  (דריסה מפורשת ומתועדת של `electron-shim-foundation.md` §3.2, שקבע `'hidden'`).
+- **§5ב** — `makeWindow()` נשאר Proxy יחיד (מותר ע"י foundation) אך עם טבלה מורחבת:
+  המתודות שנמדדו דרך alias (`isMinimized`/`restore`/`isMaximized`/`unmaximize`/`minimize`/
+  `setAlwaysOnTop`) מקבלות מימוש **stateful** אמיתי (לא סתם no-op), כדי שהגייט הכפול-קליק
+  (`isMaximized()` אחרי `maximize()`) יתנהג בעקביות.
+- **§5ג** — `remote.systemPreferences` (2 צרכנים: double-click-titlebar guard +
+  `AudioRecorder.getMediaAccessStatus`), `remote.app.relaunch`/`quit` (quit עושה
+  `location.reload()`; relaunch no-op — שני הכפתורים תמיד קוראים לשניהם ברצף).
+- **§5ד** — `Menu.buildFromTemplate(...).popup()` נופל חזרה למיקום-עכבר אחרון
+  (`lastPointer`, נעקב ב-`mousedown`/`contextmenu` capture) כש-`opts.x`/`opts.y` חסרים —
+  שני אתרי-הקריאה בבאנדל מעבירים רק `{window}`.
+- **`file-url` → `'file:///'`** — ערוץ top-level שרץ בכל עלייה (נשמט מהטיוטה הראשונה,
+  נתפס בבדיקת ה-grep מול הבאנדל האמיתי; ראה "חריגות" למטה).
+- **`vault-open`/`vault-remove`/`vault-move`** — לא מומשו (מוקצים ל-Commit 4 / נמחקו כקוד-מת
+  לפי המדידה שאין קריאות בבאנדל).
+- **`src/client-mobile/boot.js`** — `modules['electron'] = window.electron` (רישום
+  ללא-תנאי, כמו כל שאר המפה) · `process.versions.electron = '30.0.0'` (ליטרל נושא-משקל —
+  שלושה אילוצים בו-זמנית: `major>=13`, `>= '28.2.3'`, `major<40`).
+- **`src/client-mobile/index.html`** — תג script חדש ל-`shims/electron.js?v=1`, אחרי
+  `platform-bridge.js` ולפני `boot.js`.
+
+### בדיקות
+
+- `node --check` על `shims/electron.js` ו-`boot.js` — עבר.
+- `bun test` תחת `src/client-mobile` — 76 pass / 0 fail (baseline; טסטים ייעודיים ל-electron.js
+  לא נדרשים ב-DoD של הבריף — האימות האמיתי הוא בדפדפן, Commit 6).
+- לא בוצעה עדיין בדיקת-דפדפן חיה (מתוכננת ל-Commit 6, per §6 בבריף — "אימות מלא בדפדפן").
+
+### חריגות
+
+- טיוטה ראשונית של הקובץ פספסה את ערוץ `file-url` (מטופל ב-§3.0 של
+  electron-shim-foundation.md, לא בטבלת §3.2) — אותר ותוקן **לפני** ה-commit, ע"י גריפ ישיר
+  מול `vendor/obsidian-mobile/app.js` (לא מתוך זיכרון של טבלת הבריף). בלעדיו
+  `resourcePathPrefix` היה נשאר `''` (ברירת-המחדל הריקה), לא `'file:///'` — DoD#3 היה נכשל.
+- **החלטה מתועדת**: `makeWindow()` נשאר Proxy (לפי היתר foundation "בדיוק אחד מותר"),
+  לא הומר לאובייקט רגיל — למרות שדיווח-ה-dispatch הזהיר מ"Proxy גורף = truthy". הפתרון
+  שיושם: לא שינוי המנגנון (Proxy), אלא הרחבת הטבלה המפורשת + תיקון root-cause האמיתי
+  (`remote.systemPreferences` חסר לגמרי) — כי "isMaximizable" כבר היה בטבלה עם ערך נכון
+  (`true`), לא ברירת-מחדל שגויה של ה-Proxy. מתועד גם בקוד עצמו (הערה מעל
+  `windowMethodReturns`).
+
+## 2026-07-27 — slice/desktop-layout-now — Commit 1: מקור-אמת לגרסת Obsidian
+
+### מה בוצע?
+
+- **`src/client-mobile/obsidian-version.js`** (חדש) — `window.__owObsidianVersion = '1.12.7'`, GENERATED,
+  מקור-אמת יחיד לגרסה (docs/plans/electron-shim-foundation.md §3.0).
+- **`scripts/update-obsidian-mobile.js`** — כותב את הקובץ הנ"ל מיד אחרי resolve הגרסה (לפני ההורדה),
+  עם הודעת-console בולטת.
+- **`src/client-mobile/shims/capacitor-shim.js`** — `App.getInfo().version` קורא עכשיו מ-
+  `window.__owObsidianVersion` (עצלנית, בתוך גוף הפונקציה) במקום ליטרל `'1.12.7'` קשיח.
+  Fallback ל-`'1.12.7'` נשאר, למקרה שהסקריפט לא רץ.
+- **`src/client-mobile/index.html`** — תג script חדש ל-`obsidian-version.js?v=1`, לפני
+  `shims/capacitor-shim.js` (וממילא לפני `boot.js`).
+
+### בדיקות
+
+- `node --check` על שלושת הקבצים הנוגעים ב-JS — עבר.
+- `bun test` תחת `src/client-mobile` — 76 pass / 0 fail (baseline, לא נגעו בטסטים כאן).
+
+### חריגות
+
+- אין.
+
+## 2026-07-27 — slice/docs-truth-final — Commit 1: גילוי הפרוקסי בארבעת האתרים (§1)
+
+### מה בוצע?
+
+- **`src/deployments/cloudflare/template.js`** — `Welcome.md` (שני האתרים): אחרי
+  "never sent to a server" הראשון (שורה 57 בגרסה הקודמת) נוסף פסקה שמסבירה שרק
+  בקשות ל-`github.com`/`githubusercontent.com`/`obsidian.md` (התקנת פלאגין קהילתי, וגם
+  קריאה אוטומטית אחת בטעינת כספת ל-deprecated-plugins) עוברות דרך פרוקסי בשרת; ליד
+  ה"Note" השני (הישן: שורה 83) נוסף משפט-הפניה קצר לפסקה הזו. `How It Works.md`
+  (שורה 119 בגרסה הקודמת, טבלת ה-Worker) — הוחלף מסגור "can reach GitHub" בתיאור
+  מדויק של שלוש התבניות + הקריאה האוטומטית, ותוספת שסנכרון/מארחים-אישיים לא עוברים
+  בפרוקסי.
+- **`README.md:47`** — טבלת "Two deployment modes", שורת Sharing: הוחלף "never sent
+  anywhere" בתיאור שמפנה ל"Cloudflare (client-only) deployment" למטה, עם אותה
+  התניה (GitHub/obsidian.md + הקריאה האוטומטית).
+
+### מדדתי
+
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (baseline נשמר, שינויי-תיעוד
+  בלבד ולא נגעו בקבצי client-mobile).
+- אין להעתיק את רשימת-7 המארחים של `proxy-worker.js` (הרשאה-בשרת) — הניסוח בכל
+  ארבעת האתרים מתאר את שלוש התבניות ש-`capacitor-shim.js:802` באמת מנתב (§1ג/§1ד).
+- לא נכתב "רק בעת ההתקנה" באף אחד מהאתרים (§1א).
+
+### חריגות
+
+- אין.
+
+## 2026-07-27 — slice/docs-truth-final — Commit 2: §2א+§2ב+§2ג — שלוש ההצהרות שנמדדו כשגויות
+
+### מה בוצע?
+
+- **§2א — `README.md:120`** — נמדד חי (שרת מקומי, port 3710): `GET /starter` → `200`,
+  ללא `Location` header, גוף מלא (11600 bytes). הוחלף "redirects to `/`" ב-"returns the
+  same app shell as `/` ... is a 200, not a redirect".
+- **§2ב — `cloudflare/README.md:12-13`** — כוון מחדש (לא בוטל): מול `boot.js:105-113`,
+  מבקר-חוזר עם `mobile-selected-vault` **כן** מקבל resume אוטומטי ל-`/vault/<id>` —
+  רק מבקר בלי כספת-זכורה מגיע ל-`/starter` (מסך-ה-onboarding הריק). תוקנו שתי
+  ההצהרות באותו bullet יחד (§2ב + סבב 4 ממצא #7): "renders onboarding" ו-"no vault
+  is opened automatically".
+- **§2ג — `README.md:127`** — "the static deployment only serves `/`" סתר את
+  `:120-126` שלוש שורות מעליו (`/starter`, `/vault/*`, `/api/proxy-request` על
+  אותו Worker). הוחלף בתיאור שמונה את מה שה-Worker כן מגיש, ומבהיר ש-`/mobile`
+  הוא היחיד שחסר.
+- **תוספת (§1ג, סבב 6 ממצא #2)**: `cloudflare/README.md:23-25` מנה את "templater's
+  unsplash endpoint" כמשהו שעובר בפרוקסי — נמדד כ-fetch ישיר
+  (`capacitor-shim.js:802` מנתב רק שלוש תבניות; `templater-unsplash-2.fly.dev`
+  מותר רק בהרשאת-השרת של `proxy-worker.js`). תוקן להבהיר את הפער בין המותר
+  לבין המנותב בפועל.
+
+### מדדתי
+
+- `GET /starter` על שרת מקומי (`PORT=3710 node src/runtime-server/server/index.js`)
+  — `HTTP/1.1 200 OK`, אין `Location`, `Content-Length: 11600`.
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי).
+
+### חריגות
+
+- אין.
+
+## 2026-07-27 — slice/docs-truth-final — Commit 3: §3 — סריקה-לפי-מושג + תיקון שאר האתרים
+
+### הפקודה
+
+```
+grep -rniI -E "patch|unmodified|Durable Object|4 hours|reset|shared|visible to others|\
+never sent|only serves|redirect|__owPlatform|proxy|Docker|AppImage|workerd" \
+--include="*.js" --include="*.md" --include="*.toml" --include="*.html" \
+--exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.tmp .
+```
+
+### תוצאה
+
+- **597** hits case-insensitive (`-i`), **490** case-sensitive, **38** קבצים.
+- (המספרים נעים בין סבבים לפי §3א/§3ב — נמדד עכשיו, לא צוטט מסבב קודם.)
+
+### מה בוצע?
+
+עברתי קובץ-קובץ על כל ה-`.md` (לא-יומן) עם hits, לפי כלל-הטריאז' §3ב:
+יומן היסטורי → דילוג; הווה-בזמן-הווה → בדיקה נגד הקוד; מזהה-קוד ב-`.js` → דילוג;
+ספק → תיעוד כאן בלי לנחש.
+
+**תוקן (ממצאים חדשים, לא מכוסים ע"י Commit 1/2):**
+- **`Docker`** — `docs/architecture.md:15,46` ו-`src/deployments/server/README.md`
+  טענו "Docker option"/"Node.js / Docker" — נמדד: **אין שום `Dockerfile` בריפו**
+  (`find . -iname "Dockerfile*"` → ריק) ו-`docker` לא מוזכר בשום script. תוקן
+  לציין מפורשות שאין Dockerfile היום.
+- **`AppImage`** — `README.md:80` (עץ repo layout) הציג `Obsidian.AppImage` כקובץ
+  שנוצר תחת `vendor/`. נמדד: `scripts/update-obsidian-desktop.js` מוריד
+  `.asar.gz` (asset של GitHub release) ומחלץ ASAR ישירות — אין AppImage בשום
+  שלב. תוקן.
+- **`cloudflare/README.md:87`** (נמצא **אחרי** commit 1/2, בקריאה-רציפה של
+  DoD#5) — "onboarding screen renders fully at `/`" סתר את התיקון של §2ב
+  שלוש שורות מעליו (Commit 2): מבקר-חוזר לא רואה onboarding ב-`/`, רק מבקר
+  חדש (דרך `/starter`). תוקן.
+- **`README.md:188-189` / cloudflare `README.md:26-28`** — אותה מסגרת-צרה
+  "community-plugin installs can reach GitHub/obsidian.md" (בלי הקריאה
+  האוטומטית, בלי ההבחנה 3-מול-7) כמו ב-§1 — תוקן לעקביות עם Commit 1.
+- **`wrangler.toml:6-9,21`** — ערבב טענה נכונה (אין Durable Object) עם שגויה
+  ("Worker only serves static... follow-up: porting the proxy route") —
+  `index.js` כבר מטפל ב-`/api/proxy-request` ישירות. הופרד: הפרוקסי כבר
+  מנותב; רק ה-system-plugins seed API נשאר follow-up (כמו שההערה הפנימית
+  של `index.js` עצמו כבר אומרת).
+
+**סווג כהיסטורי (לא תוקן, יומנים לפי §3א):**
+- `docs/walkthrough.md` ו-`docs/investigations.md` — רוב ה-hits (רשומות
+  מתוארכות שמתארות מצב-עבר). לא נסרקו שורה-שורה בסלייס הזה — הכלל §3א חל
+  אוטומטית (יומן היסטורי).
+
+**נמצא, תועד, לא תוקן שורה-אחר-שורה — הכרעה מפורשת (לא ניחוש):**
+- **`PLAN.md`** — מעבר ל"5 ההצהרות" שכבר תוקנו בסלייס `zero-patches` (טענות
+  patch-בלבד), נמדדו הצהרות נוספות ומהותיות שאינן מכוסות ע"י מונחי-החיפוש
+  לבד: כל סעיף "Two parallel client runtimes — `src/client/` vs
+  `src/client-mobile/`" (שורות ~38-67 בגרסה הקודמת) ו-"Files to know about"
+  (שורות ~527-539) מתארים ארכיטקטורה שהוסרה ב-`collapse-desktop`
+  (`src/client/` לא קיים יותר) וב-`zero-patches`/`client-only-resilience`
+  (Durable Object הוסר). תיקון מלא, שורה-אחר-שורה, של כל הקובץ (548 שורות,
+  כולל טבלאות ותרשימים) הוא מעבר להיקף commit אחד בסלייס complexity=4, ומעלה
+  את סיכון ההליכון (DoD#5) — לא ניסיתי. **התיקון שביצעתי**: הוספת הודעת-סטטוס
+  מפורשת בראש הקובץ (כמו הסעיף "Superseded" הפנימי שכבר קיים בו) שמכריזה על
+  המסמך כהיסטורי-לא-מקור-אמת ומפנה ל-`README.md`/`AGENTS.md`/`docs/architecture.md`.
+  **זו הכרעה שלי, לא ניחוש** — מדווחת כאן במפורש למרדכי להחלטה אם דרוש סלייס
+  ייעודי לשכתוב/פרישה של `PLAN.md`.
+
+### מדדתי
+
+- `find . -iname "Dockerfile*"` (מחוץ ל-node_modules/vendor) — ריק.
+- `grep -rn -i "docker\|asar\|appimage" scripts/*.js` — `update-obsidian-desktop.js`
+  מוריד ומחלץ `.asar.gz`, לא AppImage, לא Docker.
+- `bun test` תחת `src/client-mobile` — 86 pass / 0 fail (ללא שינוי).
+
+### חריגות
+
+- `PLAN.md` — ראה "נמצא, תועד, לא תוקן" למעלה. מדווח למרדכי, לא הכרעתי בעצמי
+  שהיקף מלא נדרש/לא נדרש מעבר להוספת ההודעה.

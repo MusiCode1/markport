@@ -67,3 +67,130 @@ test('build-assets.sh: plugins install/enabled follow config.json + index.html g
   // "deploy-config.js" — the comment above the marker also names the file.)
   expect(html.indexOf(expectedSnippet)).toBeLessThan(html.indexOf('src="/client-mobile/deploy-config.js'));
 }, 120000);
+
+// ── §3.2/§3.4 — client-only backend flag + version (docs/plans/client-only-resilience.md) ──
+
+const VERSION_PATH = path.join(MAIN_DIR, 'src', 'config', 'version.json');
+
+test('build-assets.sh: index.html gets window.__owBackend="none" + window.__owVersion + window.__owDemoContent before deploy-config.js', () => {
+  execSync('bash scripts/build-assets.sh', {
+    cwd: CF_DIR,
+    stdio: 'pipe',
+    timeout: 120000,
+  });
+
+  const version = JSON.parse(fs.readFileSync(VERSION_PATH, 'utf8')).version;
+  const html = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
+  const demoHash = execSync('sha256sum ' + path.join(PUBLIC_DIR, 'example-vault.json'))
+    .toString()
+    .slice(0, 16);
+
+  expect(html).not.toContain('<!-- OW_BACKEND_INJECT -->');
+  const expectedSnippet = '<script>window.__owBackend="none";window.__owVersion=' + JSON.stringify(version) +
+    ';window.__owDemoContent=' + JSON.stringify(demoHash) + ';</script>';
+  expect(html).toContain(expectedSnippet);
+  expect(html.indexOf(expectedSnippet)).toBeLessThan(html.indexOf('src="/client-mobile/deploy-config.js'));
+}, 120000);
+
+// DoD#11 — the injection step must be a bare command (not swallowed by `if
+// node ...; then` under `set -e`, the exact pitfall already hit once at the
+// LiveSync step in this same script — see §3.2 finding). A source index.html
+// missing the marker must fail the BUILD loudly, never silently ship a
+// client-only bundle without window.__owBackend.
+test('build-assets.sh: FAILS loudly (nonzero exit) when OW_BACKEND_INJECT marker is missing from the source index.html', () => {
+  const SRC_HTML = path.join(MAIN_DIR, 'src', 'client-mobile', 'index.html');
+  const original = fs.readFileSync(SRC_HTML, 'utf8');
+  expect(original).toContain('<!-- OW_BACKEND_INJECT -->');   // sanity: marker really is there normally
+  const mutated = original.replace('<!-- OW_BACKEND_INJECT -->', '');
+  fs.writeFileSync(SRC_HTML, mutated);
+  try {
+    let threw = false;
+    try {
+      execSync('bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+    } catch (err) {
+      threw = true;
+      expect(err.status).not.toBe(0);
+      expect(String(err.stderr)).toContain('OW_BACKEND_INJECT marker not found');
+    }
+    expect(threw).toBe(true);
+  } finally {
+    fs.writeFileSync(SRC_HTML, original);   // restore regardless of pass/fail
+  }
+}, 120000);
+
+// ── guard-deploy-target.sh (docs/plans/demo-origin-split.md §4 Commit 5,
+// DoD#8) — the one failure mode in this slice that reaches real visitors
+// without any test noticing otherwise: the artifact itself is fine, it just
+// got uploaded to the wrong target (demo → main, or vice versa). Anchor is
+// `"demoVault":{"enabled":true` (WITH the key name — avigail finding 4: a
+// bare `"enabled":true` search false-positives on the main artifact too,
+// via deploy-config.json's obsidian-web-layout plugin entry).
+
+function runGuard(target) {
+  return execSync(`bash scripts/guard-deploy-target.sh ${target}`, { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+}
+
+test('guard-deploy-target.sh: blocks a demo artifact from deploying to the main target (DoD#8)', () => {
+  execSync('OW_PROFILE=demo bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+
+  let threw = false;
+  try {
+    runGuard('main');
+  } catch (err) {
+    threw = true;
+    expect(err.status).not.toBe(0);
+    expect(String(err.stdout)).toContain('refusing to deploy a DEMO artifact');
+  }
+  expect(threw).toBe(true);
+});
+
+test('guard-deploy-target.sh: passes a demo artifact against the demo target', () => {
+  execSync('OW_PROFILE=demo bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+  expect(() => runGuard('demo')).not.toThrow();
+});
+
+test('guard-deploy-target.sh: blocks the main artifact from deploying to the demo target', () => {
+  execSync('bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+
+  let threw = false;
+  try {
+    runGuard('demo');
+  } catch (err) {
+    threw = true;
+    expect(err.status).not.toBe(0);
+    expect(String(err.stdout)).toContain('no demo config injected');
+  }
+  expect(threw).toBe(true);
+});
+
+test('guard-deploy-target.sh: passes the main artifact against the main target', () => {
+  execSync('bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+  expect(() => runGuard('main')).not.toThrow();
+});
+
+test('guard-deploy-target.sh: rejects an unknown/missing target argument', () => {
+  let threw = false;
+  try {
+    execSync('bash scripts/guard-deploy-target.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+  } catch (err) {
+    threw = true;
+    expect(err.status).not.toBe(0);
+  }
+  expect(threw).toBe(true);
+});
+
+// ── _headers (docs/plans/demo-origin-split.md §4 Commit 6, DoD#16) — demo
+// profile only, overrides the branch-alias noindex Cloudflare would
+// otherwise inject (measured 2026-07-28, see the build-assets.sh comment).
+// The main/default profile must NOT get this file — it's already the
+// production target.
+
+test('build-assets.sh: _headers is written for the demo profile only, main profile has none', () => {
+  execSync('bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+  expect(fs.existsSync(path.join(PUBLIC_DIR, '_headers'))).toBe(false);
+
+  execSync('OW_PROFILE=demo bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+  const headersPath = path.join(PUBLIC_DIR, '_headers');
+  expect(fs.existsSync(headersPath)).toBe(true);
+  expect(fs.readFileSync(headersPath, 'utf8')).toBe('/*\n  X-Robots-Tag: index, follow\n');
+});

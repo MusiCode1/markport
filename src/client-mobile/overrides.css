@@ -5,7 +5,7 @@
  * מטרה: על מסך רחב (720-899px, מתחת לסף layout-switch של 900 — ראה
  * client-mobile/boot.js) הכפתורים בפריסת-המובייל רחוקים זה מזה, כי המסכים
  * הנייטיביים (onboarding/chooser) ממורכזים אבל עדיין רחבים/עם ניווט בפינה.
- * ראה docs/plans/mobile-layout-wide.md (docs-repo).
+ * ראה the mobile-layout-wide brief.
  *
  * לא נוגע בבאנדל, ב-JS, או בלוגיקת isPhone/layout — CSS בלבד, נטען **אחרי**
  * app.css ב-index.html (order + specificity גוברים).
@@ -44,6 +44,16 @@
  * so we just reference the existing name.
  */
 .ow-folder-refresh-btn.is-spinning svg {
+  animation: ow-spin 0.6s linear infinite;
+}
+
+/*
+ * ── "Sync now" button spin (the pull-sync brief §2/§3ד) ──
+ * `.ow-sync-now-btn` (boot.js, installSyncNowTrigger) — same reuse of the
+ * `ow-spin` keyframes as the folder-refresh button above, same rationale
+ * (document-global @keyframes name, don't redefine it here).
+ */
+.ow-sync-now-btn.is-spinning svg {
   animation: ow-spin 0.6s linear infinite;
 }
 

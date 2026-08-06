@@ -38,7 +38,8 @@
  *   App.requestUrl — real fetch() impl (slice livesync-requesturl).
  *                      Supports GET/POST/PUT, headers, body (string + binary),
  *                      always returns body as base64 (Obsidian calls atob unconditionally).
- *                      See PLAN.md → "Updated approach (2026-05-11): direct fetch + CORS".
+ *                      Rationale: "Updated approach (2026-05-11): direct fetch + CORS" —
+ *                      why the earlier server-proxy design was rejected in favor of this.
  *
  * Vault path: read from localStorage / URL params (same mechanism as desktop).
  * All FS calls get ?vault=<id> query param so the server routes to the right vault.
@@ -163,7 +164,7 @@
     const id = slash !== -1 ? p.slice(0, slash) : p;
     if (window.__owLocalVaults && window.__owLocalVaults.get(id)) return id;
     let known = [];
-    try { known = JSON.parse(localStorage.getItem('ow-known-vault-ids') || '[]'); } catch (e) {}
+    try { known = JSON.parse(localStorage.getItem('ow-known-vault-ids') || '[]'); } catch (e) { }
     return known.indexOf(id) !== -1 ? id : null;
   }
 
@@ -189,7 +190,7 @@
       type: e.isDirectory ? 'directory' : 'file',
       size: e.size,
       mtime: e.mtime,
-      uri:   '',
+      uri: '',
       ctime: e.mtime,
     };
   }
@@ -402,17 +403,17 @@
       }
       const s = await res.json();
       return {
-        type:  s.isDirectory ? 'directory' : 'file',
-        size:  s.size,
+        type: s.isDirectory ? 'directory' : 'file',
+        size: s.size,
         mtime: s.mtime,
         ctime: s.mtime,
-        uri:   '',
+        uri: '',
       };
     },
 
     async rename(opts) {
       const from = fullPath({ path: opts.from, directory: opts.directory });
-      const to   = fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory });
+      const to = fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory });
       const res = await fetch('/api/fs/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -431,7 +432,7 @@
 
     async copy(opts) {
       const from = fullPath({ path: opts.from, directory: opts.directory });
-      const to   = fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory });
+      const to = fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory });
       const res = await fetch('/api/fs/copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -458,9 +459,9 @@
     async verifyIcloud() { return {}; },   // iOS iCloud check — not applicable
     async open() { return {}; },           // Android file opener — not applicable
 
-    async checkPerms()        { return { publicStorage: 'granted' }; },
-    async requestPermissions(){ return { publicStorage: 'granted' }; },
-    async requestPerms()      { return { publicStorage: 'granted' }; },
+    async checkPerms() { return { publicStorage: 'granted' }; },
+    async requestPermissions() { return { publicStorage: 'granted' }; },
+    async requestPerms() { return { publicStorage: 'granted' }; },
     // opfs-ux: File System Access API polyfill for the native "Open folder
     // as vault" flow (brief §3ג). Chromium-only (feature-detected below —
     // the native onClick handler treats a thrown Error whose message
@@ -471,7 +472,29 @@
     // e.contains('/') routes to the External fs instance) AND our own
     // owResolveNativeVaultId() both parse it consistently.
     async choose() {
-      if (!('showDirectoryPicker' in window)) throw capError('UNSUPPORTED', 'canceled: not supported');
+      if (!('showDirectoryPicker' in window)) {
+        // §3.5ג (calev PARTIAL, ממצא 2 — DoD#14): boot.js's own .catch (the
+        // interceptor's "Create a vault" path) only covers ITS OWN call to
+        // this method. The bundle has a SECOND call site to the exact same
+        // plugin method — "Use my existing vault" → "On this device" →
+        // choose-folder (vendor/obsidian-mobile/app.js, screen `kte`) —
+        // which awaits Filesystem.choose() directly with no .catch of its
+        // own; the UNSUPPORTED rejection there used to land in the console
+        // only (verified: real Firefox, zero user-visible feedback, screen
+        // doesn't move). Notifying HERE, at the single shared entry point
+        // every caller goes through, fixes both call sites at once without
+        // touching the (minified, unpatched) bundle — consistent with
+        // AGENTS.md's "prefer a shim over a patch" guidance. Not a double
+        // Notice for our OWN call site: the logic gate in
+        // installCreateVaultInterceptor (boot.js) already forces
+        // location_='app' whenever showDirectoryPicker is absent, so THIS
+        // branch is unreachable from our own interceptor on such browsers —
+        // only the bundle's own, un-gated call site ever reaches it.
+        if (typeof window.Notice === 'function') {
+          new window.Notice('External storage isn\'t supported in this browser — using internal storage instead.');
+        }
+        throw capError('UNSUPPORTED', 'canceled: not supported');
+      }
       let dir;
       try {
         dir = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -510,7 +533,7 @@
                 cb({ path: msg.path });
               });
             }
-          } catch (_) {}
+          } catch (_) { }
         };
         ws.onclose = () => { window.__owCapacitorWatcher = null; };
         window.__owCapacitorWatcher = { ws, _listeners: new Set() };
@@ -589,7 +612,7 @@
       if (eventName === 'change') {
         if (!window.__owCapacitorWatcher) {
           // HttpFilesystem, not the Filesystem Proxy — see §4 Commit 2.2.
-          HttpFilesystem.startWatch({}).catch(() => {});
+          HttpFilesystem.startWatch({}).catch(() => { });
         }
         // Defer until watcher is ready
         setTimeout(() => {
@@ -633,13 +656,13 @@
     if (typeof store.rename === 'function') {
       wrapped.rename = (opts) => store.rename(Object.assign({}, opts, {
         from: fullPath({ path: opts.from, directory: opts.directory }),
-        to:   fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory }),
+        to: fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory }),
       }));
     }
     if (typeof store.copy === 'function') {
       wrapped.copy = (opts) => store.copy(Object.assign({}, opts, {
         from: fullPath({ path: opts.from, directory: opts.directory }),
-        to:   fullPath({ path: opts.to,   directory: opts.toDirectory || opts.directory }),
+        to: fullPath({ path: opts.to, directory: opts.toDirectory || opts.directory }),
       }));
     }
     return wrapped;
@@ -675,6 +698,29 @@
     get: function (_t, prop) {
       const b = fsBackend();
       const v = b[prop];
+      // readFile — EISDIR at the vault root (docs/plans/
+      // electron-shim-foundation.md §3.3): the desktop-only
+      // `Vault.readRaw("")` empty-vault probe reads the vault root AS A
+      // FILE, and branches specifically on error CODE ("ENOENT" → vault
+      // discarded entirely, `this.vault=null,this.openVaultChooser(!0)`;
+      // anything else → treated as a harmless non-issue and ignored). A
+      // real filesystem answers "read a directory as a file" with EISDIR,
+      // not ENOENT — both backends' readFile would otherwise surface
+      // whatever their own 404/ENOENT path produces, which wrongly nukes a
+      // perfectly good, non-empty vault. Intercepted HERE (the Proxy's own
+      // get trap), not inside either backend, so it protects local AND
+      // folder AND server vaults with one check regardless of which
+      // backend fsBackend() picks — see vault-root-path.js for why
+      // `path === ''` alone doesn't catch every shape this can arrive in.
+      if (prop === 'readFile') {
+        return function (opts) {
+          const p = fullPath(opts || {});
+          if (window.__owVaultRootPath && window.__owVaultRootPath.isVaultRootPath(p)) {
+            return Promise.reject(capError('EISDIR', 'illegal operation on a directory, read'));
+          }
+          return v.call(b, opts);
+        };
+      }
       // bind is mandatory, not optional (avigail fix): OpfsStore.trash does
       // `return this.deleteFile(opts)` (opfs-store.js:331) — it relies on
       // `this`. Without bind, a destructured call (`const {trash}=Filesystem`)
@@ -724,6 +770,8 @@
     keys: () => Promise.resolve({ keys: [] }),
   };
 
+  let terms = (localStorage.getItem('obsidian-terms') || window.__obsidianTerms || '');
+
   const App = {
     getInfo:              () => Promise.resolve({ name: 'Obsidian', id: 'md.obsidian', build: '0', version: '1.12.7' }),
     getState:             () => Promise.resolve({ isActive: true }),
@@ -748,7 +796,7 @@
       // the user's own hosts — stays a DIRECT fetch, so the server is never in
       // the sync data path (preserves the direct-fetch sync architecture).
       let __owHost = '';
-      try { __owHost = new URL(url, location.href).hostname; } catch (_) {}
+      try { __owHost = new URL(url, location.href).hostname; } catch (_) { }
       if (/(^|\.)(github\.com|githubusercontent\.com|obsidian\.md)$/.test(__owHost)) {
         const pr = await fetch('/api/proxy-request', {
           method: 'POST',
@@ -781,15 +829,15 @@
         headers: reqHeaders,
         body: reqBody,
         credentials: 'omit',   // ‏native requestUrl ‏לא ‏שולח cookies; ‏auth ‏עובר ‏ב-Authorization header.
-                             // ‏`include` ‏שובר ‏endpoints ‏עם wildcard CORS (GitHub) — ‏אומת ‏ש-LiveSync→CouchDB
-                             // ‏משתמש ‏ב-basic-auth (‏לא cookies), ‏אז omit ‏בטוח. ‏ראה §6.
+        // ‏`include` ‏שובר ‏endpoints ‏עם wildcard CORS (GitHub) — ‏אומת ‏ש-LiveSync→CouchDB
+        // ‏משתמש ‏ב-basic-auth (‏לא cookies), ‏אז omit ‏בטוח. ‏ראה §6.
       });
       const respHeaders = {};
       res.headers.forEach((v, k) => { respHeaders[k] = v; });
       const respBuffer = await res.arrayBuffer();
       return { status: res.status, headers: respHeaders, body: arrayBufferToBase64(respBuffer) };
     },
-    setBackgroundColor:   noop,
+    setBackgroundColor: noop,
   };
 
   const SplashScreen = {
@@ -900,7 +948,7 @@
           pluginId,
           methodName,
           success,
-          data:  success ? dataOrError : undefined,
+          data: success ? dataOrError : undefined,
           error: success ? undefined : { message: dataOrError && dataOrError.message || String(dataOrError), code: dataOrError && dataOrError.code },
           save: false,
         });

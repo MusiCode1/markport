@@ -1,5 +1,12 @@
 # Vendor — extracted Obsidian bundles (regeneratable via scripts/update-obsidian.js)
+# Obsidian's own bundle — generated locally by scripts/update-obsidian-*.js.
+# BOTH patterns are required: `vendor/` matches a real directory, but NOT a
+# symlink named `vendor` (which is how every worktree points at the shared copy,
+# or at an isolated /tmp copy). Without the second line, `git add -A` commits the
+# symlink — it happened in f1153c1 and the merge then replaced dev/vendor,
+# the shared directory, with a dangling link into /tmp.
 vendor/
+vendor
 
 # Node
 node_modules/
@@ -31,7 +38,16 @@ docs-private/
 .worktrees/
 .playwright-cli/
 
-# build-time stub for the CF static-seed build (docs/plans/cf-mobile-seed.md
-# §3א) — generated + removed by build-assets.sh, safety net in case a build
-# is interrupted mid-way.
+# build-time stub for the CF static-seed build — generated + removed by
+# build-assets.sh, safety net in case a build is interrupted mid-way.
 src/deployments/cloudflare/plugins-generated.js
+
+# Internal verification/planning reports — never published; they live in the
+# private docs repo. Directory-level boundary so one `git add -A` can't leak one.
+reports/
+
+# Scratch vaults. Only the curated demo vault is tracked; anything else under
+# user-data/ is local test data and may hold real credentials
+# (.obsidian/plugins/*/data.json).
+user-data/*/
+!user-data/demo-vault/

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>sync integration self-test</title>
+  <style>
+    body { font: 13px/1.5 -apple-system, BlinkMacSystemFont, monospace, sans-serif; background: #1e1e1e; color: #ddd; margin: 0; padding: 16px; }
+    #summary { font-weight: bold; font-size: 16px; margin-bottom: 12px; }
+    #summary.pass { color: #4caf50; }
+    #summary.fail { color: #f44336; }
+    .pass-line { color: #4caf50; }
+    .fail-line { color: #f44336; font-weight: bold; }
+    pre#out { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h1>sync integration self-test</h1>
+  <p>Query params: <code>?baseUrl=http://127.0.0.1:4003&amp;token=test-token-abc</code></p>
+  <div id="summary">Running…</div>
+  <pre id="out"></pre>
+
+  <!-- Modules under test — commit 2 of the pull-sync brief.
+       remote-client.js/local-manifest.js/hash-store.js against a LIVE
+       sync-server (brief §4 commit 2: "integration: מול sync-server חי + OPFS") -->
+  <script src="/client-mobile/storage/opfs-store.js"></script>
+  <script src="/client-mobile/sync/hash-store.js"></script>
+  <script src="/client-mobile/sync/local-manifest.js"></script>
+  <script src="/client-mobile/sync/remote-client.js"></script>
+  <script>
+    (async function () {
+      const out = document.getElementById('out');
+      const summary = document.getElementById('summary');
+      let passCount = 0;
+      let failCount = 0;
+
+      function log(ok, label) {
+        const line = document.createElement('div');
+        line.className = ok ? 'pass-line' : 'fail-line';
+        line.textContent = (ok ? 'PASS — ' : 'FAIL — ') + label;
+        out.appendChild(line);
+        if (ok) passCount++; else failCount++;
+      }
+      function assert(cond, label) {
+        log(!!cond, label);
+        if (!cond) console.error('[sync-integration selftest] FAIL:', label);
+      }
+      async function assertThrowsCode(fn, code, label) {
+        let caught = null;
+        try { await fn(); } catch (e) { caught = e; }
+        assert(caught && caught.code === code, label);
+      }
+
+      const params = new URLSearchParams(location.search);
+      const baseUrl = params.get('baseUrl') || 'http://127.0.0.1:4003';
+      const token = params.get('token') || 'test-token-abc';
+
+      try {
+        if (!window.__owOpfsStore) throw new Error('opfs-store.js failed to load');
+        if (!window.__owSyncHashStore) throw new Error('hash-store.js failed to load');
+        if (!window.__owSyncLocalManifest) throw new Error('local-manifest.js failed to load');
+        if (!window.__owSyncRemoteClient) throw new Error('remote-client.js failed to load');
+
+        const vaultId = 'sync-integration-test-vault';
+        const helloText = '# Hello\nThis is a test note.\n';
+        const changedText = '# Will change\nOriginal content.\n';
+        // 80000-byte deterministic pseudo-random pattern — MUST match
+        // /tmp/sync-fixture-src/assets/big.bin exactly (same formula) so the
+        // local vs. remote hash comparison below is meaningful.
+        const bigBytes = new Uint8Array(80000);
+        for (let i = 0; i < bigBytes.length; i++) bigBytes[i] = (i * 37 + 11) % 256;
+
+        // base64 encode (chunked — mirrors opfs-store.js's own
+        // arrayBufferToBase64, needed here only to seed the OPFS vault via
+        // OpfsStore.writeFile, which requires base64 for binary writes).
+        function toBase64(bytes) {
+          const CHUNK = 0x8000;
+          let s = '';
+          for (let i = 0; i < bytes.length; i += CHUNK) {
+            s += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+          }
+          return btoa(s);
+        }
+
+        const store = window.__owOpfsStore.makeStore(vaultId);
+        const hashStore = window.__owSyncHashStore.makeStore(vaultId);
+
+        // Cleanup — idempotent, repeated runs start clean.
+        try {
+          const root = await navigator.storage.getDirectory();
+          const vaults = await root.getDirectoryHandle('vaults', { create: true });
+          await vaults.removeEntry(vaultId, { recursive: true });
+        } catch (_) { /* didn't exist yet — fine */ }
+        try { indexedDB.deleteDatabase('ow-sync:' + vaultId); } catch (_) {}
+
+        // ── seed OPFS with content IDENTICAL to /tmp/sync-fixture-src ──────
+        await store.writeFile({ path: 'notes/hello.md', data: helloText, encoding: 'utf8' });
+        await store.writeFile({ path: 'notes/changed.md', data: changedText, encoding: 'utf8' });
+        await store.writeFile({ path: 'assets/big.bin', data: toBase64(bigBytes) }); // binary, no encoding
+        await store.writeFile({ path: 'local-only.md', data: 'not on server', encoding: 'utf8' });
+
+        // ── 1. local-manifest: buildLocalManifest hashes raw OPFS bytes ────
+        const localManifest = await window.__owSyncLocalManifest.buildLocalManifest(store, vaultId, hashStore);
+        assert(localManifest['notes/hello.md'] && typeof localManifest['notes/hello.md'].hash === 'string' && localManifest['notes/hello.md'].hash.length === 64,
+          'buildLocalManifest: notes/hello.md has a 64-char hex hash');
+        assert(localManifest['assets/big.bin'] && localManifest['assets/big.bin'].size === 80000,
+          'buildLocalManifest: assets/big.bin size === 80000');
+        assert(localManifest['local-only.md'], 'buildLocalManifest includes local-only file (not filtered by remote)');
+        assert(!Object.prototype.hasOwnProperty.call(localManifest, ''), 'buildLocalManifest never includes the root itself');
+
+        // hash-cache round trip: re-running buildLocalManifest with the SAME
+        // hashStore must produce the SAME hashes without re-reading OPFS
+        // (functionally verified by hash equality; the read-skip itself is
+        // an internal optimization, not separately observable here).
+        const localManifest2 = await window.__owSyncLocalManifest.buildLocalManifest(store, vaultId, hashStore);
+        assert(localManifest2['notes/hello.md'].hash === localManifest['notes/hello.md'].hash,
+          'buildLocalManifest is stable across repeated calls (hash-cache)');
+
+        // ── 2. remote-client: manifest() + blob() against LIVE sync-server ─
+        const remote = window.__owSyncRemoteClient.RemoteClient({ baseUrl: baseUrl, token: token });
+        const remoteManifest = await remote.manifest();
+        assert(remoteManifest && Array.isArray(remoteManifest.entries) && remoteManifest.entries.length === 3,
+          'remote.manifest() returns 3 entries (fixture: hello.md, changed.md, big.bin)');
+
+        const remoteHello = remoteManifest.entries.filter(e => e.path === 'notes/hello.md')[0];
+        assert(remoteHello, 'remote manifest contains notes/hello.md');
+
+        // ── 3. hash IDENTITY between local (SubtleCrypto, real browser) and
+        //      remote (server, node crypto) on the SAME content — spike
+        //      §0.1(2), re-verified here in-browser (not just bun). ─────────
+        assert(remoteHello && localManifest['notes/hello.md'].hash === remoteHello.hash,
+          'hash identity: local SubtleCrypto hash === remote sha256 for identical content (notes/hello.md)');
+
+        const remoteBig = remoteManifest.entries.filter(e => e.path === 'assets/big.bin')[0];
+        assert(remoteBig && localManifest['assets/big.bin'].hash === remoteBig.hash,
+          'hash identity holds for >64KB binary too (assets/big.bin)');
+
+        // ── 4. blob() fetch — byte-exact for both text and >64KB binary ────
+        const helloBuf = await remote.blob(remoteHello.hash);
+        const helloTextFetched = new TextDecoder().decode(helloBuf);
+        assert(helloTextFetched === helloText, 'remote.blob() returns byte-exact content for notes/hello.md');
+
+        const bigBuf = await remote.blob(remoteBig.hash);
+        const bigFetched = new Uint8Array(bigBuf);
+        assert(bigFetched.length === 80000, 'remote.blob() for big.bin: correct length (80000)');
+        let bigMatches = bigFetched.length === bigBytes.length;
+        if (bigMatches) {
+          for (let i = 0; i < bigBytes.length; i++) {
+            if (bigFetched[i] !== bigBytes[i]) { bigMatches = false; break; }
+          }
+        }
+        assert(bigMatches, 'remote.blob() for big.bin: byte-exact match (>64KB)');
+
+        // ── 5. 401 handling — wrong token → EAUTH, no retry-loop ───────────
+        // blob() uses notes/changed.md's hash — NOT yet blob()-fetched by
+        // the good `remote` above — deliberately, so this exercises a real
+        // network 401, not a browser-HTTP-cache hit on an already-fetched
+        // immutable blob URL (see remote-client.js's blob() comment: the
+        // Cache-Control:immutable response isn't auth-scoped by the browser).
+        const remoteChanged = remoteManifest.entries.filter(e => e.path === 'notes/changed.md')[0];
+        const badRemote = window.__owSyncRemoteClient.RemoteClient({ baseUrl: baseUrl, token: 'wrong-token' });
+        await assertThrowsCode(() => badRemote.manifest(), 'EAUTH', 'remote.manifest() with wrong token throws {code:EAUTH}');
+        await assertThrowsCode(() => badRemote.blob(remoteChanged.hash), 'EAUTH', 'remote.blob() with wrong token throws {code:EAUTH} (unfetched hash)');
+
+        // ── 6. hash-store: get/upsert/all/remove round trip (synced half) ──
+        assert((await hashStore.get('notes/hello.md')) === undefined, 'hashStore.get on unseeded path returns undefined (⊥)');
+        await hashStore.upsert('notes/hello.md', remoteHello.hash);
+        assert((await hashStore.get('notes/hello.md')) === remoteHello.hash, 'hashStore.get after upsert returns the stored hash');
+        const all = await hashStore.all();
+        assert(all['notes/hello.md'] === remoteHello.hash, 'hashStore.all() includes the upserted path');
+        await hashStore.remove('notes/hello.md');
+        assert((await hashStore.get('notes/hello.md')) === undefined, 'hashStore.remove clears the entry');
+
+      } catch (err) {
+        failCount++;
+        const line = document.createElement('div');
+        line.className = 'fail-line';
+        line.textContent = 'FAIL — unexpected exception: ' + (err && err.message || err);
+        out.appendChild(line);
+        console.error('[sync-integration selftest] unexpected exception', err);
+      }
+
+      if (failCount === 0) {
+        summary.textContent = 'ALL PASS (' + passCount + ')';
+        summary.className = 'pass';
+      } else {
+        summary.textContent = 'FAILED: ' + failCount + ' (passed ' + passCount + ')';
+        summary.className = 'fail';
+      }
+    })();
+  </script>
+</body>
+</html>

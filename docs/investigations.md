@@ -48,8 +48,9 @@ LiveSync (Obsidian plugin) מעולם לא יודע ש-Filesystem (Capacitor plu
 - `/` — desktop bundle (`obsidian/app.js`) + electron shims (`client/`). ראה `client/boot.js`. שימושי כ-fallback.
 - `/mobile` — mobile bundle (`obsidian-mobile/app.js`) + Capacitor shim (`client-mobile/`). זה ה-runtime המועדף; ראה הסעיפים [PluginHeaders mechanism](#pluginheaders), [Capacitor plugin inventory](#capacitor-plugin-inventory), ו-[`__owPlatform` runtime API](#owplatform-api).
 
-**Build-time patches על ה-mobile bundle** (`scripts/patch-obsidian-mobile.js`):
-שלושה regex patches על `obsidian-mobile/app.js` חושפים את אובייקט ה-Platform כ-`window.__owPlatform` וממזגים `window.__owPlatformOverrides` לתוך ה-IIFE. כך `client-mobile/boot.js` שולט ב-flag `isMobile` (UI layout) **לפני** ש-`app.js` רץ. ראה walkthrough.md 19:30 לפרטים מלאים.
+**Runtime interception של ה-Platform object** (`client-mobile/platform-bridge.js`):
+יירוט `Object.defineProperty` (לא regex patch על app.js) חושף את אובייקט ה-Platform כ-`window.__owPlatform` ונועל את `isMobile`/`isMobileApp`/`isDesktop` לפי `window.__owPlatformOverrides`. כך `client-mobile/boot.js` שולט ב-flag `isMobile` (UI layout) **לפני** ש-`app.js` רץ — ראה `docs/plans/runtime-platform-descriptors.md`.
+**אין יותר build-time patches על ה-mobile bundle** (`docs/plans/zero-patches.md`, 2026-07-27) — `scripts/patch-obsidian-mobile.js` נשאר קיים כתשתית עם `PATCHES = []`, למקרה שגרסת Obsidian עתידית תדרוש patch. הפאטצ' האחרון (`vault-profile-on-desktop-layout`) הוסר: פאנל ה-vault-profile בתחתית הסיידבר ממשיך לרנדר במצב desktop-layout כי `client-mobile/platform-bridge.js` נועל את `isDesktopApp` ישירות — לא בזכות עריכת app.js.
 
 **System plugin overlay** (`server/system-plugins.js`):
 תוספי Obsidian מהריפו (`<repo>/plugins/`) מוזרקים כ-virtual entries לכל vault. ה-vault עצמו אינו מתלכלך — `community-plugins.json` ממוזג ב-read ומופשט ב-write. הראשון: `obsidian-web-layout` (ribbon + commands להחלפת layout). מקור עומק: [Virtual plugin overlay — deep dive](#virtual-overlay-deep-dive).
@@ -58,10 +59,7 @@ LiveSync (Obsidian plugin) מעולם לא יודע ש-Filesystem (Capacitor plu
 שני runtimes צורכים את `/api/bootstrap` ל-cold boot מהיר. ה-mobile shim בודק את `window.__owBootstrapCache` לפני HTTP על כל `readFile`/`stat`/`readdir` (88% hit rate). שלושה env vars לדפלוייר: `BOOTSTRAP_DISABLED`, `BOOTSTRAP_MAX_FILE_KB`, `BOOTSTRAP_MAX_TOTAL_MB`. מגבלות ידועות: [Workers לא רואים את ה-cache](#mobile-bootstrap-cache-workers), [watch-event firehose ב-LiveSync](#mobile-bootstrap-cache-firehose).
 
 **מקורות מידע משלימים:**
-- `docs/walkthrough.md` — יומן פיתוח כרונולוגי (19:30 build-time patches, 20:05 system plugin overlay, 17:00 בניית ה-Capacitor shim).
-- `PLAN.md` — סטטוס, roadmap, ו-LiveSync integration plan.
 - `docs/system-plugin-dev-guide.md` — איך להוסיף system plugin חדש.
-- `docs/dev-setup.md` — workflow של דפדפן gui-host ל-QA.
 
 ---
 
@@ -166,7 +164,7 @@ GET /api/fs/read?path=.obsidian/plugins/obsidian-web-layout/main.js   → 200 (f
 
 ### כלי ניפוי שגיאות — globals זמינים ב-DevTools
 
-שלושה globals מוזרקים ב-boot שימושיים לחקירה. **כסוכן: הרץ אותם דרך `playwright-cli evaluate` או בקש מהמשתמש להריץ ב-DevTools.**
+שלושה globals מוזרקים ב-boot שימושיים לחקירה. הרץ אותם ב-DevTools console.
 
 ---
 
@@ -293,19 +291,15 @@ const wrap = (obj, name, label) => {
 ```
 שימוש: `wrap(view, "acceptRename", "acceptRename")`.
 
-**גישה ל-eval מ-playwright-cli:**
-```bash
-ssh gui-host "... && playwright-cli eval --raw 'async () => { ... return JSON.stringify(...); }'"
-```
-- **חייב** `--raw` כדי לקבל את הreturn value נקי.
-- **חייב** `JSON.stringify` כי playwright-cli serializer לפעמים נחנק על objects מורכבים.
-- מתודות שמחזירות Promise - חייב async או .then()/.catch().
-- **לפעמים eval מעוכב** אם אין reload - אובייקטים נשארים בזיכרון; בכל מקרה חוזרים אחרי כל שינוי בקוד.
+**הערות על הרצת eval מכלי אוטומציה** (Playwright/CDP וכד'):
+- החזר `JSON.stringify(...)` — serializers רבים נחנקים על objects מורכבים.
+- מתודות שמחזירות Promise — חייב async או `.then()`/`.catch()`.
+- ללא reload אובייקטים נשארים בזיכרון; בכל מקרה הם חוזרים אחרי כל שינוי בקוד.
 
 **הפעלת השרת (עם auto-reload):**
 
 ```bash
-cd ~/projects/obsidian-web/server
+cd src/runtime-server/server
 nohup npm run dev > /tmp/obsidian-web-server.log 2>&1 &
 ```
 
@@ -321,12 +315,9 @@ kill $(lsof -ti :3000) 2>/dev/null
 - `tail -f /tmp/obsidian-web-server.log`
 - ה-middleware של request logging מסנן רק `/api`, `/i18n`, `/lib`. אם צריך יותר - להרחיב.
 
-**גישה ל-console messages ב-browser:**
-```bash
-ssh gui-host "ls -t ~/Documents/playwright-cli/results/console-* | head -1 | xargs cat"
-```
-- זה מצטבר עם הזמן. בואו לעיתים נרענן עם `goto` כדי לקבל console חדש.
-- שימושי לסנן ב-`grep TRACE` כדי לקבל רק את הtraces שלנו.
+**גישה ל-console messages ב-browser:** ה-DevTools console, או קובץ ה-console שכלי
+האוטומציה שלך כותב. הלוג מצטבר — רענן עם `goto` כדי לקבל console נקי, וסנן
+ב-`grep TRACE` כדי לראות רק traces שלנו.
 
 ---
 
@@ -380,6 +371,89 @@ GET 400 /api/fs/readdir?path=.obsidian%2Fappearance.json
 
 #### אפשרות עתידית: pre-flight bundle
 אנחנו יכולים להוסיף `/api/bootstrap` שמחזיר את **כל** קבצי `.obsidian/*.json` שקיימים במכה אחת. זה יחסוך 15+ HTTP round-trips ב-boot. הoptimization הזה ב-PLAN Phase 2.
+
+---
+
+### B-006: הדלקת `isDesktopApp` פותחת את שער `isDesktopOnly` — פלאגין desktop-only נטען ואז נופל בשקט
+
+**סטטוס:** נמדד ותועד (`docs/plans/desktop-layout-now.md` §10ב/DoD#15 — "מדידה ותיעוד בלבד,
+לא לחסום"). **לא תוקן, במכוון** — מחוץ ל-scope של הסלייס שהדליק את הדגל.
+
+#### מה נמדד
+
+שני אתרי-הקריאה היחידים ב-`vendor/obsidian-mobile/app.js` שבודקים `isDesktopOnly`:
+
+```js
+(S=!bn.isDesktopApp&&u.isDesktopOnly)&&f.createDiv({cls:"mod-warning",text:F1.labelUnsupported()})
+// ...
+if(!bn.isDesktopApp&&n.isDesktopOnly)return[2,!1];
+```
+
+לפני `desktop-layout-now`, `bn.isDesktopApp` היה `false` קבוע ⇒ `!bn.isDesktopApp` תמיד
+`true` ⇒ השער תמיד נסגר — כל פלאגין (community/system) עם `manifest.isDesktopOnly:true`
+היה מסורב טעינה + מקבל תווית "Unsupported" בחנות. **עכשיו, בפריסת-דסקטופ,
+`bn.isDesktopApp===true` ⇒ `!bn.isDesktopApp===false` ⇒ שני האתרים "עוברים" — כל
+פלאגין desktop-only **נטען בהצלחה**.
+
+אומת חי (Chromium/Playwright, `/vault/0000demo0000demo`, layout=desktop): שתלתי פלאגין
+עם `isDesktopOnly:true` בכספת — `enablePlugin()` החזיר `true` והפלאגין הופיע ב-
+`app.plugins.plugins`. בתוך אותו פלאגין `require('fs')` עדיין מחזיר `undefined`
+(כצפוי — הריצה עדיין דפדפן, לא Node/Electron אמיתי).
+
+#### ההשלכה (לא תוקנה)
+
+זה **שינוי-התנהגות אמיתי מול המשתמש**, לא רק פנימי: פלאגין desktop-only עובר מ"סירוב
+מנומק בזמן טעינה + תווית *Unsupported* בחנות" ל"נטען בהצלחה, ואז נופל מאוחר יותר ברגע
+שהוא באמת נוגע ב-API של Node/Electron שלא ממומש (למשל `require('fs')===undefined`)".
+משתמש שמתקין פלאגין desktop-only יראה כישלון מאוחר ופחות ברור, במקום סירוב מיידי וברור.
+
+#### למה לא תוקן כאן
+
+מחוץ ל-scope של `desktop-layout-now` (§2 "בחוץ" בבריף: "שער `isDesktopOnly`" מפורש
+כ"מדידה בלבד"). אין החלטה עדיין על מדיניות (לחסום את השער ידנית? להראות אזהרה ברורה
+יותר? לתעד את הפלאגינים הידועים שנשברים?) — משאיר פתוח למרדכי/לסלייס הבא.
+
+---
+
+### B-007: `<webview>` בקנבס/Web Viewer — `HTMLUnknownElement` בדפדפן, לא נגיש כברירת-מחדל
+
+**סטטוס:** נמדד ותועד (DoD#15). **לא שבור בפועל היום** — הפלאגין שמשתמש בזה כבוי כברירת-מחדל.
+
+#### מה נמדד
+
+הבאנדל עושה `doc.createElement("webview")` בשני מקומות (Web Viewer core plugin, גם
+בתוך קנבס) ואז קורא למתודות כמו `.isLoading()`/`.loadURL()`/`.getWebContentsId()` —
+אלה קיימות רק על התג `<webview>` האמיתי של Electron (Chromium embedder API), לא בדפדפן
+רגיל. אומת ישירות:
+
+```js
+document.createElement('webview').constructor.name   // "HTMLUnknownElement"
+document.createElement('webview').isLoading           // undefined
+document.createElement('webview').loadURL             // undefined
+```
+
+⇒ אם קוד היה נוגע ב-`webview.isLoading()` היה זורק `TypeError: … is not a function`.
+
+**אבל**: הפלאגין הפנימי `webviewer` (Web Viewer) **קיים** ברשימת ה-31 core plugins
+(`app.internalPlugins.plugins.webviewer` קיים) **אך `enabled===false` כברירת-מחדל** —
+לא נבדק שינוי לעומת base (לא רלוונטי, ברירת-המחדל של הפלאגין עצמו לא קשורה ל-
+`isDesktopApp`). ⇒ הנתיב השבור **לא נגיש** למשתמש שלא מפעיל את הפלאגין ידנית.
+
+#### ההשלכה (פתוחה)
+
+אם משתמש יפעיל את Web Viewer ידנית (Settings → Core plugins), הוא ייתקל ב-TypeError
+בפעם הראשונה שהפלאגין ינסה לטעון URL בתוך `<webview>`. לא נמדד/תועד מעבר לזה — אין
+כרגע shim ל-`<webview>` (מחוץ ל-scope, `docs/plans/desktop-layout-now.md` §2).
+
+---
+
+### B-008: `sec:` keys (SecureStorage) — לא הושפעו מהסלייס, קיימים גם ב-base
+
+**סטטוס:** נמדד, **אין רגרסיה**. הטאב "Keychain" קיים ב-Settings **גם ב-`717d193`**
+(הבסיס, לפני `desktop-layout-now`) — הושוו 18 הטאבים בין base לסלייס, **זהים לחלוטין**
+(אומת עצמאית, לא רק סמכתי על דוח האימות). ⇒ הדלקת `isDesktopApp` לא פתחה/סגרה שום
+דבר בנתיב הזה. ראה גם רשומת SecureStorage הקיימת למעלה (`get`/`set`/`remove`/
+`isKeyExists`/`getPlatformSupportLevel` על `localStorage` עם prefix `sec:`, לא מוצפן).
 
 ---
 
@@ -466,7 +540,7 @@ for (const f of ROOT_FILES) {
 
 ## כיוון מיושם: obsidian-web-mobile — Capacitor approach
 
-> נכון ל-2026-05-11 הגישה מיושמת בפועל: ה-mobile bundle נטען עם CapacitorAdapter, ו-3 build-time patches על `obsidian-mobile/app.js` נותנים לנו שליטה ב-layout (mobile/desktop) דרך `window.__owPlatformOverrides`. ראה "Build-time patch approach (implemented)" בהמשך הסעיף.
+> נכון ל-2026-05-11 הגישה מיושמת בפועל: ה-mobile bundle נטען עם CapacitorAdapter, ו-3 build-time patches על `obsidian-mobile/app.js` נתנו לנו שליטה ב-layout (mobile/desktop) דרך `window.__owPlatformOverrides`. **עדכון 2026-07-26** (`docs/plans/runtime-platform-descriptors.md`): 3 מתוך ה-4 patches הוסרו והוחלפו ביירוט `Object.defineProperty` בזמן ריצה (`client-mobile/platform-bridge.js`); patch יחיד נותר (`vault-profile-on-desktop-layout`). ראה "Build-time patch approach (implemented)" בהמשך הסעיף — מתועד כפי-שהיה, לרפרנס היסטורי. **עדכון 2026-07-27** (`docs/plans/zero-patches.md`): גם הפאטצ' היחיד שנותר הוסר — אפס build-time patches על ה-mobile bundle כיום.
 
 
 
@@ -575,11 +649,12 @@ var Yl = {  // (Yl=desktop, bn=mobile — אותו אובייקט)
 };
 ```
 
-`isPhone` נקבע לפי **viewport width** (media query ~630px), **לא** לפי `isMobile`!
+`isPhone` נקבע לפי **viewport width** (media query ~600px — נמדד ישירות ב-DoD#6 של
+docs/plans/runtime-platform-descriptors.md, resize 1280→520 הופך אותו; תוקן מ-"~630px" הישן), **לא** לפי `isMobile`!
 
 #### מה שולט במה:
 
-| Feature | נשלט ע"י | desktop viewport (≥630px) עם isMobile=true |
+| Feature | נשלט ע"י | desktop viewport (≥600px) עם isMobile=true |
 |---|---|---|
 | Split panes | `!isPhone` | **עובד** ✅ |
 | Ribbon | `!isPhone` | **עובד** ✅ |
@@ -695,7 +770,22 @@ Dv && document.body.addClass("is-android");
 - `adapter instanceof FileSystemAdapter` → `false` → plugins לוקחים mobile code paths
 - אין sync XHR בכלל → אין deprecation warning, אין blocking
 
-### Build-time patch approach (implemented)
+### Build-time patch approach (implemented, ואז הוחלף חלקית — ראה עדכון)
+
+> **עדכון 2026-07-26** (`docs/plans/runtime-platform-descriptors.md`): הסעיף הזה מתאר את
+> המצב **כפי שהיה עד לסלייס הזה** — נשאר כרפרנס היסטורי (הרציונל תקף גם למנגנון החדש).
+> patches 1-3 בטבלה למטה **הוסרו**; המנגנון שהם מימשו קיים היום כ-runtime interception
+> ב-`client-mobile/platform-bridge.js` (יירוט `Object.defineProperty`, לא regex על app.js).
+> patch 4 (`vault-profile-on-desktop-layout`, לא בטבלה הזו) **היה עדיין קיים בזמן כתיבת
+> העדכון הזה**. שלושת ה-"Hooks" וה-"עקרונות" למטה עדיין תקפים כהתנהגות-נצפית, **חוץ**
+> מ"ההחלטה היא boot-time, לא runtime" — זה כבר לא נכון: הלכידה/נעילה של Platform קורות
+> ב-runtime, רק ה-**overrides object עצמו** עדיין נקבע ב-boot-time (`boot.js`).
+>
+> **עדכון 2026-07-27** (`docs/plans/zero-patches.md`): patch 4 גם הוא **הוסר**.
+> `PATCHES.length === 0` — אין יותר build-time patches על ה-mobile bundle כלל;
+> `scripts/patch-obsidian-mobile.js` נשאר כתשתית ריקה. הפאנל vault-profile ממשיך לרנדר
+> במצב desktop-layout כי `platform-bridge.js` נועל את `isDesktopApp` ישירות (ראה
+> LOCKED_FLAGS שם) — לא כי הפאטצ' עדיין קיים.
 
 **הבעיה שצריך לפתור:** ה-mobile bundle קובע ב-IIFE שלו `bn.isMobile=!0` ומוסיף `is-mobile` ל-body. גם על viewport דסקטופ זה גורם ל-170 CSS rules של mobile להופיע, mobile toolbar, ו-`isMobile=true` שמוטמע ב-`window.app` כשהוא נוצר. גישת ה-MutationObserver שהיתה ב-boot.js ניסתה לפרק את זה אחרי שה-workspace נטען — אבל זה ייצר flicker וגם לא שלט ב-`app.isMobile` שנקבע בזמן ההבנייה של ה-App.
 
@@ -711,7 +801,7 @@ Dv && document.body.addClass("is-android");
 
 **Hooks שהפתרון פותח:**
 
-- `window.__owPlatformOverrides = { isMobile: false }` ב-`client-mobile/boot.js` (לפני שה-bundle נטען) → desktop layout גם כשbundle הוא mobile.
+- `window.__owPlatformOverrides = { isMobile: false, isDesktop: true }` ב-`client-mobile/boot.js` (לפני שה-bundle נטען) → desktop layout גם כשbundle הוא mobile. ⚠️ **`isDesktop: true` חובה** מ-2026-07-27 (`docs/plans/zero-patches.md` §1ג) — בלי זה `isMobile`/`isDesktopApp` מתבדרים (`!isMobile===true` אבל `isDesktopApp===false`) ופאנל ה-vault-profile נעלם בשקט, בלי באנר.
 - `window.__owPlatform` (אחרי שה-bundle רץ) → גישה ל-flags של Platform מהקליינט (plugin עתידי, debugging).
 - localStorage key `obsidian-web:layout-mode` (`auto` | `mobile` | `desktop`) — `boot.js` קורא וקובע את ה-overrides.
 
@@ -891,7 +981,7 @@ function pm(name) { return { name, rtype: 'promise' }; }
 
 | Plugin.method | מצב | מה צריך |
 |---|---|---|
-| `App.requestUrl` | מחזיר `{}` (no-op) | implementation אמיתי דרך `fetch()` — נדרש עבור LiveSync (CouchDB calls). ראה PLAN.md "Updated approach (2026-05-11): direct fetch + CORS". |
+| `App.requestUrl` | מחזיר `{}` (no-op) | implementation אמיתי דרך `fetch()` — נדרש עבור LiveSync (CouchDB calls). ר' "Updated approach (2026-05-11): direct fetch + CORS" (capacitor-shim.js, תיעוד-בגוף). |
 
 ### Call flow
 
@@ -902,41 +992,67 @@ function pm(name) { return { name, rtype: 'promise' }; }
 ## `window.__owPlatform` runtime API {#owplatform-api}
 
 > Added: 2026-05-11. ה-mechanism שמאפשר control בזמן ריצה על ה-Platform flags של Obsidian.
+> **עדכון 2026-07-26** (`docs/plans/runtime-platform-descriptors.md`): המקור עבר מ-3
+> build-time patches ל-runtime interception (`client-mobile/platform-bridge.js`,
+> יירוט `Object.defineProperty`). ה-API הציבורי (שני ה-globals למטה) **זהה** —
+> זו הסיבה שהמעבר לא שבר צרכנים כמו `obsidian-web-layout/main.js:65`. מה שהשתנה:
+> `window.__owPlatform` הפך מ-plain-object חשוף ל-**reference שנלכד** אחרי אימות-צורה,
+> ו-`isMobile`/`isMobileApp`/`isDesktop` הפכו מ-data properties כתיבים ל-**accessors נעולים**
+> (getter קבוע + setter no-op) — כתיבה אליהם כבר לא "תופסת" בכלל, אפילו לא באופן לא-retroactive.
 
-הסעיף הזה מתעד את ה-API שנפתח על ידי שלושת ה-build-time patches ב-`scripts/patch-obsidian-mobile.js`. תיאור ה-patches עצמם נמצא ב-walkthrough 19:30 וב-["Build-time patch approach (implemented)"](#build-time-patch-approach-implemented) בסעיף ה-Capacitor approach.
+הסעיף הזה מתעד את ה-API הציבורי, שמומש קודם ע"י 3 build-time patches (עדיין מתועדים
+ב-["Build-time patch approach (implemented)"](#build-time-patch-approach-implemented)
+כרפרנס היסטורי) והיום ע"י runtime interception.
 
 ### שני globals שונים — אל תבלבל ביניהם
 
 #### `window.__owPlatform` — reference חי לאובייקט Platform
 
-נחשף ע"י Patch #1 (`expose-platform`). הוא **אותו אובייקט** שה-bundle משתמש בו פנימית כדי לבדוק `isMobile`, `isPhone`, `isDesktopApp` וכו'. אין `getter` ו-`setter`; זו השמה ישירה.
+נחשף ע"י `client-mobile/platform-bridge.js` אחרי לכידה מאומתת (`'isMobileApp' in P && 'canPinSidebar' in P`).
+הוא **אותו אובייקט** שה-bundle משתמש בו פנימית כדי לבדוק `isMobile`, `isPhone`, `isDesktopApp` וכו'.
 
 ```js
 window.__owPlatform.isMobile      // true / false  (קריא)
-window.__owPlatform.isPhone       // נגזר מ-viewport (~630px), קריא לרוב
-window.__owPlatform.isDesktopApp  // false ב-mobile bundle תמיד
+window.__owPlatform.isPhone       // נגזר מ-viewport (~600px), קריא לרוב
+window.__owPlatform.isDesktopApp  // true בפריסת-דסקטופ, false במובייל/אמולציה —
+                                   // ⚠️ עדכון 2026-07-27 (docs/plans/desktop-layout-now.md
+                                   // §1): לפני הסלייס הזה זה היה false קבוע (אין electron
+                                   // shim). עכשיו נעול כמו שלושת האחרים (למטה).
 ```
 
-**ניתן לכתוב אליו** — אבל זה לא retroactive. שינוי `__owPlatform.isMobile = false` אחרי שה-app נטען לא יזיז את ה-`is-mobile` class מה-body, ולא ימחזר UI שכבר נבנה. הוא רק ישפיע על קוד שבודק את ה-flag בעתיד (למשל לוגיקת `canSplit` של workspace חדש). הדרך הבטוחה לשנות layout: לעדכן `__owPlatformOverrides` ו-reload.
+**`isMobile`/`isMobileApp`/`isDesktop` נעולים — כתיבה אליהם היא no-op** (accessor עם
+`set(){}` ריק, ראה `platform-bridge.js` §3.2). שאר השדות (`isPhone`, `isTablet`,
+`canSplit` וכו') נשארים plain data properties, כמו קודם — Obsidian עצמו ממשיך לכתוב
+אליהם (למשל `wn()` על שינוי viewport). הדרך הבטוחה לשנות layout: לעדכן
+`__owPlatformOverrides` ו-reload — לא לכתוב ל-`__owPlatform` ישירות.
 
-#### `window.__owPlatformOverrides` — overrides שמיושמים ב-init
+#### `window.__owPlatformOverrides` — overrides שנקראים ב-install
 
-נקרא ע"י Patch #2 (`iife-overrides`) **בזמן ש-IIFE של ה-bundle מאתחל את ה-Platform**:
+נקרא ע"י `client-mobile/platform-bridge.js` **בעצלתיים, ברגע שה-Platform האמיתי נלכד**
+(לא ב-init של ה-IIFE — ראה brief §3.0 לתרשים-הסדר המלא):
 
 ```js
-// ה-bundle אחרי patch 2:
-Object.assign(bn, { isMobileApp:!0, isMobile:!0, isAndroidApp:Dv, isIosApp:Tv },
-              window.__owPlatformOverrides || {});
+// platform-bridge.js locks exactly these FOUR flags to window.__owPlatformOverrides
+// (עדכון 2026-07-27, docs/plans/desktop-layout-now.md §1 — isDesktopApp נוסף; לפני
+// כן היו רק שלושה, וההערה כאן טענה ש-isDesktopApp "נקרא ונענה בכוונה" — זה היה נכון
+// לפני שהיה electron shim, ולא נכון יותר):
+LOCKED_FLAGS = ['isMobile', 'isMobileApp', 'isDesktop', 'isDesktopApp'];
 ```
 
-`Object.assign` overload האחרון מנצח, אז כל מה ש-`__owPlatformOverrides` מכיל מנצח את ברירות המחדל של ה-bundle.
+מה ש-`__owPlatformOverrides` מכיל מנצח את ברירות המחדל של ה-bundle לארבעת הדגלים האלה
+בלבד; `isPhone`/`isTablet` נקראים ונענים בכוונה (viewport-based, לא ננעלים — ראה
+`platform-bridge.js`'s own LOCKED_FLAGS comment).
 
-**חובה להגדיר אותו לפני שה-bundle נטען.** ב-`client-mobile/boot.js` זה קורה ב-sync code לפני ה-`fetch()` ל-bootstrap (שאחריו ה-scripts מוזרקים). אם תגדיר אותו אחרי ש-`app.js` נטען, אין לזה השפעה.
+**חובה להגדיר אותו לפני שה-bundle נטען.** ב-`client-mobile/boot.js` זה קורה ב-sync code לפני ה-`fetch()` ל-bootstrap (שאחריו ה-scripts מוזרקים). אם תגדיר אותו אחרי ש-`app.js` נטען, אין לזה השפעה — ה-bridge כבר קרא אותו פעם אחת, ב-install.
 
 ```js
 // דוגמה — חייב לרוץ לפני <script src="/obsidian-mobile/app.js">:
-window.__owPlatformOverrides = { isMobile: false };
+window.__owPlatformOverrides = { isMobile: false, isDesktop: true };
 // תוצאה: bn.isMobile יהיה false למרות שברירת המחדל היא true.
+// ⚠️ isDesktop:true חובה (docs/plans/zero-patches.md §1ג) — computeWant() גוזר את
+// isDesktopApp מ-overrides.isDesktop, לא מ-overrides.isMobile. בלי isDesktop:true כאן,
+// isDesktopApp נשאר false בעוד ש-!isMobile===true — דיברגנציה, ופאנל ה-vault-profile
+// (שגייטד על isDesktopApp בבאנדל עצמו, ללא patch יותר) לא ירונדר.
 ```
 
 `isMobileApp` **לא** משתנה (זה מה שבוחר ב-CapacitorAdapter במקום FileSystemAdapter). רק ה-flags הקוסמטיים ו-layout flags ניתנים ל-override.
@@ -948,7 +1064,7 @@ window.__owPlatformOverrides = { isMobile: false };
 | Value | תוצאה |
 |---|---|
 | `mobile` | `__owPlatformOverrides = { isMobile: true }` — mobile UI תמיד |
-| `desktop` | `__owPlatformOverrides = { isMobile: false }` — desktop UI תמיד |
+| `desktop` | `__owPlatformOverrides = { isMobile: false, isDesktop: true }` — desktop UI תמיד ⚠️ `isDesktop: true` חובה, ראה §1ג לעיל |
 | `auto` (ברירת מחדל) | viewport-based: `< 900` רוחב או `< 600` גובה → mobile, אחרת desktop |
 | חסר | `auto` |
 
@@ -980,7 +1096,7 @@ __owPlatformOverrides // מה שהגדרנו ב-boot.js
 
 ### מגבלות
 
-- שינוי runtime ל-`__owPlatform.isMobile` לא משפיע על workspace קיים, רק על קוד עתידי שיבדוק את ה-flag.
+- `__owPlatform.isMobile`/`isMobileApp`/`isDesktop` נעולים (accessor, `set` no-op) — כתיבה אליהם היא no-op שקט, לא רק "לא-רטרואקטיבי". השדות האחרים (`isPhone`, `isTablet` וכו') נשארים כתיבים.
 - `isPhone` נקבע מ-media query על viewport ב-runtime ולא בידי `__owPlatformOverrides`. אם תרצה לשנות אותו תיאלץ לעדכן ידנית את ה-property (וזה לא יעדכן רכיבי UI שכבר rendered).
 - `isMobileApp` לא ניתן להעברה ל-`false` ב-mobile runtime — זה ישבור את ה-CapacitorAdapter selection. אם רוצים FileSystemAdapter, לך ל-`/` (desktop runtime).
 
@@ -1081,7 +1197,7 @@ GET /api/fs/readdir?path=.obsidian/plugins
 
 ### Use cases עתידיים
 
-- **system plugin של LiveSync** — תוסף `obsidian-livesync` מוזרק לכל vault, מוגדר דרך `data.json` per-vault. ראה PLAN.md "Updated approach (2026-05-11): direct fetch + CORS" ו-Gap 15 לגבי opt-in via env var ל-CF demo.
+- **system plugin של LiveSync** — תוסף `obsidian-livesync` מוזרק לכל vault, מוגדר דרך `data.json` per-vault. ר' "Updated approach (2026-05-11): direct fetch + CORS" (capacitor-shim.js, תיעוד-בגוף) ו-Gap 15 לגבי opt-in via env var ל-CF demo.
 - **system plugin של mobile UI tweaks** — תוסף שמוסיף touch gestures חסרים ב-mobile bundle.
 
 ---
@@ -1108,7 +1224,7 @@ Web Workers הם **קונטקסטים נפרדים לחלוטין** — להם �
 2. ה-main thread שולח את ה-buffer ל-worker דרך `postMessage` כ-`{ metadataCache: <ArrayBuffer> }`.
 3. ה-worker מקבל buffer, עושה `TextDecoder().decode()`, מפרסר את ה-Markdown, ומחזיר את האינדקס דרך `postMessage` חזרה.
 
-ראיתי את זה כשבדקתי את `vendor/obsidian-mobile/worker.js` — הקוד שלו מקבל `e.data.metadataCache` כ-buffer ובכלל לא יודע מאיפה הקובץ הגיע. זו הסיבה שבמדידה ראיתי **88% cache hit rate** (322 hits מתוך 366 קריאות) ב-cold boot על vault `009428c4` (394 קבצים) — ה-main thread שקורא את הקבצים עבור ה-worker עובר דרך ה-shim שלנו ופוגע ב-cache.
+ראיתי את זה כשבדקתי את `vendor/obsidian-mobile/worker.js` — הקוד שלו מקבל `e.data.metadataCache` כ-buffer ובכלל לא יודע מאיפה הקובץ הגיע. זו הסיבה שבמדידה ראיתי **88% cache hit rate** (322 hits מתוך 366 קריאות) ב-cold boot על כספת בדיקה (394 קבצים) — ה-main thread שקורא את הקבצים עבור ה-worker עובר דרך ה-shim שלנו ופוגע ב-cache.
 
 #### מתי זה כן ייהפך לבעיה
 
@@ -1116,7 +1232,7 @@ Web Workers הם **קונטקסטים נפרדים לחלוטין** — להם �
 
 1. **plugin של מישהו** מחליט ליצור worker משלו ולעשות fetch מתוכו. נדיר אבל אפשרי — למשל plugin של search שרוצה לפרסר 1000 קבצים במקביל בלי לתפוס את ה-main thread.
 2. **אובסידיאן עצמה משנה ארכיטקטורה** ומעבירה את קריאת הקבצים ל-worker. אם זה יקרה, כל ה-cache שלנו ב-mobile יהפוך לחסר ערך עד שנגיב.
-3. **Service Workers** של LiveSync (שמוזכר ב-`docs/plans/livesync-implementation.md`) — אם LiveSync ירצה offline cache בעתיד, היא תרצה גישה לאותם נתונים.
+3. **Service Workers** של LiveSync — אם LiveSync ירצה offline cache בעתיד, היא תרצה גישה לאותם נתונים.
 
 #### פתרונות אפשריים אם זה ייהפך לבעיה
 
@@ -1166,7 +1282,7 @@ delete cache.dirs[parent];
 
 שני נימוקים:
 
-1. **LiveSync עדיין לא הותקנה בפרויקט.** הפלאן שלה (`docs/plans/livesync-implementation.md`) הוא עתידי. עד שהיא תרוץ, אין firehose אמיתי. כשהיא תיכנס, נצבע נתונים אמיתיים על כמה תיקיות מתבטלות וכמה שניות זה מוסיף.
+1. **LiveSync עדיין לא הותקנה בפרויקט.** האינטגרציה שלה עדיין עתידית. עד שהיא תרוץ, אין firehose אמיתי. כשהיא תיכנס, נצבע נתונים אמיתיים על כמה תיקיות מתבטלות וכמה שניות זה מוסיף.
 
 2. **הפתרון לא טריוויאלי וה-design choices לא ברורים מראש.** שלוש אפשרויות:
 
@@ -1178,7 +1294,7 @@ delete cache.dirs[parent];
 
    הבחירה תלויה במה שיתגלה כצוואר-בקבוק בפועל אחרי שה-LiveSync יתחיל לרוץ. עדיף למדוד לפני שמחליטים מאשר לבחור עכשיו ולשלם תחזוקה על פתרון שאולי לא צריך.
 
-Pitfall #5 בפלאן `docs/plans/mobile-bootstrap-cache.md` מסמן את זה במפורש כ-"out of scope ל-v1; document".
+Pitfall #5 בתכנון ה-bootstrap cache מסמן את זה במפורש כ-"out of scope ל-v1; document".
 
 ---
 

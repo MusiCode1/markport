@@ -19,8 +19,8 @@
 // Cache API note (brief finding 3 / §9 Q0): caches.default is a no-op on
 // *.workers.dev (documented CF limitation) — it's only active on a
 // custom-domain/route. Functional either way; caching is purely an
-// optimization. See README for the routes/wrangler.toml uncomment needed in
-// prod to get cache hits.
+// optimization. To get real cache hits in prod, attach a custom domain to the
+// Pages project (a dashboard step — no route config lives in this repo).
 
 // Simple allow-list of hostnames we are willing to proxy. Keeps this from
 // becoming an open proxy.
@@ -73,10 +73,10 @@ export function b64ToBytes(b64) {
   return bytes;
 }
 
-function json(obj, status = 200) {
+function json(obj, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
   });
 }
 
@@ -97,7 +97,110 @@ export function isCacheableHost(urlStr) {
   }
 }
 
+// ── rate limiting (§3.3, docs/plans/client-only-resilience.md) ─────────────
+// In-memory, isolate-lifetime counter — NOT KV/Durable-Object state. Decision
+// (see brief §3.3): caches.default is a documented no-op on *.pages.dev (no
+// zone — same limitation this file's Cache API section already notes), and
+// that SAME limitation rules out Cloudflare WAF rate-limiting rules (also
+// zone-only) — "let Cloudflare handle it" isn't available on this
+// deployment. handleProxy(request, ctx) deliberately does NOT gain an `env`
+// parameter for this — a plain Map needs none, and proxy-worker.test.js:337
+// already passes an (unused) third argument, so adding a real `env` there
+// would silently collide with it for no benefit.
+// Approved by the user (2026-07-25): 30 requests/minute per IP — generous
+// enough for a plugin-install burst, tight enough against gross abuse.
+// NOT precise: isolates recycle and the Map resets with them — acceptable
+// per the user's own framing ("enough against abuse, not a hard quota").
+const RATE_LIMIT_PER_MINUTE = 30;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+// §3.5ה (calev PARTIAL, ממצא 5 — DoD#16): hard cap on the number of distinct
+// IPs tracked at once. Without one, the Map grows without bound — a scan
+// across N distinct IPs leaves N live entries forever if they never come
+// back (verified: 5000 distinct IPs through one isolate, all retained).
+// Each entry is tiny, so this is a slow-burn, not an exploit, but it's
+// unbounded state in a component whose whole selling point is being
+// state-free, and isolates have a hard memory ceiling. 10k entries is
+// generous headroom over any realistic per-isolate concurrent-abuser count
+// while still bounding worst-case memory.
+export let RATE_LIMIT_MAX_ENTRIES = 10000;
+let rateLimitMap = new Map();
+
+// Exposed for tests only: a module-level Map persists across every test case
+// in a single bun-test file run, so cases would otherwise leak counters into
+// each other (brief §3.3 finding). Call from beforeEach.
+export function __resetRateLimit() {
+  rateLimitMap = new Map();
+}
+
+// Test-only: lets §3.5ה's cap/prune tests exercise the eviction path without
+// pushing 10k+ real requests through handleProxy on every run.
+export function __setRateLimitMaxEntriesForTest(n) {
+  RATE_LIMIT_MAX_ENTRIES = n;
+}
+
+export function __getRateLimitMapSizeForTest() {
+  return rateLimitMap.size;
+}
+
+// Drops entries whose window has already fully expired — called
+// opportunistically (not on every request; a Map.size check is O(1), a full
+// sweep is O(n)) so long-running isolates don't accumulate one entry per
+// distinct IP ever seen, only per IP active within the last window.
+function pruneExpiredRateLimitEntries(now) {
+  for (const [key, entry] of rateLimitMap) {
+    if (now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) rateLimitMap.delete(key);
+  }
+}
+
+// Missing CF-Connecting-IP bypasses the limiter entirely — in production
+// behind Cloudflare the header is always present; proxy-worker.test.js's
+// ~15 pre-existing DoD calls never set it (brief §3.3 finding: rate-limiting
+// them by IP would 429 the whole file since they'd all share one bucket).
+function checkRateLimit(ip) {
+  if (!ip) return true;
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    if (rateLimitMap.size >= RATE_LIMIT_MAX_ENTRIES) {
+      pruneExpiredRateLimitEntries(now);
+    }
+    // §3.6ב (calev-heavy NO-GO round 2, finding 3): the old code fell back to
+    // evicting `rateLimitMap.keys().next().value` — the OLDEST entry — when
+    // pruning didn't free enough room. Oldest-by-insertion-order is NOT the
+    // same as "expired": a currently-throttled IP that has been hammering
+    // the proxy is exactly the kind of entry that stays oldest-and-live the
+    // longest, so a flood of ~RATE_LIMIT_MAX_ENTRIES distinct new IPs could
+    // evict it and hand it a free reset of its own 429 (measured: 10,001
+    // distinct IPs bought back a throttled IP's counter). Never evict a
+    // live (non-expired) entry — if the cap is still full after pruning
+    // truly-expired ones, this new IP just goes untracked for this one
+    // request (best-effort limiter, not a hard quota — see README Known
+    // gaps). Memory stays bounded either way: we simply stop inserting once
+    // at the cap, we don't evict to make room.
+    if (rateLimitMap.size < RATE_LIMIT_MAX_ENTRIES) {
+      rateLimitMap.set(ip, { count: 1, windowStart: now });
+    }
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= RATE_LIMIT_PER_MINUTE;
+}
+
 export async function handleProxy(request, ctx) {
+  // Cheapest possible check first — before even parsing the body — so an
+  // abusive client pays no JSON-parse cost either.
+  const clientIp = request.headers.get('CF-Connecting-IP');
+  if (!checkRateLimit(clientIp)) {
+    // §3.5ה (DoD#16): tell the client how long to back off instead of
+    // leaving it to guess/hammer — the window is fixed (not sliding), so the
+    // worst case is "wait out the rest of THIS window", i.e. up to
+    // RATE_LIMIT_WINDOW_MS. Not exact (we don't track per-IP remaining time
+    // here), but a same-order-of-magnitude value is far better than none.
+    return json({ error: 'rate limit exceeded' }, 429, {
+      'Retry-After': String(RATE_LIMIT_WINDOW_MS / 1000),
+    });
+  }
+
   let payload;
   try {
     payload = await request.json();

@@ -1,11 +1,11 @@
 {
   "defaultVaultLocation": "device",
-  "seedExampleContent": true,
+  "seedExampleContent": false,
   "plugins": {
     "obsidian-livesync": { "install": true, "enabled": false },
     "obsidian-web-layout": { "install": true, "enabled": true }
   },
   "layout": { "default": "auto", "threshold": 900 },
-  "demoVault": { "enabled": true, "id": "0000demo0000demo" },
+  "demoVault": { "enabled": false, "id": "0000demo0000demo" },
   "branding": { "name": "Obsidian Web", "themeColor": "#1e1e1e" }
 }

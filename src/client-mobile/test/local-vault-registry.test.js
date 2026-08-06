@@ -72,3 +72,17 @@ test('has()/get() reflect create() with a fixed id', () => {
   registry.create('Demo', { id: '0000demo0000demo' });
   assert.equal(registry.has('0000demo0000demo'), true);
 });
+
+// ── vaultPath(id, name) — docs/plans/electron-shim-foundation.md §3.4 ──
+
+test('vaultPath(id, name) builds "/ow/<id>/<name>"', () => {
+  const registry = freshRegistry();
+  assert.equal(registry.vaultPath('abc123', 'My Vault'), '/ow/abc123/My Vault');
+});
+
+test('vaultPath(id) with no/empty name falls back to the id itself — two-arg signature is deliberate: get(id) does not return id, so vaultPath(get(id)) would otherwise silently produce "/ow/undefined/<name>"', () => {
+  const registry = freshRegistry();
+  assert.equal(registry.vaultPath('abc123'), '/ow/abc123/abc123');
+  assert.equal(registry.vaultPath('abc123', ''), '/ow/abc123/abc123');
+  assert.equal(registry.vaultPath('abc123', undefined), '/ow/abc123/abc123');
+});

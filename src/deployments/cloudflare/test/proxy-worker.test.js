@@ -10,8 +10,11 @@
 //
 // Run: bun test src/deployments/cloudflare/test/proxy-worker.test.js
 
-import { expect, test, describe } from 'bun:test';
-import { handleProxy, isAllowed, isCacheableHost, bytesToB64, b64ToBytes } from '../proxy-worker.js';
+import { expect, test, describe, beforeEach } from 'bun:test';
+import {
+  handleProxy, isAllowed, isCacheableHost, bytesToB64, b64ToBytes,
+  __resetRateLimit, __setRateLimitMaxEntriesForTest, __getRateLimitMapSizeForTest,
+} from '../proxy-worker.js';
 
 // ── caches.default mock (DoD#4) ──────────────────────────────────────────────
 // Bun has no global `caches` (that's a Worker/Service-Worker runtime API) —
@@ -58,6 +61,22 @@ function postRequest(body) {
     body: JSON.stringify(body),
   });
 }
+
+function postRequestFromIp(ip, body) {
+  return new Request('https://worker.example/api/proxy-request', {
+    method: 'POST',
+    headers: { 'CF-Connecting-IP': ip },
+    body: JSON.stringify(body),
+  });
+}
+
+// ── §3.3 rate limiting — the module-level Map is shared across every case in
+// this bun-test file (brief finding), so it must be reset before EACH test —
+// not just the rate-limiting describe block below — otherwise an earlier
+// test's requests-from-a-known-IP could bleed into a later one.
+beforeEach(() => {
+  __resetRateLimit();
+});
 
 // ── DoD#7 — isAllowed unit ──────────────────────────────────────────────────
 
@@ -340,4 +359,147 @@ test('strips forbidden request headers before fetch (calev medium finding)', asy
     expect(seenHeaders['Connection'] || seenHeaders['connection']).toBeUndefined();
     expect(seenHeaders['Authorization']).toBe('Basic zzz');   // legit header survives
   } finally { globalThis.fetch = origFetch; }
+});
+
+// ── §3.3 — rate limiting (docs/plans/client-only-resilience.md) ────────────
+// Uses 'https://evil.com/x' as the target on purpose: isAllowed() rejects it
+// with a fast, network-free 403 — proves the rate-limit check runs (or
+// doesn't) without depending on real network calls or DoD#1/2's manifest
+// fetch. A 403 vs 429 status is exactly what distinguishes
+// "rate-limited" from "reached the handler and got rejected for another
+// reason" here.
+
+describe('rate limiting (§3.3)', () => {
+  test('DoD#6: under the 30/min limit → no 429 (still 403s from isAllowed, not rate-limited)', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await handleProxy(postRequestFromIp('1.2.3.4', { url: 'https://evil.com/x' }), makeCtx());
+      expect(res.status).toBe(403);
+    }
+  });
+
+  test('DoD#6: the 31st request/min from one IP → 429', async () => {
+    let last;
+    for (let i = 0; i < 31; i++) {
+      last = await handleProxy(postRequestFromIp('5.6.7.8', { url: 'https://evil.com/x' }), makeCtx());
+    }
+    expect(last.status).toBe(429);
+  });
+
+  test('a different IP is unaffected by another IP already at its limit', async () => {
+    for (let i = 0; i < 31; i++) {
+      await handleProxy(postRequestFromIp('9.9.9.9', { url: 'https://evil.com/x' }), makeCtx());
+    }
+    const res = await handleProxy(postRequestFromIp('1.1.1.1', { url: 'https://evil.com/x' }), makeCtx());
+    expect(res.status).not.toBe(429);
+  });
+
+  test('missing CF-Connecting-IP bypasses the limiter entirely (matches prod-behind-Cloudflare vs. test reality)', async () => {
+    for (let i = 0; i < 40; i++) {
+      const res = await handleProxy(postRequest({ url: 'https://evil.com/x' }), makeCtx());
+      expect(res.status).not.toBe(429);
+    }
+  });
+
+  test('DoD#7 sanity: rate limiting does not block a legitimate request under the limit', async () => {
+    const res = await handleProxy(postRequestFromIp('8.8.4.4', {
+      url: 'https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json',
+      method: 'GET',
+    }), makeCtx());
+    expect(res.status).toBe(200);
+  }, 20000);
+
+  // ── §3.5ה (calev PARTIAL, ממצא 5 — DoD#16) ────────────────────────────────
+  // rateLimitMap used to grow without bound: a scan across distinct IPs left
+  // one permanent entry per IP, never pruned. These exercise the cap/prune
+  // logic directly with a small max-entries value (rather than pushing the
+  // real 10,000-entry production cap through handleProxy on every test run)
+  // and a fake clock for the window-expiry case — same technique calev used
+  // to drive the probe by hand.
+
+  test('DoD#16: the tracked-IP map is capped — distinct IPs beyond the cap evict rather than grow forever', async () => {
+    __setRateLimitMaxEntriesForTest(5);
+    try {
+      for (let i = 0; i < 8; i++) {
+        await handleProxy(postRequestFromIp('50.0.0.' + i, { url: 'https://evil.com/x' }), makeCtx());
+      }
+      expect(__getRateLimitMapSizeForTest()).toBeLessThanOrEqual(5);
+    } finally {
+      __setRateLimitMaxEntriesForTest(10000);
+    }
+  });
+
+  test('DoD#16: pruning drops expired entries at the cap instead of evicting still-live ones', async () => {
+    __setRateLimitMaxEntriesForTest(3);
+    const origNow = Date.now;
+    try {
+      let t = 1_000_000;
+      Date.now = () => t;
+      await handleProxy(postRequestFromIp('60.0.0.1', { url: 'https://evil.com/x' }), makeCtx());
+      await handleProxy(postRequestFromIp('60.0.0.2', { url: 'https://evil.com/x' }), makeCtx());
+      await handleProxy(postRequestFromIp('60.0.0.3', { url: 'https://evil.com/x' }), makeCtx());
+      expect(__getRateLimitMapSizeForTest()).toBe(3);
+
+      t += 61_000;   // past the fixed 60s window — all three entries above are now expired
+      await handleProxy(postRequestFromIp('60.0.0.4', { url: 'https://evil.com/x' }), makeCtx());
+      // Hitting the cap with the new IP prunes the three expired entries
+      // first, then inserts — net result is 1 entry, not "3 kept, oldest
+      // live one evicted".
+      expect(__getRateLimitMapSizeForTest()).toBe(1);
+    } finally {
+      Date.now = origNow;
+      __setRateLimitMaxEntriesForTest(10000);
+    }
+  });
+
+  test('DoD#16: a 429 response carries Retry-After', async () => {
+    let last;
+    for (let i = 0; i < 31; i++) {
+      last = await handleProxy(postRequestFromIp('70.0.0.1', { url: 'https://evil.com/x' }), makeCtx());
+    }
+    expect(last.status).toBe(429);
+    expect(last.headers.get('Retry-After')).toBe('60');
+  });
+
+  // ── §3.6ב (calev-heavy NO-GO round 2, finding 3) ────────────────────────────
+  // The old eviction path evicted `rateLimitMap.keys().next().value` — the
+  // oldest entry by insertion order — whenever the cap was still full after
+  // pruning. A currently-throttled IP (still very much "live", not expired)
+  // stays in the map and, if it was one of the earliest entries inserted, is
+  // exactly the oldest surviving one — so a flood of new distinct IPs could
+  // evict IT and hand it back a fresh 200. Regression test: throttle one IP,
+  // then push the map to its cap with brand-new IPs, then confirm the
+  // throttled IP is STILL throttled — its entry must never be evicted just
+  // to make room for someone else, only pruning of truly-expired entries may
+  // free space.
+  test('DoD#16 / §3.6ב: a throttled IP stays throttled even when the cap is filled by other IPs', async () => {
+    __setRateLimitMaxEntriesForTest(2);
+    try {
+      // Throttle 90.0.0.1 — 31 requests within the same (real, un-mocked)
+      // clock tick trips the 30/minute limit.
+      let last;
+      for (let i = 0; i < 31; i++) {
+        last = await handleProxy(postRequestFromIp('90.0.0.1', { url: 'https://evil.com/x' }), makeCtx());
+      }
+      expect(last.status).toBe(429);
+
+      // Map is now { 90.0.0.1 } (size 1, cap 2). One more distinct IP fills
+      // the cap exactly (size 2); a further one used to force an eviction.
+      await handleProxy(postRequestFromIp('90.0.0.2', { url: 'https://evil.com/x' }), makeCtx());
+      expect(__getRateLimitMapSizeForTest()).toBe(2);
+      await handleProxy(postRequestFromIp('90.0.0.3', { url: 'https://evil.com/x' }), makeCtx());
+      // Cap still 2 — 90.0.0.3 went untracked rather than evicting anyone
+      // (nothing here has expired: RATE_LIMIT_WINDOW_MS is 60s, this test
+      // runs in milliseconds).
+      expect(__getRateLimitMapSizeForTest()).toBe(2);
+
+      // The decisive assertion: 90.0.0.1's throttle must have survived —
+      // its counter was never reset by the eviction that used to happen
+      // when 90.0.0.3 arrived at a full cap.
+      const stillThrottled = await handleProxy(
+        postRequestFromIp('90.0.0.1', { url: 'https://evil.com/x' }), makeCtx());
+      expect(stillThrottled.status).toBe(429);
+    } finally {
+      __setRateLimitMaxEntriesForTest(10000);
+    }
+  });
 });
