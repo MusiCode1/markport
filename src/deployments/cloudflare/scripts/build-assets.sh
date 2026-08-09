@@ -20,6 +20,13 @@ CF_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAIN_DIR="$(cd "$CF_DIR/../../.." && pwd)"
 PUBLIC_DIR="$MAIN_DIR/.tmp/deployments/cloudflare/public"
 
+# Native (Windows-form) variants for paths embedded INSIDE node -e/-p script
+# strings — Git Bash/MSYS mangles POSIX paths there ('/c/...' → 'C:\c\...').
+# Standalone path arguments and *_PATH env vars are converted by MSYS already;
+# on Linux/macOS `pwd -W` fails and these are just the POSIX paths again.
+MAIN_DIR_NATIVE="$(cd "$MAIN_DIR" && pwd -W 2>/dev/null || pwd)"
+PUBLIC_DIR_NATIVE="$MAIN_DIR_NATIVE/.tmp/deployments/cloudflare/public"
+
 echo "obsidian-web CF — building assets (mobile)"
 echo "  main project : $MAIN_DIR"
 echo "  output       : $PUBLIC_DIR"
@@ -53,6 +60,7 @@ if [[ -n "$OW_PROFILE" ]]; then
 else
   CONFIG_PATH="$MAIN_DIR/src/config/deploy-config.json"
 fi
+CONFIG_PATH_NATIVE="$MAIN_DIR_NATIVE/src/config/deploy-config${OW_PROFILE:+.$OW_PROFILE}.json"
 if [[ ! -f "$CONFIG_PATH" ]]; then
   echo ""
   echo "ERROR: $CONFIG_PATH not found — required for deploy config (plugins + injected config)."
@@ -150,7 +158,7 @@ CONFIG_PATH="$CONFIG_PATH" HTML_PATH="$PUBLIC_DIR/index.html" node -e '
 # reads it.
 echo "  building example-vault.json (static)..."
 echo 'export const PLUGIN_FILES = new Map();' > "$MAIN_DIR/src/deployments/cloudflare/plugins-generated.js"
-node -e "import('$MAIN_DIR/src/deployments/cloudflare/template.js').then(m=>{require('fs').writeFileSync('$PUBLIC_DIR/example-vault.json', JSON.stringify([...m.TEMPLATE_FILES]))})"
+node -e "const {pathToFileURL}=require('url'); import(pathToFileURL('$MAIN_DIR_NATIVE/src/deployments/cloudflare/template.js').href).then(m=>{require('fs').writeFileSync('$PUBLIC_DIR_NATIVE/example-vault.json', JSON.stringify([...m.TEMPLATE_FILES]))})"
 rm "$MAIN_DIR/src/deployments/cloudflare/plugins-generated.js"
 
 # ── client-only signals inject (docs/plans/client-only-resilience.md §3.2 +
@@ -221,17 +229,17 @@ echo "  building system-plugins/ (static)..."
 # decide installed-but-disabled vs auto-enabled-on-seed. Defaults in
 # src/config/deploy-config.json mirror the old hardcoded values 1:1 (install:
 # true/true, enabled: false/true) — zero regression when the file is unchanged.
-LAYOUT_INSTALL=$(node -p "require('$CONFIG_PATH').plugins['obsidian-web-layout'].install")
-LAYOUT_ENABLED=$(node -p "require('$CONFIG_PATH').plugins['obsidian-web-layout'].enabled")
-LS_INSTALL=$(node -p "require('$CONFIG_PATH').plugins['obsidian-livesync'].install")
-LS_ENABLED=$(node -p "require('$CONFIG_PATH').plugins['obsidian-livesync'].enabled")
+LAYOUT_INSTALL=$(node -p "require('$CONFIG_PATH_NATIVE').plugins['obsidian-web-layout'].install")
+LAYOUT_ENABLED=$(node -p "require('$CONFIG_PATH_NATIVE').plugins['obsidian-web-layout'].enabled")
+LS_INSTALL=$(node -p "require('$CONFIG_PATH_NATIVE').plugins['obsidian-livesync'].install")
+LS_ENABLED=$(node -p "require('$CONFIG_PATH_NATIVE').plugins['obsidian-livesync'].enabled")
 
 # system-plugins/ — layout-switcher, gated by config.plugins.obsidian-web-layout.install
 LAYOUT_VER=""
 if [[ "$LAYOUT_INSTALL" == "true" ]]; then
   mkdir -p "$PUBLIC_DIR/system-plugins/obsidian-web-layout"
   cp "$MAIN_DIR/src/plugins/obsidian-web-layout/"* "$PUBLIC_DIR/system-plugins/obsidian-web-layout/"
-  LAYOUT_VER=$(node -p "require('$MAIN_DIR/src/plugins/obsidian-web-layout/manifest.json').version")
+  LAYOUT_VER=$(node -p "require('$MAIN_DIR_NATIVE/src/plugins/obsidian-web-layout/manifest.json').version")
 else
   echo "  config: plugins.obsidian-web-layout.install=false — skipping layout-switcher"
 fi
@@ -242,12 +250,13 @@ LS_VERSION=""; LS_FILES=""              # finding 3: init לפני set -u
 if [[ "$LS_INSTALL" == "true" ]]; then
   if node "$MAIN_DIR/scripts/install-livesync.js" ${LS_PIN:+--version "$LS_PIN"}; then
     LS_SRC="$MAIN_DIR/vendor/plugins/obsidian-livesync"
+    LS_SRC_NATIVE="$MAIN_DIR_NATIVE/vendor/plugins/obsidian-livesync"
     if [[ -f "$LS_SRC/main.js" && -f "$LS_SRC/manifest.json" ]]; then
       DEST="$PUBLIC_DIR/system-plugins/obsidian-livesync"; mkdir -p "$DEST"
       cp "$LS_SRC/main.js" "$LS_SRC/manifest.json" "$DEST/"          # finding 4: מפורש, לא *.json (מדלג data.json)
       LS_FILES='["main.js","manifest.json"]'
       if [[ -f "$LS_SRC/styles.css" ]]; then cp "$LS_SRC/styles.css" "$DEST/"; LS_FILES='["main.js","manifest.json","styles.css"]'; fi
-      LS_VERSION=$(node -p "require('$LS_SRC/manifest.json').version")
+      LS_VERSION=$(node -p "require('$LS_SRC_NATIVE/manifest.json').version")
     fi
   else
     echo "  WARN: obsidian-livesync download failed — skipping preinstall (build continues, layout-switcher only)"
@@ -257,7 +266,7 @@ else
 fi
 
 # manifest.json — finding 2: env מיוצא inline לפני node -e (אחרת process.env undefined → abort)
-LAYOUT_VER="$LAYOUT_VER" LAYOUT_ENABLED="$LAYOUT_ENABLED" LS_VERSION="$LS_VERSION" LS_FILES="$LS_FILES" LS_ENABLED="$LS_ENABLED" OUT="$PUBLIC_DIR/system-plugins/manifest.json" node -e '
+LAYOUT_VER="$LAYOUT_VER" LAYOUT_ENABLED="$LAYOUT_ENABLED" LS_VERSION="$LS_VERSION" LS_FILES="$LS_FILES" LS_ENABLED="$LS_ENABLED" OUT="$PUBLIC_DIR_NATIVE/system-plugins/manifest.json" node -e '
   const fs=require("fs");
   const plugins=[];
   if (process.env.LAYOUT_VER) plugins.push({id:"obsidian-web-layout",version:process.env.LAYOUT_VER,files:["main.js","manifest.json"],enabled:process.env.LAYOUT_ENABLED === "true"});

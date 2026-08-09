@@ -163,6 +163,22 @@ const MOBILE_SCRIPTS = [
     if (resumeId) {
       location.replace('/vault/' + encodeURIComponent(resumeId));
     } else {
+      // Single-repository deployment (deploy-config `defaultRepo`) — the bare
+      // origin IS a repository, so a first-time visitor lands in it instead of
+      // the chooser. Redirects into the /github/ share-link route handled at
+      // the top of this block rather than cloning here: that route already
+      // resolves "already have this repo", the post-rename lookup, and the
+      // failure UI. Checked BEFORE the demo branch below because the two are
+      // mutually exclusive by construction (a profile sets one or the other,
+      // never both — see src/config/deploy-config.gdd.json); if a config ever
+      // did enable both, the repository is the more specific intent.
+      // Returning visitors never reach here — the resumeId branch above wins,
+      // so their own local edits to the cloned vault are not disturbed.
+      var repoUrl = window.__owGithubRepo
+        ? window.__owGithubRepo.defaultRepoUrl(window.__owConfig && window.__owConfig.defaultRepo)
+        : null;
+      if (repoUrl) { location.replace(repoUrl); return; }
+
       // דמו — פתיחה-אוטומטית (§0 מטרה: מבקר בדומיין הדמו נוחת ישירות בכספת,
       // אפס לחיצות). ES5 guard pattern (כמו ensureDemo/DEMO_ID למעלה) —
       // demoVault.autoOpen===true במפורש (לא ייתכן "on by default" — ברירת-

@@ -7,5 +7,6 @@
   },
   "layout": { "default": "auto", "threshold": 900 },
   "demoVault": { "enabled": false, "id": "0000demo0000demo" },
+  "defaultRepo": { "enabled": false, "owner": "", "repo": "", "ref": null, "note": "" },
   "branding": { "name": "Obsidian Web", "themeColor": "#1e1e1e" }
 }

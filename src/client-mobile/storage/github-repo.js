@@ -204,6 +204,56 @@
   }
 
   /**
+   * defaultRepoUrl(cfg) → `/github/<owner>/<repo>[/<note>][?ref=…]` | null
+   *
+   * parseShareLink's inverse, for the one deployment shape where the bare
+   * origin IS a repository rather than a vault chooser: deploy-config's
+   * `defaultRepo` (a docs site pinned to a single repo — see
+   * src/config/deploy-config.gdd.json). boot.js's entry routing calls this
+   * and, when it returns a URL, redirects into the share-link route above
+   * rather than growing a second copy of it — that route already handles
+   * "already cloned", the post-rename lookup, private-repo failure and the
+   * clone progress UI, and none of those decisions should exist twice.
+   *
+   * Returns null — "no default repo, route normally" — for anything it can't
+   * build a valid link out of: not enabled, missing owner/repo, or a name
+   * that fails NAME_RE. A misconfigured profile must degrade to the ordinary
+   * chooser, never redirect to a `/github/` URL that parseShareLink refuses
+   * on arrival: that pair bounces a visitor between two routes with nothing
+   * ever rendered.
+   *
+   * The note is encoded PER SEGMENT — `/` stays a separator, everything else
+   * is escaped — which is exactly the shape parseShareLink hands back and
+   * `/vault/<id>/<note>` decodes. A note path like
+   * `Game Design Docs/01 Executive Summary` therefore survives the round trip
+   * with its spaces intact.
+   */
+  function defaultRepoUrl(cfg) {
+    if (!cfg || cfg.enabled !== true) return null;
+
+    var owner = String(cfg.owner || '');
+    var repo = String(cfg.repo || '').replace(/\.git$/i, '');
+    if (!NAME_RE.test(owner) || !NAME_RE.test(repo)) return null;
+
+    var url = '/github/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo);
+
+    var segments = String(cfg.note || '').split('/');
+    var encoded = [];
+    for (var i = 0; i < segments.length; i++) {
+      // Empty segments dropped, not encoded: a stray leading/trailing/double
+      // slash would otherwise become an empty path segment, and parseShareLink
+      // reads `/github/o/r//x` as the note `/x` — a path no vault ever has.
+      if (segments[i]) encoded.push(encodeURIComponent(segments[i]));
+    }
+    if (encoded.length) url += '/' + encoded.join('/');
+
+    var ref = cfg.ref ? String(cfg.ref) : '';
+    if (ref) url += '?ref=' + encodeURIComponent(ref);
+
+    return url;
+  }
+
+  /**
    * gitBlobSha(bytes) → Promise<hex sha1>
    *
    * Git's own object id: sha1("blob " + byteLength + "\0" + bytes). Computing
@@ -857,6 +907,7 @@
   var api = {
     parseRepoRef: parseRepoRef,
     parseShareLink: parseShareLink,
+    defaultRepoUrl: defaultRepoUrl,
     gitBlobSha: gitBlobSha,
     planSync: planSync,
     resolveRepo: resolveRepo,

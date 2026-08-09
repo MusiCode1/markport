@@ -140,6 +140,83 @@ test('parseShareLink rejects an owner or repo that GitHub could not have issued'
   assert.equal(gh.parseShareLink('/github/owner/re%20po', '', ''), null);
 });
 
+// ── defaultRepoUrl ─────────────────────────────────────────────────────────
+// parseShareLink's inverse, used by boot.js's entry routing to turn a
+// deploy-config `defaultRepo` into the share-link URL it redirects to. The
+// pairing is what matters: anything this builds, parseShareLink must accept.
+
+test('defaultRepoUrl builds the share-link route for an enabled repo', () => {
+  assert.equal(
+    gh.defaultRepoUrl({ enabled: true, owner: 'notnilcn', repo: 'ggdd' }),
+    '/github/notnilcn/ggdd');
+});
+
+test('defaultRepoUrl encodes the note per segment, keeping slashes as separators', () => {
+  assert.equal(
+    gh.defaultRepoUrl({
+      enabled: true, owner: 'notnilcn', repo: 'ggdd',
+      note: 'Game Design Docs/01 Executive Summary',
+    }),
+    '/github/notnilcn/ggdd/Game%20Design%20Docs/01%20Executive%20Summary');
+});
+
+test('defaultRepoUrl round-trips through parseShareLink — the shipped gdd profile', () => {
+  // The actual committed profile, not a hand-written fixture: this is the
+  // pairing that decides whether khvgames.com's bare origin resolves at all.
+  const cfg = require('../../config/deploy-config.gdd.json').defaultRepo;
+  const url = gh.defaultRepoUrl(cfg);
+  assert.ok(url, 'gdd profile must produce a URL');
+
+  const [pathname, search] = url.split('?');
+  const link = gh.parseShareLink(pathname, search ? `?${search}` : '', '');
+  assert.ok(link, 'parseShareLink must accept what defaultRepoUrl built');
+  assert.equal(link.owner, cfg.owner);
+  assert.equal(link.repo, cfg.repo);
+  assert.equal(link.ref, cfg.ref);
+  // note comes back still-encoded, by parseShareLink's contract.
+  assert.equal(link.note.split('/').map(decodeURIComponent).join('/'), cfg.note);
+});
+
+test('defaultRepoUrl appends ?ref= only when a ref is configured', () => {
+  const base = { enabled: true, owner: 'o', repo: 'r' };
+  assert.equal(gh.defaultRepoUrl({ ...base, ref: null }), '/github/o/r');
+  assert.equal(gh.defaultRepoUrl({ ...base, ref: '' }), '/github/o/r');
+  assert.equal(gh.defaultRepoUrl({ ...base, ref: 'release/1.x' }),
+    '/github/o/r?ref=release%2F1.x');
+});
+
+test('defaultRepoUrl drops empty note segments rather than emitting an empty one', () => {
+  // '/github/o/r//x' parses as the note '/x', a path no vault has.
+  assert.equal(gh.defaultRepoUrl({ enabled: true, owner: 'o', repo: 'r', note: '/a//b/' }),
+    '/github/o/r/a/b');
+});
+
+test('defaultRepoUrl returns null for anything it cannot build a valid link from', () => {
+  // null = "route normally"; a bad config must land on the ordinary chooser,
+  // never on a /github/ URL parseShareLink would refuse on arrival.
+  const cases = [
+    undefined, null, {},
+    { enabled: false, owner: 'o', repo: 'r' },          // not enabled
+    { enabled: 'true', owner: 'o', repo: 'r' },         // truthy, not === true
+    { enabled: true, owner: '', repo: 'r' },            // no owner
+    { enabled: true, owner: 'o', repo: '' },            // no repo
+    { enabled: true, owner: 'own er', repo: 'r' },      // fails NAME_RE
+    { enabled: true, owner: 'o', repo: 're po' },
+  ];
+  for (const cfg of cases) {
+    assert.equal(gh.defaultRepoUrl(cfg), null, `should reject: ${JSON.stringify(cfg)}`);
+  }
+});
+
+test('defaultRepoUrl strips a .git suffix, like parseShareLink and parseRepoRef do', () => {
+  assert.equal(gh.defaultRepoUrl({ enabled: true, owner: 'notnilcn', repo: 'ggdd.git' }),
+    '/github/notnilcn/ggdd');
+});
+
+test('the default profile ships defaultRepo disabled — the general app is not pinned to a repo', () => {
+  assert.equal(gh.defaultRepoUrl(require('../../config/deploy-config.json').defaultRepo), null);
+});
+
 // ── gitBlobSha ─────────────────────────────────────────────────────────────
 // Reference values from `git hash-object --stdin`. If this drifts, sync would
 // silently treat every file as locally modified (or as unchanged) — the whole

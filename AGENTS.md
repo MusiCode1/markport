@@ -47,6 +47,7 @@ See `docs/architecture.md` for the full picture.
 | Node backend (optional) | `src/runtime-server/` |
 | Pull-sync server | `src/sync-server/` |
 | Cloudflare deployment | `src/deployments/cloudflare/` |
+| khvgames.com front worker (apex placeholder, routing) | moved out — lives in the `khvgames.com` repo |
 
 ## Before you touch the bundle
 

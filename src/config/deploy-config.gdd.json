@@ -1,0 +1,18 @@
+{
+  "defaultVaultLocation": "device",
+  "seedExampleContent": false,
+  "plugins": {
+    "obsidian-livesync": { "install": false, "enabled": false },
+    "obsidian-web-layout": { "install": true, "enabled": true }
+  },
+  "layout": { "default": "auto", "threshold": 900 },
+  "demoVault": { "enabled": false, "id": "0000demo0000demo" },
+  "defaultRepo": {
+    "enabled": true,
+    "owner": "notnilcn",
+    "repo": "ggdd",
+    "ref": null,
+    "note": "Game Design Docs/01 Executive Summary"
+  },
+  "branding": { "name": "KHV Games — Game Design Docs", "themeColor": "#1e1e1e" }
+}
