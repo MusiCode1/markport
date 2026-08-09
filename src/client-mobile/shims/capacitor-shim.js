@@ -682,13 +682,24 @@
   // docs/plans/folder-vault.md §3ה. `isFolder: true` additionally gates
   // OpfsStore's external-change watch (docs/plans/folder-watch.md §2) —
   // 'local' (OPFS) vaults must stay a watch no-op (DoD#4).
+  //
+  // 'github' vaults (storage/github-repo.js) hold no GitHub-specific storage:
+  // boot.js materialises the repo before Obsidian loads, and from here down
+  // the vault is read and written like any other. WHERE it was materialised
+  // is the separate question — `window.__owVaultStorage` ('opfs' | 'folder',
+  // set by boot.js next to __owVaultType) — and that is what decides the
+  // getRoot and the external-change watch, for every type alike: a repo
+  // cloned into a picked directory can change from outside the browser, an
+  // OPFS one cannot. (Before a GitHub clone could target a directory, the
+  // type answered both questions, which is why this used to read `t`.)
   function fsBackend() {
     const t = window.__owVaultType;
-    if (t === 'local' || t === 'folder') {
+    if (t === 'local' || t === 'folder' || t === 'github') {
       if (!window.__owLocalFs) {
-        const getRoot = t === 'folder' ? (async () => window.__owFolderRoot) : undefined;
+        const isFolder = window.__owVaultStorage === 'folder' || t === 'folder';
+        const getRoot = isFolder ? (async () => window.__owFolderRoot) : undefined;
         window.__owLocalFs = wrapOpfsWithFullPath(
-          window.__owOpfsStore.makeStore(window.__owVaultId || getVaultId(), { getRoot, isFolder: t === 'folder' }));
+          window.__owOpfsStore.makeStore(window.__owVaultId || getVaultId(), { getRoot, isFolder }));
       }
       return window.__owLocalFs;
     }
@@ -716,6 +727,19 @@
         return function (opts) {
           const p = fullPath(opts || {});
           if (window.__owVaultRootPath && window.__owVaultRootPath.isVaultRootPath(p)) {
+            return Promise.reject(capError('EISDIR', 'illegal operation on a directory, read'));
+          }
+          // Same probe, one screen earlier: on the native vault-chooser
+          // (no vault active) register() builds an adapter whose basePath is
+          // the raw '<id>/<name>' list entry, so `readRaw("")` arrives here as
+          // that whole string — fullPath() has no active vault id to strip, so
+          // isVaultRootPath() above cannot recognize it. Falling through would
+          // ask the server for a path it has never heard of, and its ENOENT is
+          // exactly the answer that makes the bundle throw the vault away
+          // (`vault=null, openVaultChooser(!0)`) mid-open. owResolveNativeVaultId
+          // is the same recognizer stat() already uses for this screen, and is
+          // a no-op the moment a real vault is active.
+          if (owResolveNativeVaultId(p) !== null) {
             return Promise.reject(capError('EISDIR', 'illegal operation on a directory, read'));
           }
           return v.call(b, opts);

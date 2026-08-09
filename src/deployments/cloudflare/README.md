@@ -157,25 +157,55 @@ with no vault pre-opened and no demo trace. Do **not** delete `template.js`.
    dev`/deployed Worker → GitHub) — deferred to a real `wrangler deploy` or a
    CF environment where `workerd` runs.
 
-## Deploy — two profiles, one build (docs/plans/demo-origin-split.md)
+## Deploy — three profiles, one build (docs/plans/demo-origin-split.md)
 
-The **same** `build-assets.sh`/`index.js`/`template.js` produce two different
+The **same** `build-assets.sh`/`index.js`/`template.js` produce three different
 experiences, selected at BUILD time via `OW_PROFILE` — nothing branches at
-runtime beyond reading the injected config, so the two artifacts can never
+runtime beyond reading the injected config, so the artifacts can never
 silently drift apart (`git diff` always shows the one line that changed).
 
 | Profile | Command | Config file | Visitor experience |
 |---|---|---|---|
 | main (default) | `npm run build` | `src/config/deploy-config.json` | Clean vault-creation screen, no demo, no seeding |
 | demo | `npm run build:demo` | `src/config/deploy-config.demo.json` | Auto-opens into a pre-seeded demo vault, re-seeds on template change, links back to the main deployment |
+| gdd | `npm run build:gdd` | `src/config/deploy-config.gdd.json` | Bare origin **is a GitHub repository**: `/` redirects into `/github/<owner>/<repo>/<note>`, which clones it into the visitor's own OPFS vault |
 
 ```
 npm run build           # main profile → .tmp/deployments/cloudflare/public
 npm run build:demo      # demo profile (OW_PROFILE=demo) → same output dir
+npm run build:gdd       # gdd profile  (OW_PROFILE=gdd)  → same output dir
 npm run dev              # local emulation (wrangler pages dev) — does NOT publish anywhere
 npm run deploy           # predeploy: rebuilds MAIN + guard, then publishes to --branch=main → obsidian-online.pages.dev
 npm run deploy:demo      # predeploy:demo: rebuilds DEMO + guard, then publishes to --branch=demo → demo.obsidian-online.pages.dev
+npm run deploy:gdd       # predeploy:gdd: rebuilds GDD + guard, then publishes to the khvgames project
 ```
+
+### The `gdd` profile — a single-repository docs site
+
+`deploy-config.gdd.json` sets `defaultRepo.enabled=true`; `boot.js`'s entry
+routing turns that into a redirect to the **existing** `/github/<owner>/<repo>`
+share-link route (`storage/github-repo.js` `defaultRepoUrl` builds the URL,
+`parseShareLink` reads it back). Nothing about the clone is new — the
+share-link route already handled progress, the post-rename lookup, private-repo
+failure and "already have this repo".
+
+Consequences worth knowing before pointing a domain at it:
+
+- **The whole repository is cloned**, not a subfolder — there is no path filter
+  in `github-repo.js`. Every file under 25 MB (`MAX_FILE_BYTES`) lands in the
+  visitor's browser on first visit. A repo carrying research scrapes or large
+  attachments makes for a slow first paint; the progress UI shows `n/total`
+  throughout.
+- **`.obsidian/` comes with it**, unlike the demo seed path (which skips that
+  subtree deliberately). The repository's own community plugins therefore load
+  and run. Any that assume a desktop Obsidian API can throw on boot — harmless
+  to rendering, but visible in the console.
+- **`workspace.json` is seeded once** (`planSync` treats it as device-local
+  state thereafter), so the first view reproduces whatever panes and searches
+  were open when it was last committed.
+- A returning visitor **resumes their own copy** — the `resumeId` branch wins
+  before `defaultRepo` is ever consulted, so local edits survive. Fresh content
+  comes from the in-app pull button, not from a redeploy.
 `npm run build`/`build:demo` need network access to GitHub (`api.github.com` +
 release-asset CDN) to fetch the LiveSync plugin on a cold cache — see
 "System plugins" above. It never blocks the build if unreachable (WARN +
@@ -188,8 +218,16 @@ continue, layout-switcher only).
 |---|---|---|
 | `npm run deploy` | `obsidian-online`, branch `main` (the project's **production** branch) | `obsidian-online.pages.dev` |
 | `npm run deploy:demo` | `obsidian-online`, branch `demo` (a preview **branch alias**) | `demo.obsidian-online.pages.dev` |
+| `npm run deploy:gdd` | `khvgames`, branch `main` (a **separate** Pages project, its own production branch) | `khvgames.pages.dev` + the `khvgames.com` custom domain |
 
-One Cloudflare Pages project serves both. A branch alias always tracks the
+`gdd` gets its own Pages project rather than a third branch alias because it
+serves a different domain to a different audience; the branch-alias trick
+exists to keep *one* site's demo next to it, not to host unrelated sites.
+Its own production branch also means Cloudflare never injects the
+`X-Robots-Tag: noindex` that preview deployments get, so it needs no
+`_headers` override the way the demo profile does.
+
+One Cloudflare Pages project serves the first two. A branch alias always tracks the
 latest deployment pushed to that branch name, and — unlike a git-integrated
 project — `--branch` here is just a label on the upload, so no `demo` git
 branch exists or is needed.
@@ -216,22 +254,31 @@ must never ship the wrong experience.
 
 The one failure mode here that reaches real visitors without any test
 noticing otherwise: the artifact itself is perfectly valid, it just got
-uploaded to the **wrong target** (a demo build shipped to main, or vice
-versa). `predeploy`/`predeploy:demo` run the guard automatically (npm's
-built-in pre-hook convention) right after the matching build and right
-before the upload — a mismatch aborts with `exit 1` and an explicit
-message, and `wrangler pages deploy` never runs.
+uploaded to the **wrong target** (a demo build shipped to main, or the gdd
+build shipped to either). `predeploy`/`predeploy:demo`/`predeploy:gdd` run the
+guard automatically (npm's built-in pre-hook convention) right after the
+matching build and right before the upload — a mismatch aborts with `exit 1`
+and an explicit message, and `wrangler pages deploy` never runs.
 
-The guard checks *what is in the artifact*; the `--branch` flag in the script
-fixes *where it goes*. Both halves are needed — the guard alone cannot tell
-you that two scripts point at the same destination.
+The guard checks *what is in the artifact*; the `--project-name`/`--branch`
+flags in the script fix *where it goes*. Both halves are needed — the guard
+alone cannot tell you that two scripts point at the same destination.
 
 ```
-bash scripts/guard-deploy-target.sh main   # exit 0 iff the built artifact has NO demo config
-bash scripts/guard-deploy-target.sh demo   # exit 0 iff the built artifact DOES have demo config
+bash scripts/guard-deploy-target.sh main   # exit 0 iff the artifact carries the main profile
+bash scripts/guard-deploy-target.sh demo   # exit 0 iff the artifact carries the demo profile
+bash scripts/guard-deploy-target.sh gdd    # exit 0 iff the artifact carries the gdd profile
 ```
 
-The anchor it checks for is `"demoVault":{"enabled":true` — **with the key
-name**, not a bare `"enabled":true` (that string alone also appears in the
-main artifact's injected config, via the `obsidian-web-layout` plugin entry
-— a naive search would false-positive on every build).
+It **derives** the artifact's profile from two anchors and compares that to
+the requested target, rather than answering one yes/no question per target.
+With two profiles a boolean was total; with three it stops being so — a gdd
+artifact has `demoVault.enabled=false`, so the old "is this the demo?" check
+would have waved it straight through to production. The anchors are
+`"demoVault":{"enabled":true` and `"defaultRepo":{"enabled":true` — **with the
+key name**, not a bare `"enabled":true` (that string alone also appears in
+every artifact's injected config, via the `obsidian-web-layout` plugin entry
+— a naive search would false-positive on every build). Both depend on
+`enabled` being the **first key** of its object, since the anchor is matched
+against `JSON.stringify` output; `deploy-config.test.js` asserts that ordering
+so a harmless-looking config reshuffle cannot silently blind the guard.

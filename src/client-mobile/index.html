@@ -74,6 +74,20 @@
   <script src="/client-mobile/local-vault-registry.js?v=1"></script>
   <script src="/client-mobile/storage/opfs-store.js?v=1"></script>
   <script src="/client-mobile/storage/folder-handle-store.js?v=1"></script>
+  <!-- github-repo — "open a GitHub repository as a vault". Must load before
+       boot.js: boot.js reads window.__owGithubRepo both in the no-vault flow
+       (the "Open GitHub repository" entry point + its dialog) and in the
+       vault-open flow (first-open clone, "Pull from GitHub" button). Needs
+       __owOpfsStore only at call time (a 'github' vault IS an OPFS vault —
+       see storage/github-repo.js), so order against opfs-store.js above is
+       not load-critical, only readability. -->
+  <!-- git-writer — builds the `.git` directory that turns a downloaded
+       repository into a real clone. Must load before github-repo.js only in
+       the sense that github-repo.js reads window.__owGitWriter at sync time;
+       it degrades to "files, no .git" if the module is missing, so this is an
+       ordering for readability, not a hard dependency. -->
+  <script src="/client-mobile/storage/git-writer.js?v=1"></script>
+  <script src="/client-mobile/storage/github-repo.js?v=1"></script>
 
   <!-- 0d. Pure vault-root-path detection (docs/plans/electron-shim-foundation.md
        §3.3) — consumed by capacitor-shim.js's Filesystem.readFile to answer

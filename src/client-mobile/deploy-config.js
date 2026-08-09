@@ -43,6 +43,14 @@
     },
     layout: { default: 'auto', threshold: 900 },
     demoVault: { enabled: false, id: '0000demo0000demo' },
+    // Single-repository deployment (storage/github-repo.js defaultRepoUrl):
+    // `enabled:true` makes the bare origin redirect into
+    // /github/<owner>/<repo>, so the site IS one repository rather than a
+    // vault chooser. Off here — the default profile is the general app.
+    // `enabled` MUST stay the first key: the JSON serialisation of this
+    // subtree is what guard-deploy-target.sh anchors on
+    // (`"defaultRepo":{"enabled":true`), same reasoning as demoVault's anchor.
+    defaultRepo: { enabled: false, owner: '', repo: '', ref: null, note: '' },
     branding: { name: 'Obsidian Web', themeColor: '#1e1e1e' }
   };
 

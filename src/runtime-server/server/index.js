@@ -115,7 +115,16 @@ function createApp(appConfig = {}) {
   // /vault/:id/* (docs/plans/vault-note-deeplink.md §3ד): document-level
   // deep link — /vault/<id>/<note-path> (note-path may have nested
   // segments). Same shell; boot.js parses id + note-path from the path.
-  app.get(['/starter', '/starter.html', '/vault/:id', '/vault/:id/*'], (req, res) => {
+  // /github/:owner/:repo(/*) — the shareable vault URL. Same shell again:
+  // boot.js resolves the repository and hands off to /vault/<id>. Unlike
+  // /vault/<id> (an id that only means something in the sender's own browser),
+  // this one carries enough to materialise the vault on any device, which is
+  // what makes a link to a vault shareable at all.
+  app.get([
+    '/starter', '/starter.html',
+    '/vault/:id', '/vault/:id/*',
+    '/github/:owner/:repo', '/github/:owner/:repo/*',
+  ], (req, res) => {
     sendHtmlWithCacheBust(res, path.join(appConfig.clientMobilePath, 'index.html'));
   });
 

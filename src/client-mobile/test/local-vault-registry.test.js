@@ -66,6 +66,40 @@ test('create() default type is "local"; opts.type is respected', () => {
   assert.equal(v2.type, 'folder');
 });
 
+// ── storage — WHERE the bytes live, as opposed to `type` (what the vault is)
+// The two used to be one field, because every combination that existed had a
+// single answer; a GitHub repository cloned into a picked directory
+// ('github' + 'folder') is the case that needs both.
+
+test('storage defaults to "opfs", and to "folder" for a type:"folder" vault — derived, so a registry written before the field existed needs no migration', () => {
+  const registry = freshRegistry();
+  assert.equal(registry.create('A').storage, 'opfs');
+  assert.equal(registry.create('B', { type: 'github' }).storage, 'opfs');
+  assert.equal(registry.create('C', { type: 'folder' }).storage, 'folder');
+});
+
+test('opts.storage is respected and survives a reload — a "github" vault can live in a picked folder', () => {
+  const registry = freshRegistry();
+  const v = registry.create('repo', { type: 'github', storage: 'folder' });
+  assert.equal(v.type, 'github');
+  assert.equal(v.storage, 'folder');
+  // get()/list() must agree with create()'s return value, and with each other
+  assert.equal(registry.get(v.id).storage, 'folder');
+  assert.equal(registry.list().find((e) => e.id === v.id).storage, 'folder');
+});
+
+test('a pre-existing entry with no storage key (the on-disk shape before this field) still reads back correctly', () => {
+  const registry = freshRegistry();
+  global.localStorage.setItem('obsidian-web:local-vaults', JSON.stringify({
+    old1: { name: 'Old OPFS', createdAt: 1, type: 'local' },
+    old2: { name: 'Old folder', createdAt: 2, type: 'folder' },
+    old3: { name: 'Old github', createdAt: 3, type: 'github' },
+  }));
+  assert.equal(registry.get('old1').storage, 'opfs');
+  assert.equal(registry.get('old2').storage, 'folder');
+  assert.equal(registry.get('old3').storage, 'opfs');
+});
+
 test('has()/get() reflect create() with a fixed id', () => {
   const registry = freshRegistry();
   assert.equal(registry.has('0000demo0000demo'), false);

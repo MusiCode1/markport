@@ -23,6 +23,30 @@ test('DEFAULTS mirrors src/config/deploy-config.json — today\'s hardcoded beha
   assert.equal(DEFAULTS.plugins['obsidian-web-layout'].install, true);
   assert.equal(DEFAULTS.plugins['obsidian-web-layout'].enabled, true);
   assert.equal(DEFAULTS.defaultVaultLocation, 'device');
+  assert.equal(DEFAULTS.defaultRepo.enabled, false);
+});
+
+// The anchor guard-deploy-target.sh greps for is the JSON serialisation of
+// this subtree with `enabled` FIRST (`"defaultRepo":{"enabled":true`). Key
+// order in a JS object literal is its insertion order, and build-assets.sh
+// injects the config via JSON.stringify — so reordering these keys would
+// silently blind the deploy guard while every other test still passed.
+test('defaultRepo declares `enabled` as its first key — guard-deploy-target.sh anchors on it', () => {
+  const fileConfig = require('../../config/deploy-config.json');
+  assert.equal(Object.keys(fileConfig.defaultRepo)[0], 'enabled');
+  assert.equal(Object.keys(DEFAULTS.defaultRepo)[0], 'enabled');
+  assert.ok(JSON.stringify({ defaultRepo: { ...DEFAULTS.defaultRepo, enabled: true } })
+    .includes('"defaultRepo":{"enabled":true'));
+});
+
+test('the gdd profile pins the site to a repository and enables nothing else that routes `/`', () => {
+  // demoVault and defaultRepo both claim the bare origin. boot.js resolves
+  // the collision in defaultRepo's favour, but a profile shipping both is a
+  // config bug — this is what keeps the shipped one honest.
+  const gdd = require('../../config/deploy-config.gdd.json');
+  assert.equal(gdd.defaultRepo.enabled, true);
+  assert.equal(gdd.demoVault.enabled, false);
+  assert.equal(gdd.seedExampleContent, false);
 });
 
 // avigail finding 3: the test above only ever compared DEFAULTS against

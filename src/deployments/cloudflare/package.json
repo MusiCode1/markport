@@ -11,6 +11,9 @@
     "deploy": "npx wrangler pages deploy ../../../.tmp/deployments/cloudflare/public --project-name=obsidian-online --branch=main --commit-dirty=true",
     "predeploy:demo": "npm run build:demo && bash scripts/guard-deploy-target.sh demo",
     "deploy:demo": "npx wrangler pages deploy ../../../.tmp/deployments/cloudflare/public --project-name=obsidian-online --branch=demo --commit-dirty=true",
+    "build:gdd": "OW_PROFILE=gdd bash scripts/build-assets.sh",
+    "predeploy:gdd": "npm run build:gdd && bash scripts/guard-deploy-target.sh gdd",
+    "deploy:gdd": "npx wrangler pages deploy ../../../.tmp/deployments/cloudflare/public --project-name=khvgames --branch=main --commit-dirty=true",
     "dev": "bash scripts/build-assets.sh && npx wrangler pages dev ../../../.tmp/deployments/cloudflare/public",
     "test": "bun test test/*.test.js"
   },

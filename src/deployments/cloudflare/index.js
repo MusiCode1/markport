@@ -26,8 +26,15 @@ export default {
     if (url.pathname === '/api/proxy-request' && request.method === 'POST') {
       return handleProxy(request, ctx);
     }
+    // '/github/<owner>/<repo>[/<note>]' joins the SPA-fallback list: it is the
+    // shareable form of a vault URL (boot.js clones the repository on arrival
+    // and hands off to /vault/<id>). This deployment is the one that makes
+    // that worth having — '/vault/<id>' pasted to someone else resolves to a
+    // vault id that only ever existed in the sender's browser.
     if (request.method === 'GET' &&
-        (url.pathname === '/starter' || url.pathname.startsWith('/vault/'))) {
+        (url.pathname === '/starter' ||
+         url.pathname.startsWith('/vault/') ||
+         url.pathname.startsWith('/github/'))) {
       // fetch את ה-root shell '/' (200) — לא '/index.html' (finding 2: html_handling
       // עלול להחזיר 307 מ-'/index.html' ל-'/' ולאבד את ה-deep-link). fetch של '/'
       // מחזיר את ה-shell כ-200; ה-URL בדפדפן נשאר /vault/<id> (זו לא הפניה, זה גוף),

@@ -121,52 +121,50 @@ test('build-assets.sh: FAILS loudly (nonzero exit) when OW_BACKEND_INJECT marker
 // ── guard-deploy-target.sh (docs/plans/demo-origin-split.md §4 Commit 5,
 // DoD#8) — the one failure mode in this slice that reaches real visitors
 // without any test noticing otherwise: the artifact itself is fine, it just
-// got uploaded to the wrong target (demo → main, or vice versa). Anchor is
-// `"demoVault":{"enabled":true` (WITH the key name — avigail finding 4: a
-// bare `"enabled":true` search false-positives on the main artifact too,
-// via deploy-config.json's obsidian-web-layout plugin entry).
+// got uploaded to the wrong target (demo → main, or vice versa). Anchors are
+// `"demoVault":{"enabled":true` and `"defaultRepo":{"enabled":true` (WITH the
+// key name — avigail finding 4: a bare `"enabled":true` search
+// false-positives on the main artifact too, via deploy-config.json's
+// obsidian-web-layout plugin entry).
+//
+// With three profiles the guard derives the artifact's profile and compares,
+// so EVERY wrong pairing is covered, not just the two the demo/main split had
+// — hence the exhaustive matrix below rather than four hand-picked cases.
 
 function runGuard(target) {
   return execSync(`bash scripts/guard-deploy-target.sh ${target}`, { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
 }
 
-test('guard-deploy-target.sh: blocks a demo artifact from deploying to the main target (DoD#8)', () => {
-  execSync('OW_PROFILE=demo bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+const BUILD_CMD = {
+  main: 'bash scripts/build-assets.sh',
+  demo: 'OW_PROFILE=demo bash scripts/build-assets.sh',
+  gdd: 'OW_PROFILE=gdd bash scripts/build-assets.sh',
+};
 
-  let threw = false;
-  try {
-    runGuard('main');
-  } catch (err) {
-    threw = true;
-    expect(err.status).not.toBe(0);
-    expect(String(err.stdout)).toContain('refusing to deploy a DEMO artifact');
+for (const profile of ['main', 'demo', 'gdd']) {
+  for (const target of ['main', 'demo', 'gdd']) {
+    const shouldPass = profile === target;
+
+    test(`guard-deploy-target.sh: a '${profile}' artifact ${shouldPass ? 'passes' : 'is blocked'} against the '${target}' target`, () => {
+      execSync(BUILD_CMD[profile], { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
+
+      if (shouldPass) {
+        expect(() => runGuard(target)).not.toThrow();
+        return;
+      }
+
+      let threw = false;
+      try {
+        runGuard(target);
+      } catch (err) {
+        threw = true;
+        expect(err.status).not.toBe(0);
+        expect(String(err.stdout)).toContain(`refusing to deploy a '${profile}' artifact to the '${target}' target`);
+      }
+      expect(threw).toBe(true);
+    }, 180000);
   }
-  expect(threw).toBe(true);
-});
-
-test('guard-deploy-target.sh: passes a demo artifact against the demo target', () => {
-  execSync('OW_PROFILE=demo bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
-  expect(() => runGuard('demo')).not.toThrow();
-});
-
-test('guard-deploy-target.sh: blocks the main artifact from deploying to the demo target', () => {
-  execSync('bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
-
-  let threw = false;
-  try {
-    runGuard('demo');
-  } catch (err) {
-    threw = true;
-    expect(err.status).not.toBe(0);
-    expect(String(err.stdout)).toContain('no demo config injected');
-  }
-  expect(threw).toBe(true);
-});
-
-test('guard-deploy-target.sh: passes the main artifact against the main target', () => {
-  execSync('bash scripts/build-assets.sh', { cwd: CF_DIR, stdio: 'pipe', timeout: 120000 });
-  expect(() => runGuard('main')).not.toThrow();
-});
+}
 
 test('guard-deploy-target.sh: rejects an unknown/missing target argument', () => {
   let threw = false;

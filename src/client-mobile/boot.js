@@ -55,6 +55,12 @@ const MOBILE_SCRIPTS = [
                     ? __owVaultMatch[2].split('/').map(decodeURIComponent).join('/')
                     : '';
   var forceStarter = (__owPath === '/starter');
+  // '/github/<owner>/<repo>[/<note>]' — the shareable vault URL (see
+  // storage/github-repo.js parseShareLink, and the routing block below).
+  // null for every other path, including when github-repo.js failed to load.
+  var __owShareLink = window.__owGithubRepo
+    ? window.__owGithubRepo.parseShareLink(__owPath, location.search, location.hash)
+    : null;
 
   // ── מסך-פתיחה נייטיב — helpers (opfs-ux) ───────────────────────────────────
   // הנייטיב (`.mobile-vault-chooser-screen`) שומר בחירת-vault תחת
@@ -76,12 +82,37 @@ const MOBILE_SCRIPTS = [
     return null;
   }
 
+  // vaultUrl(id, rawNote) — the one place '/vault/<id>[/<note>]' is spelled.
+  // `rawNote` is ALREADY percent-encoded per segment (it comes straight out of
+  // a location.pathname, e.g. the share-link route below) and is appended
+  // verbatim: that is exactly the encoding the /vault/<id>/<note> parser at the
+  // top of this file expects, so decoding it here only to re-encode it could
+  // not produce a different string — only a chance to produce a wrong one.
+  function vaultUrl(id, rawNote) {
+    var u = '/vault/' + encodeURIComponent(id);
+    if (rawNote) u += '/' + rawNote;
+    return u;
+  }
+
   // navigateToVault — path-based, **אבסולוטי** (brief §3ב): '/vault/<id>' הוא
   // עכשיו מקור-האמת ל-URL, גלוי ונשאר (ניתן-לשיתוף/סימניה) — לא תלוי יותר
   // באיזה path הגיש את הדף (CF/מקומי מגישים שניהם אותו shell). משמש הן ע"י
   // ה-Create-vault interceptor למטה והן ע"י הגישור native-vault-open (Bug 2b).
-  function navigateToVault(id) {
-    location.href = '/vault/' + encodeURIComponent(id);
+  function navigateToVault(id, rawNote) {
+    // __owVaultNavPending — "this document is on its way out, to a vault".
+    // Assigning location.href only SCHEDULES the navigation; the current
+    // document keeps running until the new one commits, and the bundle keeps
+    // running with it. On the chooser's own open-flow (register(), intercepted
+    // just below) that leftover work is a doomed Obsidian boot against a
+    // vault-less FS, and its failure path calls openVaultChooser() → the
+    // electron shim's 'starter' channel → location.href='/starter', which
+    // REPLACES the vault navigation we already committed to. Measured: the
+    // chooser's "Open vault" landed back on the vault list instead of in the
+    // vault, non-deterministically — whichever navigation the browser commits
+    // first wins, so it depends on how fast one `/api/fs/read` round-trip
+    // answers. shims/electron.js reads this flag and declines to navigate.
+    window.__owVaultNavPending = true;
+    location.href = vaultUrl(id, rawNote);
   }
 
   // DEMO_ID — הועלה לכאן, לפני בלוק ניתוב-הכניסה למטה (docs/plans/
@@ -114,6 +145,17 @@ const MOBILE_SCRIPTS = [
     // הנייטיב לא ינסה auto-open כשהוא רץ מיד למטה (מסך-הפתיחה, no-vault).
     if (localStorage.getItem('mobile-selected-vault')) localStorage.removeItem('mobile-selected-vault');
     localStorage.removeItem('obsidian-web:lastVaultId');
+  } else if (__owShareLink) {
+    // ── /github/<owner>/<repo>[/<note>] — the shareable vault URL ───────────
+    // The only route that resolves to a vault WITHOUT the recipient already
+    // having it: '/vault/<id>' is a key into the sender's own browser
+    // registry, so a pasted /vault/ link lands a visitor on "This vault isn't
+    // on this device" (the __owBackend==='none' branch further down). This
+    // route carries the repository itself, so the vault can be materialised
+    // on arrival. Runs before the entry-routing below on purpose — that block
+    // would otherwise see an empty VAULT_ID and bounce to /starter.
+    openGithubShareLink(__owShareLink);
+    return;   // async from here — nothing else in this tick applies
   } else if (!VAULT_ID) {
     var sel = localStorage.getItem('mobile-selected-vault');
     var resumeId = sel ? (owNativeVaultIdFromValue(sel) || localStorage.getItem('obsidian-web:lastVaultId') || '') : '';
@@ -121,6 +163,22 @@ const MOBILE_SCRIPTS = [
     if (resumeId) {
       location.replace('/vault/' + encodeURIComponent(resumeId));
     } else {
+      // Single-repository deployment (deploy-config `defaultRepo`) — the bare
+      // origin IS a repository, so a first-time visitor lands in it instead of
+      // the chooser. Redirects into the /github/ share-link route handled at
+      // the top of this block rather than cloning here: that route already
+      // resolves "already have this repo", the post-rename lookup, and the
+      // failure UI. Checked BEFORE the demo branch below because the two are
+      // mutually exclusive by construction (a profile sets one or the other,
+      // never both — see src/config/deploy-config.gdd.json); if a config ever
+      // did enable both, the repository is the more specific intent.
+      // Returning visitors never reach here — the resumeId branch above wins,
+      // so their own local edits to the cloned vault are not disturbed.
+      var repoUrl = window.__owGithubRepo
+        ? window.__owGithubRepo.defaultRepoUrl(window.__owConfig && window.__owConfig.defaultRepo)
+        : null;
+      if (repoUrl) { location.replace(repoUrl); return; }
+
       // דמו — פתיחה-אוטומטית (§0 מטרה: מבקר בדומיין הדמו נוחת ישירות בכספת,
       // אפס לחיצות). ES5 guard pattern (כמו ensureDemo/DEMO_ID למעלה) —
       // demoVault.autoOpen===true במפורש (לא ייתכן "on by default" — ברירת-
@@ -175,15 +233,45 @@ const MOBILE_SCRIPTS = [
 
   // Vault type: 'local' (OPFS, no server round-trip), 'folder' (real
   // directory picked via showDirectoryPicker, also OPFS-store-backed — see
-  // capacitor-shim's fsBackend), or 'server' (HTTP /api/fs). Determined by
-  // the browser-side local vault registry's `type` field (window.__owLocalVaults,
-  // loaded synchronously via <script> before boot.js — see index.html loading
-  // order). No entry in the registry → 'server' (unchanged from before).
+  // capacitor-shim's fsBackend), 'github' (a GitHub repository materialised
+  // by storage/github-repo.js; the type marks where the content came from and
+  // that a "Pull" action applies), or 'server' (HTTP /api/fs). Determined by
+  // the browser-side local vault registry's `type` field
+  // (window.__owLocalVaults, loaded synchronously via <script> before boot.js
+  // — see index.html loading order). No entry in the registry → 'server'
+  // (unchanged from before).
+  //
+  // VAULT_STORAGE answers a SEPARATE question — where the bytes physically
+  // live: 'opfs' (browser-managed storage) or 'folder' (a directory the user
+  // picked, reached through a FileSystemDirectoryHandle). It used to be
+  // readable off the type, because every combination that existed had exactly
+  // one answer; a GitHub repository cloned into a picked directory
+  // ('github' + 'folder') is the case that breaks that. Every check below
+  // that is really about "do I need a permission-granted directory handle?"
+  // asks VAULT_STORAGE; every check about "what kind of vault is this, what
+  // can I do with it?" keeps asking VAULT_TYPE. Registry entries written
+  // before the field existed derive it (local-vault-registry.js storageOf).
   var __owV = window.__owLocalVaults && window.__owLocalVaults.get(VAULT_ID);
-  var VAULT_TYPE = __owV ? (__owV.type || 'local') : 'server';   // 'folder' | 'local' | 'server'
-  window.__owVaultType = VAULT_TYPE;
-  window.__owVaultId   = VAULT_ID;
-  console.log('[obsidian-web] vault type:', VAULT_TYPE, 'id:', VAULT_ID);
+  var VAULT_TYPE = __owV ? (__owV.type || 'local') : 'server';   // 'folder' | 'local' | 'github' | 'server'
+  var VAULT_STORAGE = (__owV && __owV.storage) || (VAULT_TYPE === 'folder' ? 'folder' : 'opfs');
+  window.__owVaultType    = VAULT_TYPE;
+  window.__owVaultStorage = VAULT_STORAGE;
+  window.__owVaultId      = VAULT_ID;
+  console.log('[obsidian-web] vault type:', VAULT_TYPE, 'storage:', VAULT_STORAGE, 'id:', VAULT_ID);
+
+  // "Is this vault backed by a directory the user picked?" — the one question
+  // the permission gate, the SW resource responder, the external-change watch
+  // and the store factories all actually ask.
+  function isFolderBacked() { return VAULT_STORAGE === 'folder'; }
+
+  // The getRoot an OpfsStore needs for a folder-backed vault: the handle boot
+  // put on window.__owFolderRoot once the permission grant resolved (see
+  // verifyPromise below). undefined for OPFS-backed vaults, which is exactly
+  // what makeStore() wants — it then resolves its own vaults/<id> root.
+  function folderGetRoot() {
+    if (!isFolderBacked()) return undefined;
+    return async function () { return window.__owFolderRoot; };
+  }
 
   // ── /_owres/ folder-vault RPC responder (sw-vault-resources §3ד) ─────────
   // The SW's `/_owres/` handler (sw.js) can read OPFS ('local' vaults)
@@ -205,7 +293,7 @@ const MOBILE_SCRIPTS = [
       if (!msg || msg.type !== 'ow-res') return;
       var port = ev.ports && ev.ports[0];
       if (!port) return;
-      if (msg.vaultId !== VAULT_ID || VAULT_TYPE !== 'folder' || !window.__owFolderRoot) {
+      if (msg.vaultId !== VAULT_ID || !isFolderBacked() || !window.__owFolderRoot) {
         port.postMessage({ ok: false, error: 'no matching granted folder vault' });
         return;
       }
@@ -288,6 +376,52 @@ const MOBILE_SCRIPTS = [
     isMobileApp:  true,
   };
   console.log('[obsidian-web] platform overrides:', layout);
+
+  // ── window.process / window.Buffer ─────────────────────────────────────────
+  // ⚠️ ORDER IS LOAD-BEARING: both must exist BEFORE the `modules` map below is
+  // built, because that map captures `window.process` / `window.Buffer` BY
+  // VALUE. They used to be defined *after* it, so `require('buffer').Buffer`
+  // and `require('process')` handed every plugin `undefined` forever — the
+  // obsidian-git failure that motivated this block (see the process.versions
+  // note just below and docs/investigations.md).
+  window.process = window.process || {
+    platform: 'linux', arch: 'x64',
+    // ⚠️ NO `node:` KEY HERE — deliberate, and load-bearing by its ABSENCE.
+    // The canonical "am I running under Node?" sniff every UMD bundle uses is
+    //   typeof process === 'object' && process.versions && process.versions.node
+    // so any truthy value (the old placeholder was '0.0.0') makes a library
+    // pick its Node branch and then `require('fs' | 'buffer' | 'crypto')` for
+    // real. We are a browser: those give shims at best. Measured: js-sha256,
+    // bundled into obsidian-git, took that branch, read `.Buffer` off the
+    // buffer shim and threw — the plugin never loaded ("Failed to load
+    // plugin"). Leaving the key out puts it on its pure-JS browser path, the
+    // same one it takes on real Obsidian mobile (which has no `process` at
+    // all). Nothing in vendor/obsidian-mobile/app.js reads `versions.node`.
+    //
+    // electron: '30.0.0' — docs/plans/electron-shim-foundation.md §3.0: a
+    // WEIGHT-BEARING literal, not a "for example" placeholder. Derived
+    // (Tn/Pn/Ln) values must satisfy THREE measured constraints at once —
+    // major>=13, string>="28.2.3", major<40 — or the bundle throws an
+    // "upgrade your installer" error at boot, or picks the wrong clipboard
+    // API branch. '30.0.0' is the smallest version that clears all three.
+    versions: { electron: '30.0.0' }, env: {},
+    cwd: function(){ return '/'; },
+    nextTick: function(fn){ return Promise.resolve().then(fn); },
+  };
+
+  if (!window.Buffer) {
+    window.Buffer = {
+      from: function(data, enc) {
+        if (typeof data==='string') {
+          if (enc==='base64') { var b=atob(data),a=new Uint8Array(b.length); for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i); return a; }
+          return new TextEncoder().encode(data);
+        }
+        return new Uint8Array(data);
+      },
+      isBuffer: function(x){ return x instanceof Uint8Array; },
+      alloc: function(n){ return new Uint8Array(n); },
+    };
+  }
 
   // ── window.require לפלאגינים ───────────────────────────────────────────────
   var modules = {
@@ -408,32 +542,8 @@ const MOBILE_SCRIPTS = [
   };
   window.__owMissing = missing;
 
-  window.process = window.process || {
-    platform: 'linux', arch: 'x64',
-    // electron: '30.0.0' — docs/plans/electron-shim-foundation.md §3.0: a
-    // WEIGHT-BEARING literal, not a "for example" placeholder. Derived
-    // (Tn/Pn/Ln) values must satisfy THREE measured constraints at once —
-    // major>=13, string>="28.2.3", major<40 — or the bundle throws an
-    // "upgrade your installer" error at boot, or picks the wrong clipboard
-    // API branch. '30.0.0' is the smallest version that clears all three.
-    versions: { node: '0.0.0', electron: '30.0.0' }, env: {},
-    cwd: function(){ return '/'; },
-    nextTick: function(fn){ return Promise.resolve().then(fn); },
-  };
-
-  if (!window.Buffer) {
-    window.Buffer = {
-      from: function(data, enc) {
-        if (typeof data==='string') {
-          if (enc==='base64') { var b=atob(data),a=new Uint8Array(b.length); for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i); return a; }
-          return new TextEncoder().encode(data);
-        }
-        return new Uint8Array(data);
-      },
-      isBuffer: function(x){ return x instanceof Uint8Array; },
-      alloc: function(n){ return new Uint8Array(n); },
-    };
-  }
+  // (window.process / window.Buffer are installed ABOVE the `modules` map —
+  // it captures them by value, so defining them here would be too late.)
 
   console.log('[obsidian-web] mobile boot: require + shims installed, vault=' + VAULT_ID);
 
@@ -971,6 +1081,550 @@ const MOBILE_SCRIPTS = [
     obs.observe(document.body, { childList: true, subtree: true });
   }
 
+  // ── "Open GitHub repository" — third way into a vault ─────────────────────
+  // Alongside the bundle's own "Create new vault" (OPFS / App storage) and
+  // "Open folder as vault" (showDirectoryPicker). Injected into the two
+  // native entry screens rather than added to the storage radio-group of the
+  // create-vault form: that group's two options are addressed BY DOM ORDER in
+  // installCreateVaultInterceptor and installExternalStorageGate above
+  // (index 0 = external, index 1 = app — the only language-independent
+  // anchor available), so inserting a third option there would silently
+  // shift the very indices both of them depend on.
+  //
+  // Everything we inject is marked `data-ow-injected` (§3.6 convention, see
+  // installCreateVaultInterceptor's skip for it) and anchored to structure,
+  // never to rendered text — the entry screens are translated into 44
+  // languages and text matching has already broken this file twice.
+  var OW_GITHUB_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" ' +
+    'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-github">' +
+    '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5' +
+    '.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5' +
+    'A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4">' +
+    '</path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>';
+
+  // Re-open an existing vault instead of cloning the same repo twice. Keyed
+  // on owner/repo/ref (case-insensitive — GitHub treats owner/repo that way)
+  // so pasting the same URL again lands you back in the vault you already
+  // have, with its local edits intact, instead of minting a second copy.
+  //
+  // opts.anyRef ignores the branch — used by the share-link route for a
+  // '/github/<owner>/<repo>' with no `?ref=`, where the visitor asked for "the
+  // repo" and has expressed no opinion about which branch. Matching on
+  // ref===null there would miss the vault they already have (whose ref is the
+  // concrete default branch, resolved when it was created) and clone a second
+  // copy of the same repository.
+  //
+  // opts.storage ('opfs' | 'folder') additionally requires the existing copy
+  // to live where the caller asked for it. The dialog passes it because the
+  // storage choice is part of the request: someone who asks for the repo in a
+  // folder on disk, having previously opened it into browser storage, is
+  // asking for something they do not have yet, and silently reopening the
+  // browser-storage copy would answer a question they didn't ask. The
+  // share-link route passes nothing and keeps matching either.
+  function findExistingGithubVault(spec, opts) {
+    if (!window.__owLocalVaults || !window.__owGithubRepo) return null;
+    var anyRef = !!(opts && opts.anyRef);
+    var storage = (opts && opts.storage) || null;
+    var all = window.__owLocalVaults.list();
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].type !== 'github') continue;
+      if (storage && all[i].storage !== storage) continue;
+      var st = window.__owGithubRepo.getVaultState(all[i].id);
+      if (!st) continue;
+      if (String(st.owner).toLowerCase() === String(spec.owner).toLowerCase() &&
+          String(st.repo).toLowerCase() === String(spec.repo).toLowerCase() &&
+          (anyRef || st.ref === spec.ref)) {
+        return all[i].id;
+      }
+    }
+    return null;
+  }
+
+  // Pick the directory a repository is cloned into. `startIn:'downloads'`
+  // opens the picker AT the browser's download folder, which is as close to
+  // "download it to Downloads" as a web page is allowed to get: there is no
+  // API that writes to a path without the user confirming it in their own
+  // file dialog. `id` makes Chromium remember this picker's last directory
+  // separately from every other picker on the origin, so the second repo
+  // opens where the first one landed rather than back at Downloads.
+  //
+  // ⚠ Downloads, Desktop, Documents and the home directory CANNOT be chosen,
+  // only folders inside them. Chromium's File System Access blocklist
+  // (kDontBlockChildren) refuses the folder itself and shows its own dialog:
+  // "<origin> can't open this folder because it contains system files". This
+  // is a browser policy with no API around it — not a bug here and not
+  // something a permission prompt can unlock — so the only honest response is
+  // to say so BEFORE the picker opens (see describeWhere below) and again if
+  // the user backs out of it. `startIn` still points at Downloads because
+  // that is where people want the repository to land; they descend one level
+  // (the picker's own "New folder" button is enough).
+  //
+  // MUST be called on the click's own user activation — before any await, or
+  // the browser rejects it with "must be handling a user gesture". That is
+  // why the caller picks first and validates the repository afterwards.
+  function pickCloneParentDirectory() {
+    return window.showDirectoryPicker({
+      mode: 'readwrite',
+      startIn: 'downloads',
+      id: 'ow-github-clone',
+    });
+  }
+
+  // Said in two places (the dialog's own description, and after a cancelled
+  // pick) — one wording, so the explanation can't drift.
+  var OW_BLOCKED_FOLDER_HINT =
+    'Chrome won\'t let a website use Downloads, Desktop or Documents ' +
+    'themselves ("contains system files") — pick a folder inside one of ' +
+    'them, or use the file dialog\'s "New folder" button.';
+
+  // The picker's own "user cancelled" — Escape or the dialog's Cancel button.
+  // Not an error to report: nothing went wrong, the user changed their mind.
+  function isPickerCancel(e) {
+    if (!e) return false;
+    if (e.name === 'AbortError') return true;
+    return /abort|cancel/i.test(String(e.message || ''));
+  }
+
+  // The dialog. Built from Obsidian's own modal/setting classes (app.css is
+  // already loaded by the time any entry screen exists) so it looks like part
+  // of the app instead of a bolted-on form, but it is our DOM entirely — it
+  // never touches the bundle's modal stack.
+  //
+  // opts.repo prefills the field, and opts.note carries a note path through to
+  // the vault that gets opened. Both are for the share-link route below: when
+  // '/github/<owner>/<repo>/<note>' fails because the repository is private,
+  // this dialog IS the recovery (it's the only place a token can be entered),
+  // and it has to land on the same note the link asked for.
+  function openGithubDialog(opts) {
+    if (document.querySelector('.ow-github-modal')) return;
+    var note = (opts && opts.note) || '';
+
+    var container = document.createElement('div');
+    container.className = 'modal-container mod-dim ow-github-modal';
+    container.setAttribute('data-ow-injected', 'github-dialog');
+    // app.css puts .modal-container at z-index 50, which is above everything
+    // Obsidian renders but BELOW our own boot overlay (#ow-loading, z-index
+    // 99999 in index.html). That matters on exactly one path — the share-link
+    // failure screen, which is drawn inside that overlay and offers this
+    // dialog as its recovery: measured, the dialog opened correctly and was
+    // invisible underneath it. 100000 matches the platform-failure banner.
+    container.style.zIndex = '100000';
+    container.innerHTML =
+      '<div class="modal-bg" style="opacity:0.85;"></div>' +
+      '<div class="modal" style="max-width:520px;">' +
+        '<div class="modal-close-button"></div>' +
+        '<div class="modal-title">Open GitHub repository</div>' +
+        '<div class="modal-content">' +
+          '<div class="setting-item">' +
+            '<div class="setting-item-info">' +
+              '<div class="setting-item-name">Repository</div>' +
+              '<div class="setting-item-description">' +
+                'A URL or <code>owner/repo</code>. Add <code>#branch</code>, or paste a ' +
+                '<code>/tree/&lt;branch&gt;</code> URL, to pick a branch.' +
+              '</div>' +
+            '</div>' +
+            '<div class="setting-item-control">' +
+              '<input type="text" class="ow-gh-repo" spellcheck="false" ' +
+                'placeholder="https://github.com/owner/repo"/>' +
+            '</div>' +
+          '</div>' +
+          '<div class="setting-item">' +
+            '<div class="setting-item-info">' +
+              '<div class="setting-item-name">Access token <span style="opacity:.6">(optional)</span></div>' +
+              '<div class="setting-item-description">' +
+                'Only needed for a private repository. Stored in this browser, sent to github.com only.' +
+              '</div>' +
+            '</div>' +
+            '<div class="setting-item-control">' +
+              '<input type="password" class="ow-gh-token" spellcheck="false" placeholder="ghp_…"/>' +
+            '</div>' +
+          '</div>' +
+          '<div class="setting-item ow-gh-where-row">' +
+            '<div class="setting-item-info">' +
+              '<div class="setting-item-name">Download to</div>' +
+              '<div class="setting-item-description ow-gh-where-desc"></div>' +
+            '</div>' +
+            '<div class="setting-item-control">' +
+              '<select class="dropdown ow-gh-where">' +
+                '<option value="folder">A folder on this device</option>' +
+                '<option value="opfs">This browser\'s storage</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ow-gh-error" style="display:none;color:var(--text-error,#e05252);' +
+            'font-size:13px;margin:4px 0 12px;line-height:1.5;"></div>' +
+          '<div class="setting-item" style="border:none;">' +
+            '<div class="setting-item-info">' +
+              '<div class="setting-item-description">' +
+                'Edits stay local — nothing is pushed back to GitHub.' +
+              '</div>' +
+            '</div>' +
+            '<div class="setting-item-control">' +
+              '<button class="mod-cta ow-gh-submit" data-ow-injected="github-submit">Open</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(container);
+
+    var repoInput = container.querySelector('.ow-gh-repo');
+    var tokenInput = container.querySelector('.ow-gh-token');
+    var submitBtn = container.querySelector('.ow-gh-submit');
+    var errorEl = container.querySelector('.ow-gh-error');
+    var whereRow = container.querySelector('.ow-gh-where-row');
+    var whereSelect = container.querySelector('.ow-gh-where');
+    var whereDesc = container.querySelector('.ow-gh-where-desc');
+
+    // Same gate, and for the same reason, as installExternalStorageGate
+    // above: Firefox and Safari have no showDirectoryPicker at all, and an
+    // option that can never work must not be offered — least of all as the
+    // default. There, the row disappears and browser storage is the only
+    // answer, which is what those browsers did before this choice existed.
+    var canPickFolder = 'showDirectoryPicker' in window;
+    if (!canPickFolder) {
+      whereRow.style.display = 'none';
+      whereSelect.value = 'opfs';
+    }
+
+    function describeWhere() {
+      whereDesc.textContent = whereSelect.value === 'folder'
+        ? 'You pick the folder — the file dialog opens at your downloads folder. ' +
+          'A folder named after the repository is created inside it, as a real ' +
+          'git clone (.git included). ' + OW_BLOCKED_FOLDER_HINT
+        : 'Kept in browser storage, private to this site. Not visible in your file manager, ' +
+          'and cleared if you clear this site\'s data.';
+    }
+    describeWhere();
+    whereSelect.addEventListener('change', describeWhere);
+
+    function close() { if (container.parentNode) container.parentNode.removeChild(container); }
+    function fail(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.color = 'var(--text-error,#e05252)';
+      errorEl.style.display = '';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Open';
+    }
+    // Same slot, muted: nothing went wrong, the user just needs to know why
+    // the folder they tried was refused.
+    function hint(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.color = 'var(--text-muted,#888)';
+      errorEl.style.display = '';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Open';
+    }
+
+    container.querySelector('.modal-close-button').addEventListener('click', close);
+    container.querySelector('.modal-bg').addEventListener('click', close);
+    container.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') close();
+      // Enter from either field submits. Guarded on `disabled` so holding
+      // Enter during the resolve round-trip can't fire a second lookup (and,
+      // on the success path, a second vault).
+      if (e.key === 'Enter' && e.target !== submitBtn && !submitBtn.disabled) {
+        e.preventDefault();
+        submit();
+      }
+    });
+
+    // Survives a failed submit on purpose: a folder the user already chose is
+    // not re-asked for just because the repository name had a typo in it.
+    var pickedParent = null;
+
+    function submit() {
+      errorEl.style.display = 'none';
+      var spec = window.__owGithubRepo.parseRepoRef(repoInput.value);
+      if (!spec) {
+        fail('That doesn\'t look like a GitHub repository. Try https://github.com/owner/repo.');
+        return;
+      }
+      var token = tokenInput.value.trim() || null;
+      var wantsFolder = canPickFolder && whereSelect.value === 'folder';
+      var wantedStorage = wantsFolder ? 'folder' : 'opfs';
+
+      // Already have this repo, in the storage being asked for? Then answer
+      // from the registry — before the picker and before the network, so
+      // re-pasting a URL neither opens a file dialog nor spends a GitHub
+      // request. Ref matching mirrors the share-link route: no explicit ref in
+      // the input means "the repo", which must match the concrete default
+      // branch the existing vault was created with.
+      var already = findExistingGithubVault(spec, { anyRef: !spec.ref, storage: wantedStorage });
+      if (already) { navigateToVault(already, note); return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = wantsFolder ? 'Choose a folder…' : 'Checking…';
+
+      // The picker runs FIRST, synchronously on this click's user activation:
+      // showDirectoryPicker() is only callable while that activation is live,
+      // and the repository lookup below is a network round-trip that can
+      // outlast it. The cost of that ordering is that an unreachable repo is
+      // reported after the folder was chosen rather than before — paid back by
+      // pickedParent, which keeps the choice for the corrected retry.
+      var pickPromise;
+      if (!wantsFolder) pickPromise = Promise.resolve(null);
+      else if (pickedParent) pickPromise = Promise.resolve(pickedParent);
+      else pickPromise = pickCloneParentDirectory().then(function (h) { pickedParent = h; return h; });
+
+      pickPromise
+        .then(function (parent) {
+          submitBtn.textContent = 'Checking…';
+          // Resolve BEFORE creating anything: a typo'd repo or a private one
+          // with no token must fail here, in a dialog the user can correct,
+          // rather than leaving a broken vault entry behind in the registry.
+          return window.__owGithubRepo.resolveRepo(spec, { token: token })
+            .then(function (meta) { return { meta: meta, parent: parent }; });
+        })
+        .then(function (r) {
+          if (!r) return;   // dialog closed under us
+          var meta = r.meta;
+          // Second check, now against what GitHub actually resolved — the
+          // input's owner/repo casing, a rename, or an unspecified ref can all
+          // make the pre-check above miss a vault we do have.
+          var existing = findExistingGithubVault(meta, { storage: wantedStorage });
+          if (existing) { navigateToVault(existing, note); return; }
+          if (!r.parent) return createGithubVault(meta, token, null);
+
+          // A folder named after the repository, inside the chosen one — so
+          // choosing Downloads gets you Downloads/<repo>/, not a repository
+          // emptied loose into Downloads. `create:true` is also the reopen
+          // path: an existing directory of the same name is adopted rather
+          // than refused, and syncVault()'s three-way plan then treats
+          // whatever is already in it as local edits (kept, never clobbered).
+          return r.parent.getDirectoryHandle(meta.repo, { create: true })
+            .then(function (dir) { return createGithubVault(meta, token, dir); });
+        })
+        .catch(function (e) {
+          if (isPickerCancel(e)) {
+            // Dismissed the folder picker. Indistinguishable from "walked into
+            // the blocked-folder wall and gave up" — Chromium reports both as
+            // AbortError — so say the thing that helps in the second case and
+            // is merely ignorable in the first.
+            hint(OW_BLOCKED_FOLDER_HINT);
+            return;
+          }
+          fail((e && e.message) || String(e));
+        });
+    }
+
+    // Registry entry + sync state + navigation, shared by both storages.
+    // `dir` non-null ⇒ folder-backed: the handle must be persisted BEFORE
+    // navigating, because the vault is unopenable without it — boot.js's
+    // verify step loads it from IndexedDB and fails the open if it isn't
+    // there (see the isFolderBacked() branch of verifyPromise).
+    function createGithubVault(meta, token, dir) {
+      var created = window.__owLocalVaults.create(meta.name, {
+        type: 'github',
+        storage: dir ? 'folder' : 'opfs',
+      });
+      var saved = dir
+        ? window.__owFolderHandles.saveHandle(created.id, dir)
+        : Promise.resolve();
+      return saved.then(function () {
+        window.__owGithubRepo.setVaultState(created.id, {
+          owner: meta.owner,
+          repo: meta.repo,
+          ref: meta.ref,
+          commit: null,       // null = "never synced" → boot.js clones on open
+          token: token,
+          blobs: {},
+        });
+        navigateToVault(created.id, note);   // the clone runs there, with progress
+      });
+    }
+
+    submitBtn.addEventListener('click', submit);
+    if (opts && opts.repo) repoInput.value = opts.repo;
+    repoInput.focus();
+  }
+
+  // ── /github/<owner>/<repo>[/<note>] — share-link route ────────────────────
+  // Routed at the top of this file, before anything else runs. Three outcomes,
+  // in order of how common they are:
+  //   already have this repo → straight into that vault (local edits intact)
+  //   don't have it yet      → create the registry entry, then hand off to
+  //                            /vault/<id>, where the EXISTING first-open
+  //                            clone path (see the verifyPromise chain near
+  //                            the bottom) does the download with progress.
+  //                            Deliberately not cloning here: that code
+  //                            already handles progress, seed-guarding and
+  //                            partial-clone recovery, and a second copy of it
+  //                            would be a second set of those decisions.
+  //   lookup failed          → a message plus the two things that can actually
+  //                            help (a token for a private repo; the starter
+  //                            screen), never a bounce to /starter that leaves
+  //                            the visitor with no idea what went wrong.
+  //
+  // No token is used on this path — a share link that carried one would be a
+  // credential in a URL. A private repository therefore fails here by design,
+  // and recovers through the dialog, where the token is typed locally.
+  function openGithubShareLink(link) {
+    var slug = link.owner + '/' + link.repo;
+    function say(text) {
+      var el = document.getElementById('ow-status');
+      if (el) el.textContent = text;
+    }
+
+    if (!window.__owLocalVaults) { location.replace('/starter'); return; }
+
+    var existing = findExistingGithubVault(link, { anyRef: !link.ref });
+    if (existing) { location.replace(vaultUrl(existing, link.note)); return; }
+
+    say('Looking up ' + slug + ' on GitHub…');
+    window.__owGithubRepo.resolveRepo(link, {})
+      .then(function (meta) {
+        // Second lookup, now against what GitHub actually resolved: a repo
+        // that has been RENAMED still answers under its old name (GitHub
+        // redirects), so a link written before the rename resolves to the new
+        // name — which is the name the vault we already have is stored under.
+        // Without this, that link would clone a duplicate every time.
+        var renamed = findExistingGithubVault(meta, { anyRef: !link.ref });
+        if (renamed) { location.replace(vaultUrl(renamed, link.note)); return; }
+
+        say('Preparing ' + meta.owner + '/' + meta.repo + '…');
+        var created = window.__owLocalVaults.create(meta.name, { type: 'github' });
+        window.__owGithubRepo.setVaultState(created.id, {
+          owner: meta.owner,
+          repo: meta.repo,
+          ref: meta.ref,
+          commit: null,       // null = "never synced" → the vault-open flow clones
+          token: null,
+          blobs: {},
+        });
+        // replace(), not href=: the /github/ URL must not stay in history
+        // behind the vault, or Back would re-enter this route (and, on a
+        // vault the visitor then deleted, clone it all over again).
+        location.replace(vaultUrl(created.id, link.note));
+      })
+      .catch(function (e) {
+        console.warn('[ow-github] share link failed for ' + slug, e);
+        var overlay = document.getElementById('ow-loading');
+        // Stops the spinner (index.html's .ow-failed rule) — it kept spinning
+        // under a "did not work" message otherwise, which reads as "still
+        // trying" and is the one thing this screen must not say.
+        if (overlay) overlay.classList.add('ow-failed');
+        // The commonest failure (404 / private-with-no-token) already names
+        // the repository in its own message — prefixing it produced "Could not
+        // open o/r. Repository o/r not found...", which reads as two separate
+        // problems. Rate-limit and auth messages don't name it, and still need
+        // the lead-in.
+        var msg = (e && e.message) || String(e);
+        say(msg.indexOf(slug) === -1 ? ('Could not open ' + slug + '. ' + msg) : msg);
+
+        var bar = document.createElement('div');
+        bar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;';
+        // §3.6 convention: everything this file injects is marked, so the
+        // create-vault interceptor's skip-list keeps working by rule rather
+        // than by nobody's selector happening to collide today.
+        bar.appendChild(shareLinkButton('Open with an access token', true, function () {
+          openGithubDialog({ repo: slug, note: link.note });
+        }));
+        bar.appendChild(shareLinkButton('Choose another vault', false, function () {
+          location.href = '/starter';
+        }));
+        (overlay || document.body).appendChild(bar);
+      });
+  }
+
+  // Buttons for the failure screen above. Same shape as showGrantScreen's
+  // injected button (inline styles — this screen renders before Obsidian's
+  // own bundle is injected, so app.css class names are all that exist and
+  // .mod-cta alone doesn't carry the layout).
+  function shareLinkButton(label, primary, onClick) {
+    var btn = document.createElement('button');
+    btn.setAttribute('data-ow-injected', 'github-share-link');
+    btn.textContent = label;
+    btn.style.cssText = 'margin-top:8px;padding:8px 16px;border:none;border-radius:4px;' +
+      'cursor:pointer;font:13px -apple-system,BlinkMacSystemFont,sans-serif;' +
+      (primary ? 'background:#7f6df2;color:#fff;'
+               : 'background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);');
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  // Mounts the entry points on whichever screen is showing. MutationObserver
+  // for the same reason every other injection in this file uses one: the
+  // onboarding controller detaches and re-renders a fresh screen on each
+  // goTo(), and the chooser screen can be re-rendered too. Both mounts are
+  // idempotent (dedupe by our own class).
+  function installGithubVaultOption() {
+    if (!window.__owGithubRepo || !window.__owLocalVaults) return;
+
+    function mountChooserRow() {
+      // `.mod-main` is load-bearing, not decoration: the chooser's SUB-screens
+      // (per-vault detail — Open vault / Rename / Forget / Delete; Create new
+      // vault; Setup Sync) are all `.mobile-vault-chooser-screen` too, built by
+      // the same helper, and each renders its own `.mobile-vault-chooser-
+      // actions`. Only the root screen carries `mod-main` (verified in the
+      // running bundle: root = "mobile-vault-chooser-screen mod-main",
+      // sub-screens = "mobile-vault-chooser-screen"). Without this the row was
+      // injected into whichever screen was showing — measured: "Open GitHub
+      // repository" appeared under "Delete vault" on the vault-detail screen,
+      // where it means nothing.
+      var actions = document.querySelector('.mobile-vault-chooser-screen.mod-main .mobile-vault-chooser-actions');
+      if (!actions || actions.querySelector('.ow-github-action')) return;
+      // Anchor: the LAST direct-child action row ("Open folder as vault" in
+      // today's bundle). Direct-child only — the vault list below is wrapped
+      // in its own <div>, so its rows are not siblings and can't be picked up
+      // by mistake, and no text is matched.
+      var rows = [];
+      for (var i = 0; i < actions.children.length; i++) {
+        if (actions.children[i].classList.contains('mobile-vault-chooser-action')) rows.push(actions.children[i]);
+      }
+      if (!rows.length) return;
+      var model = rows[rows.length - 1];
+
+      var row = document.createElement('div');
+      row.className = 'mobile-vault-chooser-action tappable ow-github-action';
+      row.setAttribute('data-ow-injected', 'github-open');
+      var icons = model.querySelectorAll('.mobile-vault-chooser-action-icon');
+      // Chevron cloned from the model row rather than hardcoded — it comes
+      // from the bundle's own icon table and would drift on an Obsidian
+      // update if copied as literal path data.
+      var chevron = icons.length > 1 ? icons[icons.length - 1].innerHTML : '';
+      row.innerHTML =
+        '<div class="mobile-vault-chooser-action-icon">' + OW_GITHUB_ICON_SVG + '</div>' +
+        '<div class="mobile-vault-chooser-action-name">Open GitHub repository</div>' +
+        '<div class="mobile-vault-chooser-action-icon">' + chevron + '</div>';
+      row.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openGithubDialog();
+      });
+      model.parentNode.insertBefore(row, model.nextSibling);
+    }
+
+    function mountOnboardingButton() {
+      // Only the welcome screen — identified by the language dropdown, which
+      // the bundle renders on that screen alone. Without this the button
+      // would follow the user through every wizard step (sync intro,
+      // configure-vault, sign-in), competing with each step's own actions.
+      var screens = document.querySelectorAll('.mobile-onboarding .mobile-onboarding-screen');
+      for (var i = 0; i < screens.length; i++) {
+        var screen = screens[i];
+        if (!screen.querySelector('.language-dropdown')) continue;
+        var bar = screen.querySelector('.button-container');
+        if (!bar || bar.querySelector('.ow-github-open-btn')) continue;
+        var btn = document.createElement('button');
+        btn.className = 'ow-github-open-btn';
+        btn.setAttribute('data-ow-injected', 'github-open');
+        btn.textContent = 'Open GitHub repository';
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openGithubDialog();
+        });
+        bar.appendChild(btn);
+      }
+    }
+
+    function mount() { mountChooserRow(); mountOnboardingButton(); }
+    mount();
+    var obs = new MutationObserver(mount);
+    obs.observe(document.body, { childList: true, subtree: true });
+  }
+
   // ── מסך-פתיחה נייטיב (no-vault) ─────────────────────────────────────────────
   // אין VAULT_ID תקף (לא ב-/vault/<id> path, forceStarter, או שה-entry redirect
   // למעלה כבר קבע שאין כספת-אחרונה — ראה למעלה). ה-shims כבר מותקנים (require/capacitor) — מזריקים
@@ -984,6 +1638,7 @@ const MOBILE_SCRIPTS = [
     installCreateVaultInterceptor();
     installExternalStorageGate();
     installVersionDisplay();
+    installGithubVaultOption();
     seedNativeVaultList()
       .catch(function (err) { console.warn('[obsidian-web] seedNativeVaultList failed:', err); })
       .then(function () {
@@ -1044,10 +1699,13 @@ const MOBILE_SCRIPTS = [
   // fully supported) and, only when FileSystemObserver isn't supported, a
   // visibilitychange-triggered auto-rescan (debounced ~500ms) so switching
   // back to the tab/app picks up external edits without a manual click.
-  // VAULT_TYPE==='folder' guard only (DoD#4) — 'local' (OPFS) vaults can
-  // never change externally, must stay a no-op.
+  // Folder-backed vaults only (DoD#4) — an OPFS-backed vault can never change
+  // externally, and must stay a no-op. Asked of VAULT_STORAGE, not
+  // VAULT_TYPE: a GitHub repository cloned into a picked directory is just as
+  // reachable from outside the browser as any other directory, and its
+  // "Pull from GitHub" button is a different action from this one.
   function installFolderRefreshWatch() {
-    if (VAULT_TYPE !== 'folder') return;
+    if (!isFolderBacked()) return;
     if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Filesystem) return;
     var fs = window.Capacitor.Plugins.Filesystem;
     var hasObserver = typeof self !== 'undefined' && 'FileSystemObserver' in self;
@@ -1277,6 +1935,170 @@ const MOBILE_SCRIPTS = [
     });
   }
 
+  // ── GitHub vaults — clone on first open, pull on demand ──────────────────
+  // storage/github-repo.js does the work; this is the boot-side wiring.
+  //
+  // Cloning is BLOCKING and happens before Obsidian is injected, on purpose:
+  // the adapter takes one full-tree snapshot at vault-open (watchAndStatAll)
+  // and would otherwise show an empty vault while files trickled in behind
+  // it. The spinner already exists for exactly this kind of wait, so the
+  // clone reports into it.
+  //
+  // Only the FIRST open syncs automatically (no recorded commit yet). Later
+  // opens read straight from local storage — no network, works offline, and
+  // boot time stays identical to a 'local' vault. Fetching upstream changes is
+  // an explicit action: the "Pull from GitHub" button installed below.
+  //
+  // The store is the same OpfsStore either way — folderGetRoot() is what
+  // redirects it at the picked directory when the clone target is a real
+  // folder rather than OPFS. github-repo.js sees one store interface and
+  // knows nothing about the difference; only this factory does.
+  function makeGithubStore() {
+    return window.__owOpfsStore.makeStore(VAULT_ID, { getRoot: folderGetRoot() });
+  }
+
+  function githubProgressText(p) {
+    if (p.phase === 'resolve') return 'Contacting GitHub…';
+    if (p.phase === 'tree') return 'Listing repository files…';
+    if (p.phase === 'scan') return 'Checking local files…';
+    if (p.phase === 'git-objects') return 'Building git history (' + p.done + '/' + p.total + ')';
+    if (p.phase === 'git') return 'Writing .git…';
+    if (p.total) return 'Downloading from GitHub (' + p.done + '/' + p.total + ')';
+    return 'Downloading from GitHub…';
+  }
+
+  // Human summary shared by the boot clone (console) and the Pull button
+  // (Notice) — one wording, so the two paths can't drift apart.
+  function githubSyncSummary(r) {
+    if (r.upToDate) return 'Already up to date with GitHub';
+    var parts = [];
+    if (r.written) parts.push(r.written + ' updated');
+    if (r.deleted) parts.push(r.deleted + ' removed');
+    if (!parts.length) parts.push('no changes');
+    if (r.conflicts && r.conflicts.length) parts.push(r.conflicts.length + ' kept (edited here)');
+    if (r.failures && r.failures.length) parts.push(r.failures.length + ' failed');
+    if (r.skipped && r.skipped.length) parts.push(r.skipped.length + ' too large');
+    // The .git half is reported as a state, not a count: what a user needs to
+    // know is whether the folder is a clone they can `git pull` (exact), a
+    // content-only snapshot (see git-writer.js), or neither.
+    if (r.git && r.git.error) parts.push('no .git — ' + r.git.error);
+    else if (r.git && r.git.mode === 'snapshot') parts.push('.git written (snapshot — history unavailable)');
+    else if (r.git) parts.push('.git written');
+    return 'GitHub: ' + parts.join(', ');
+  }
+
+  // ── "Pull from GitHub" — command palette entry + toolbar button ──────────
+  // TWO affordances, and the command is the primary one. The toolbar button
+  // follows installFolderRefreshWatch/installSyncNowTrigger above (mount into
+  // the file-explorer's `.nav-buttons-container`, idempotent, re-mounted on
+  // layout-change) — but that anchor is NOT guaranteed to exist: measured
+  // against the verification repo (notnilcn/ggdd), whose own community
+  // plugins replace the core file-explorer view outright, leaving zero
+  // `.nav-buttons-container` in the document. A GitHub vault ships whatever
+  // `.obsidian/` its repo contains, so "the vault's own plugins removed the
+  // toolbar" is a normal case here, not an edge one — and a vault you cannot
+  // pull is a broken feature. `app.commands.addCommand` is core and always
+  // reachable (palette / hotkey), so it carries the guarantee and the button
+  // is the convenience.
+  function installGithubPullTrigger() {
+    if (VAULT_TYPE !== 'github') return;
+    if (!window.__owGithubRepo || !window.__owOpfsStore) return;
+
+    // lucide "github" — inline for the same reason the other two buttons
+    // inline theirs (no icon table access), and it names the remote plainly.
+    var OW_GITHUB_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" ' +
+      'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-github">' +
+      '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5' +
+      '.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5' +
+      'A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4">' +
+      '</path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>';
+
+    function setSpin(on) {
+      var btns = document.querySelectorAll('.ow-github-pull-btn');
+      for (var i = 0; i < btns.length; i++) {
+        if (on) btns[i].classList.add('is-spinning');
+        else btns[i].classList.remove('is-spinning');
+      }
+    }
+
+    var running = false;
+    function doPull() {
+      if (running) return;
+      running = true;
+      setSpin(true);
+      window.__owGithubRepo.syncVault(makeGithubStore(), VAULT_ID, { git: isFolderBacked() })
+        .then(function (r) {
+          var msg = githubSyncSummary(r);
+          console.log('[ow-github] ' + msg, r);
+          if (typeof window.Notice === 'function') new window.Notice(msg);
+          // Obsidian took its file-tree snapshot at vault-open; files that
+          // appeared/vanished underneath it are not in that snapshot and no
+          // watcher fires for an OPFS write we made ourselves. A reload is
+          // the honest way to show the pulled state — and only when the pull
+          // actually changed something, so an up-to-date check stays free.
+          if (!r.upToDate && (r.written || r.deleted)) {
+            setTimeout(function () { location.reload(); }, 1200);
+          }
+        })
+        .catch(function (e) {
+          console.warn('[ow-github] pull failed', e);
+          if (typeof window.Notice === 'function') {
+            new window.Notice('GitHub pull failed: ' + ((e && e.message) || e));
+          }
+        })
+        .then(function () { running = false; setSpin(false); });
+    }
+
+    function mountPullButton() {
+      var bars = document.querySelectorAll(
+        '.workspace-leaf-content[data-type="file-explorer"] .nav-buttons-container');
+      for (var i = 0; i < bars.length; i++) {
+        var bar = bars[i];
+        if (bar.querySelector('.ow-github-pull-btn')) continue;   // dedupe
+        var btn = document.createElement('div');   // nav-action-button is a div in this bundle
+        btn.className = 'clickable-icon nav-action-button ow-github-pull-btn';
+        btn.setAttribute('data-ow-injected', 'github-pull');
+        var st = window.__owGithubRepo.getVaultState(VAULT_ID);
+        btn.setAttribute('aria-label', st
+          ? ('Pull from GitHub — ' + st.owner + '/' + st.repo + ' (' + st.ref + ')')
+          : 'Pull from GitHub');
+        btn.innerHTML = OW_GITHUB_SVG;
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          doPull();
+        });
+        bar.appendChild(btn);
+      }
+    }
+
+    // same App.onload race guard as the two triggers above (app.vault can
+    // exist before app.workspace).
+    owWhenAppReady(function (app) {
+      // The guaranteed affordance — registered as soon as the command
+      // registry exists, independent of the workspace/leaf layout.
+      if (app.commands && typeof app.commands.addCommand === 'function') {
+        var st = window.__owGithubRepo.getVaultState(VAULT_ID);
+        app.commands.addCommand({
+          id: 'obsidian-web:github-pull',
+          name: st ? ('Pull from GitHub (' + st.owner + '/' + st.repo + ')') : 'Pull from GitHub',
+          callback: doPull,
+        });
+      }
+      function whenWorkspaceReady(tries) {
+        if (app.workspace) {
+          mountPullButton();
+          app.workspace.on('layout-change', mountPullButton);
+          return;
+        }
+        if ((tries || 0) >= 160) return;
+        setTimeout(function () { whenWorkspaceReady((tries || 0) + 1); }, 50);
+      }
+      whenWorkspaceReady(0);
+    });
+  }
+
   setStatus('Verifying vault...');
 
   // אמת שה-vault קיים: local → OPFS getDirectoryHandle (idempotent, אין
@@ -1284,15 +2106,12 @@ const MOBILE_SCRIPTS = [
   // gate (queryPermission → showGrantScreen אם צריך); server → HTTP stat על
   // ה-root (כמו קודם).
   var verifyPromise;
-  if (VAULT_TYPE === 'local') {
-    verifyPromise = (async function () {
-      if (!window.__owOpfsStore) throw new Error('OPFS store not loaded');
-      var root = await navigator.storage.getDirectory();
-      var vaults = await root.getDirectoryHandle('vaults', { create: true });
-      await vaults.getDirectoryHandle(VAULT_ID, { create: true });   // idempotent
-      return { isDirectory: true };
-    })();
-  } else if (VAULT_TYPE === 'folder') {
+  if (isFolderBacked()) {
+    // Storage, not type, picks this branch (see VAULT_STORAGE above): a
+    // 'github' vault cloned into a picked directory needs the very same
+    // handle restore + permission gate as a plain 'folder' vault, and it
+    // needs it BEFORE the clone/pull step below — which reads
+    // window.__owFolderRoot through makeGithubStore().
     verifyPromise = (async function () {
       if (!window.__owOpfsStore) throw new Error('OPFS store not loaded');
       if (!window.__owFolderHandles) throw new Error('folder handle store not loaded');
@@ -1302,6 +2121,18 @@ const MOBILE_SCRIPTS = [
       if (perm !== 'granted') perm = await showGrantScreen(h);   // נתיב ראשי: כפתור → requestPermission (gesture)
       if (perm !== 'granted') throw new Error('Access not granted');
       window.__owFolderRoot = h;                                 // רק אחרי granted
+      return { isDirectory: true };
+    })();
+  } else if (VAULT_TYPE === 'local' || VAULT_TYPE === 'github') {
+    // 'github' shares this branch on purpose: an OPFS-backed GitHub vault's
+    // storage IS an ordinary OPFS vault directory. What makes it a GitHub
+    // vault is the clone/pull step below, which runs after verification and
+    // before Obsidian is injected — not a different storage backend.
+    verifyPromise = (async function () {
+      if (!window.__owOpfsStore) throw new Error('OPFS store not loaded');
+      var root = await navigator.storage.getDirectory();
+      var vaults = await root.getDirectoryHandle('vaults', { create: true });
+      await vaults.getDirectoryHandle(VAULT_ID, { create: true });   // idempotent
       return { isDirectory: true };
     })();
   } else if (window.__owBackend === 'none') {
@@ -1344,6 +2175,44 @@ const MOBILE_SCRIPTS = [
       // no-vault כבר התקין (לא קורה באותו טעינת-עמוד, אבל להיות עקבי).
       installNativeVaultOpenBridge();
 
+      // ── GitHub vault — first-open clone ────────────────────────────────
+      // Must run BEFORE the seed guard below: that guard decides whether the
+      // vault is "empty" and therefore safe to seed with example content /
+      // system plugins. A GitHub vault is empty for exactly as long as the
+      // clone hasn't landed — seeding first would drop Welcome.md into
+      // someone's repository checkout.
+      //
+      // Only when no commit has been recorded yet (see the note on
+      // installGithubPullTrigger): a repeat open is pure OPFS, no network.
+      // A failed clone leaves the recorded commit unset, so the next open
+      // retries — and the vault still opens (empty, with the error visible)
+      // rather than being discarded.
+      if (VAULT_TYPE === 'github' && window.__owGithubRepo) {
+        var ghState = window.__owGithubRepo.getVaultState(VAULT_ID);
+        if (ghState && !ghState.commit) {
+          setStatus('Cloning ' + ghState.owner + '/' + ghState.repo + ' from GitHub…');
+          try {
+            var ghResult = await window.__owGithubRepo.syncVault(makeGithubStore(), VAULT_ID, {
+              // Only a folder on disk gets a .git: OPFS is invisible to every
+              // git that exists, so there the objects would be pure cost — a
+              // second compressed copy of the repository against the browser's
+              // storage quota, for a repository nothing can ever open.
+              git: isFolderBacked(),
+              onProgress: function (p) { setStatus(githubProgressText(p)); },
+            });
+            console.log('[ow-github] ' + githubSyncSummary(ghResult), ghResult);
+          } catch (e) {
+            console.warn('[ow-github] clone failed', e);
+            setStatus('GitHub clone failed: ' + ((e && e.message) || e));
+            // Deliberately not rethrown — the catch at the bottom of this
+            // chain bounces to /starter and forgets the vault, which would
+            // strand the user on a transient network blip. Opening an empty
+            // vault whose Pull button still works is the recoverable outcome.
+            await new Promise(function (r) { setTimeout(r, 2500); });
+          }
+        }
+      }
+
       // ── seed guard — empty-vault-only (seed-demo §0/§3ב, data-safety core) ──
       // A local/folder vault the user already has real content in must NEVER
       // be seeded (system plugins OR example content) without consent —
@@ -1353,11 +2222,17 @@ const MOBILE_SCRIPTS = [
       // below entirely. readdir failure (e.g. permission edge) defaults to
       // "not empty" (skip) — data-safety-first when uncertain. `seedStore` is
       // reused by both blocks below (one makeStore()+readdir round-trip).
+      //
+      // 'github' is deliberately NOT in the type list below: a GitHub vault's
+      // `.obsidian/` comes from its repository, which is the whole point of
+      // opening one. Seeding into it would mean writing files the repo didn't
+      // ask for — and in the one case where such a vault IS empty (the clone
+      // above failed), dropping Welcome.md into what the user believes is a
+      // checkout of their repo is exactly the wrong recovery.
       var seedStore = null;
       var isVaultEmptyForSeed = false;
       if ((VAULT_TYPE === 'local' || VAULT_TYPE === 'folder') && window.__owOpfsStore) {
-        var grSeed = VAULT_TYPE === 'folder' ? (async () => window.__owFolderRoot) : undefined;
-        seedStore = window.__owOpfsStore.makeStore(VAULT_ID, { getRoot: grSeed });
+        seedStore = window.__owOpfsStore.makeStore(VAULT_ID, { getRoot: folderGetRoot() });
         try {
           var rootListing = await seedStore.readdir({ path: '' });
           var userEntries = ((rootListing && rootListing.files) || []).filter(function (f) {
@@ -1508,6 +2383,10 @@ const MOBILE_SCRIPTS = [
       // §5 DoD#6).
       installSyncNowTrigger();
 
+      // "Pull from GitHub" toolbar button — VAULT_TYPE guard is inside
+      // installGithubPullTrigger itself (no-op for every other type).
+      installGithubPullTrigger();
+
       // ── שם-כספת מוצג מה-registry (docs/plans/vault-name-display.md §2/§3) ──
       // לכספת OPFS (local/folder) עם רשומת-registry, __owV.name הוא השם
       // שהמשתמשת נתנה; app.vault.getName() (basePath — ה-vault-id hash
@@ -1516,7 +2395,7 @@ const MOBILE_SCRIPTS = [
       // לשם המוצג בכספת server ❌"), יתום (אין רשומה) נופל ל-getName הרגיל
       // (§9 Q3). ה-guard רץ רק בזרימת ה-VAULT_ID (לא בזרימת no-vault למעלה,
       // ששם VAULT_TYPE='server' תמיד) — עונה על גבול §2 "אחרי app-ready".
-      if ((VAULT_TYPE === 'local' || VAULT_TYPE === 'folder') && __owV && __owV.name) {
+      if ((VAULT_TYPE === 'local' || VAULT_TYPE === 'folder' || VAULT_TYPE === 'github') && __owV && __owV.name) {
         owWhenAppReady(function (app) {
           var desired = __owV.name;
           if (app.vault && typeof app.vault.getName === 'function') {
