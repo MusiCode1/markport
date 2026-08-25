@@ -110,6 +110,35 @@
     }
   }, true);
 
+  // ---- Editor right-click: suppress the browser's native context menu -----
+  //
+  // Obsidian's CodeMirror contextmenu handler is async: it awaits an Electron
+  // IPC round-trip (the 'context-menu' channel, answered above) before building
+  // its editor menu, and bails if `event.defaultPrevented` is true. A browser
+  // shows its native context menu synchronously unless preventDefault() is
+  // called during dispatch — but calling it the normal way sets
+  // defaultPrevented, which would make Obsidian skip its own menu. So on
+  // right-clicks inside the editor we preventDefault() to kill the browser menu
+  // while shadowing `defaultPrevented` back to false, so Obsidian still builds
+  // its menu. The UA reads its internal canceled flag (set by preventDefault),
+  // not this JS getter, so the native menu stays suppressed. Registered at
+  // capture on document (before app.js loads) so it runs before Obsidian's own
+  // handler and is never cut off by its stopImmediatePropagation(). Scoped to
+  // the editor surface so links, reading view, and other UI are untouched.
+  document.addEventListener('contextmenu', (ev) => {
+    if (!ev.isTrusted) return;
+    const t = ev.target;
+    if (!t || typeof t.closest !== 'function') return;
+    if (!t.closest('.cm-editor, .markdown-source-view')) return;
+    try {
+      Object.defineProperty(ev, 'defaultPrevented', {
+        configurable: true,
+        get: () => false,
+      });
+    } catch (_) { /* getter already shadowed; fine */ }
+    ev.preventDefault();
+  }, true);
+
   function makeMenu(template) {
     const handlers = { 'menu-will-close': new Set() };
     const items = Array.isArray(template) ? template : [];
@@ -481,13 +510,35 @@
         return;
       }
 
+      // Editor context menu: Obsidian's CodeMirror contextmenu handler is
+      // async — it registers `ipcRenderer.once('context-menu', cb)` then
+      // `ipcRenderer.send('context-menu')` to ask Electron's main process for
+      // spellcheck data + edit flags, and only builds its own editor menu once
+      // the reply arrives. It bails if the reply is falsy. There's no main
+      // process here, so synthesize a minimal reply (no misspelled word, all
+      // edit actions enabled) on a microtask so the once() listener — already
+      // registered by the time send() runs — fires and Obsidian builds its
+      // menu. Without this the editor menu never appears and you get the
+      // browser's native right-click menu instead. `remote.webContents.fromId`
+      // returns null, so Obsidian skips the spellcheck branch safely.
+      if (channel === 'context-menu') {
+        Promise.resolve().then(() => {
+          ipcRenderer.emit('context-menu', {}, {
+            webContentsId: 1,
+            editFlags: { canCut: true, canCopy: true, canPaste: true },
+            misspelledWord: '',
+            dictionarySuggestions: [],
+          });
+        });
+        return;
+      }
+
       // Application-menu IPC channels - ignored on web. Obsidian renders
       // its own DOM menus separately; the Electron menu bar isn't visible.
       if (
         channel === 'set-menu' ||
         channel === 'update-menu-items' ||
-        channel === 'render-menu' ||
-        channel === 'context-menu'
+        channel === 'render-menu'
       ) {
         return;
       }
