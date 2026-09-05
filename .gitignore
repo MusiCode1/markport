@@ -60,7 +60,9 @@ user-data/*/
 # wrangler local state (deploy cache) — never published.
 .wrangler/
 
-# Build-only dependencies for scripts/ (marked, for the docs site build).
-# Never served to a visitor.
-scripts/node_modules/
-scripts/package-lock.json
+# The site build (site/) is a separate package with its own dependencies -
+# Astro, deliberately kept away from the app and from src/*/package.json.
+# Build-only: nothing here is served to a visitor.
+site/node_modules/
+site/.astro/
+site/dist/

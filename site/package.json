@@ -1,0 +1,14 @@
+{
+  "name": "markport-site",
+  "private": true,
+  "type": "module",
+  "description": "The markport.pages.dev site. Build-only; entirely separate from the app and its dependencies.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "astro": "^7.3.1"
+  }
+}

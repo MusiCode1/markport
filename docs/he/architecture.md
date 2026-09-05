@@ -1,3 +1,8 @@
+---
+title: "Architecture - Markport"
+description: "איך Markport מריץ את המנוע של אובסידיאן בדפדפן, ולמה הוא בנוי ככה."
+---
+
 # Architecture - Markport
 
 > קהל: מי שמשנה את הקוד. ה"למה", לא ה"איך-משתמשים" (זה `README.md`).

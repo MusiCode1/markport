@@ -1,0 +1,17 @@
+---
+import { getEntry, render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+
+const entry = await getEntry('pages', 'landing');
+const { Content } = await render(entry!);
+---
+<Base
+  title="Markport - Obsidian, running in your browser"
+  lang="en"
+  variant="landing"
+  altHref="/he/"
+  altLabel="עברית"
+  altLang="he"
+>
+  <Content />
+</Base>

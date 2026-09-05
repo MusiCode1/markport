@@ -1,0 +1,10 @@
+---
+import { getEntry, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+
+const entry = await getEntry('pages', 'he/architecture');
+const { Content } = await render(entry!);
+---
+<Base title={entry!.data.title} lang="he" altHref="/architecture" altLabel="English" altLang="en">
+  <Content />
+</Base>

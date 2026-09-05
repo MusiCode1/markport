@@ -1,8 +1,0 @@
-{
-  "name": "markport-build-scripts",
-  "private": true,
-  "description": "Build-time only. Nothing here is ever served to a visitor.",
-  "dependencies": {
-    "marked": "^15.0.12"
-  }
-}

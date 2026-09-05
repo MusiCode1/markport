@@ -1,0 +1,10 @@
+---
+import { getEntry, render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+
+const entry = await getEntry('pages', 'install');
+const { Content } = await render(entry!);
+---
+<Base title={entry!.data.title} lang="en" altHref="/he/install" altLabel="עברית" altLang="he">
+  <Content />
+</Base>

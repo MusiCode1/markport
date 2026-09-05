@@ -36,6 +36,32 @@ See `docs/architecture.md` for the full picture.
 - **No personal data in this repo.** Personal vault names, machine paths, run logs,
   and internal planning notes do not belong here.
 
+## The site
+
+`markport.pages.dev` is built by **Astro**, in `site/`. It is a separate package with its own
+`package.json` and `node_modules`, deliberately kept away from the app's dependencies - nothing
+in `site/` is part of what runs in a browser.
+
+The content is **not** in `site/`. Pages are Markdown in `docs/`, so a document has one copy and
+the site renders it:
+
+| Route | Source |
+|---|---|
+| `/` · `/he/` | `docs/landing.md` · `docs/he/landing.md` |
+| `/install` · `/he/install` | `docs/install.md` · `docs/he/install.md` |
+| `/architecture` · `/he/architecture` | `docs/architecture.md` · `docs/he/architecture.md` |
+
+`site/src/content.config.ts` lists those six files explicitly rather than globbing, so a new
+document in `docs/` does not become a public page by accident. `docs/obsidian-version-support.md`
+and `docs/system-plugin-dev-guide.md` are repo documentation and are deliberately not published.
+
+```bash
+cd site && npm install && npm run dev     # live reload
+cd site && npm run build                  # -> .tmp/site/
+```
+
+The output carries **no JavaScript**. Code samples are highlighted at build time by Shiki.
+
 ## Layout
 
 | What | Where |
@@ -43,6 +69,7 @@ See `docs/architecture.md` for the full picture.
 | Architecture and rationale | `docs/architecture.md` |
 | Writing a system plugin | `docs/system-plugin-dev-guide.md` |
 | Hebrew copies of the above | `docs/he/` |
+| The markport.pages.dev site | `site/` (Astro; its own `package.json`) |
 | Runtime (the browser side) | `src/client-mobile/` |
 | Node backend (optional) | `src/runtime-server/` |
 | Pull-sync server | `src/sync-server/` |
