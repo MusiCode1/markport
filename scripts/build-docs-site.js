@@ -31,12 +31,15 @@ const DOCS = path.join(ROOT, 'docs');
 const OUT = path.join(ROOT, '.tmp', 'site');
 
 /** Documents to render. `out` is relative to OUT, without the extension. */
+// Only pages a visitor has a reason to open. The system-plugin guide is for
+// people contributing to Markport, and obsidian-version-support duplicates the
+// landing page's "what does not work" section - both stay in the repo, and
+// neither is published as a route.
 const PAGES = [
-  { src: 'architecture.md',              out: 'architecture',              lang: 'en' },
-  { src: 'system-plugin-dev-guide.md',   out: 'system-plugin-dev-guide',   lang: 'en' },
-  { src: 'obsidian-version-support.md',  out: 'version-support',           lang: 'en' },
-  { src: 'he/architecture.md',           out: 'he/architecture',           lang: 'he' },
-  { src: 'he/system-plugin-dev-guide.md',out: 'he/system-plugin-dev-guide',lang: 'he' },
+  { src: 'install.md',         out: 'install',      lang: 'en' },
+  { src: 'architecture.md',    out: 'architecture', lang: 'en' },
+  { src: 'he/install.md',      out: 'he/install',   lang: 'he' },
+  { src: 'he/architecture.md', out: 'he/architecture', lang: 'he' },
 ];
 
 /** Pull the <style> block out of the landing page so there is one source of truth. */
