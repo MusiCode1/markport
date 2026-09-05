@@ -207,14 +207,14 @@
       <p class="note" style="margin:10px 0 4px"><strong>במובייל</strong>, דרך פלאגין ה-App של Capacitor:</p>
       <pre dir="ltr"><code><span class="t-k">const</span> <span class="t-v">ACKNOWLEDGEMENT</span> <span class="t-o">=</span> <span class="t-s">"I understand and agree that I am not allowed to … granted by the Obsidian team."</span>;
 
-<span class="t-c">// ### צד הפלטפורמה - הקוד הנייטיבי של אנדרואיד ###</span>
-<span class="t-c">// המחרוזת מהודרת לתוך classes.dex, ומוגשת דרך פלאגין ה-App של Capacitor.</span>
+<span class="t-c">// ### צד הפלטפורמה ###</span>
+<span class="t-c">// המחרוזת מהודרת לתוך classes.dex ומוגשת דרך פלאגין ה-App של Capacitor</span>
 <span class="t-v">App</span>.<span class="t-p">getInfo</span> <span class="t-o">=</span> () <span class="t-o">=&gt;</span> ({
   <span class="t-v">name</span><span class="t-o">:</span> <span class="t-s">'Obsidian'</span>, <span class="t-v">id</span><span class="t-o">:</span> <span class="t-s">'md.obsidian'</span>, <span class="t-v">build</span><span class="t-o">:</span> <span class="t-s">'…'</span>, <span class="t-v">version</span><span class="t-o">:</span> <span class="t-s">'1.13.4'</span>,
   <span class="t-v">terms</span><span class="t-o">:</span> <span class="t-v">ACKNOWLEDGEMENT</span>,
 });
 
-<span class="t-c">// ### צד הלקוח - ה-renderer, בתוך app.js ###</span>
+<span class="t-c">// ### צד הלקוח ###</span>
 <span class="t-k">const</span> <span class="t-v">appInfo</span> <span class="t-o">=</span> <span class="t-k">await</span> <span class="t-v">App</span>.<span class="t-p">getInfo</span>();
 <span class="t-v">Platform</span>.<span class="t-p">build</span>   <span class="t-o">=</span> <span class="t-v">appInfo</span>.<span class="t-p">build</span>;
 <span class="t-v">Platform</span>.<span class="t-p">version</span> <span class="t-o">=</span> <span class="t-v">appInfo</span>.<span class="t-p">version</span>;
@@ -226,13 +226,13 @@
       ריצה שבה נקראים גם <code dir="ltr">version</code> ו-<code dir="ltr">resources</code>:</p>
       <pre dir="ltr"><code><span class="t-k">const</span> <span class="t-v">ACKNOWLEDGEMENT</span> <span class="t-o">=</span> <span class="t-s">"I understand and agree that I am not allowed to … granted by the Obsidian team."</span>;
 
-<span class="t-c">// ### צד הפלטפורמה - תהליך ה-main של אלקטרון ###</span>
+<span class="t-c">// ### צד הפלטפורמה ###</span>
 <span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"terms"</span>,         <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">ACKNOWLEDGEMENT</span> }),
 <span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"documents-dir"</span>, <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">documentsDir</span> }),
 <span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"resources"</span>,     <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">resourcesPath</span> }),
 <span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"version"</span>,       <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">appVersion</span> }),
 
-<span class="t-c">// ### צד הלקוח - ה-renderer ###</span>
+<span class="t-c">// ### צד הלקוח ###</span>
 <span class="t-v">Platform</span>.<span class="t-p">version</span> <span class="t-o">=</span> <span class="t-v">electron</span>.<span class="t-p">ipcRenderer</span>.<span class="t-p">sendSync</span>(<span class="t-s">"version"</span>);
 <span class="t-v">Platform</span>.<span class="t-p">build</span>   <span class="t-o">=</span> <span class="t-v">electron</span>.<span class="t-p">remote</span>.<span class="t-p">app</span>.<span class="t-p">getVersion</span>();
 
