@@ -1,9 +1,9 @@
-# Which Obsidian version does obsidian-web run?
+# Which Obsidian version does Markport run?
 
 > Written in English on purpose, unlike most of `docs/` — the in-app failure message points
 > users here, and not all of them read Hebrew.
 
-**Short answer: Obsidian 1.12.7.** That is the newest version obsidian-web runs, and the pin is
+**Short answer: Obsidian 1.12.7.** That is the newest version Markport runs, and the pin is
 deliberate — not a lag in maintenance.
 
 ## If you point it at 1.13 or newer
@@ -11,7 +11,7 @@ deliberate — not a lag in maintenance.
 The app will not start. You'll see this instead of the loading spinner:
 
 > Obsidian 1.13.4 did not start. This version asks its host for a startup acknowledgement that
-> obsidian-web does not provide. The newest version known to work here is 1.12.7 — see the README.
+> Markport does not provide. The newest version known to work here is 1.12.7 — see the README.
 
 Nothing is broken on your side and there is nothing to fix. Run
 `node scripts/update-obsidian-mobile.js --version 1.12.7` to go back.
@@ -24,7 +24,7 @@ acknowledgement stating that the user may not distribute the Obsidian applicatio
 without explicit approval from the Obsidian team. If the value doesn't come back verbatim, the
 bundle throws and never loads.
 
-On a real Android device, Obsidian's own native layer supplies it. obsidian-web replaces that
+On a real Android device, Obsidian's own native layer supplies it. Markport replaces that
 native layer with browser shims, and those shims don't supply it.
 
 ## Why we don't work around it
@@ -38,7 +38,7 @@ is not something we're willing to ship. Obsidian is not open source; this is the
 and it's their call to make.
 
 To be explicit about what is in the code: `App.getInfo()` passes through whatever value the person
-running the instance has provided in their own browser, and **ships empty**. obsidian-web does not
+running the instance has provided in their own browser, and **ships empty**. Markport does not
 contain the acknowledgement text and does not supply it. Out of the box, on 1.13+, the app does
 not start — which is the intended behaviour.
 

@@ -518,7 +518,7 @@ const MOBILE_SCRIPTS = [
     var key = owVersionKey(v);
     if (!isNaN(key) && key >= 11300) {
       return 'Obsidian ' + v + ' did not start. This version asks its host for a ' +
-             'startup acknowledgement that obsidian-web does not provide. The newest ' +
+             'startup acknowledgement that Markport does not provide. The newest ' +
              'version known to work here is 1.12.7 — see the README.';
     }
     return 'Obsidian ' + (v ? v + ' ' : '') + 'did not start: nothing rendered after the ' +
@@ -963,7 +963,7 @@ const MOBILE_SCRIPTS = [
         var el = els[i];
         if (el.__owVersioned) continue;   // idempotent — פר-instance, לא re-prefix על מוטציה חוזרת
         el.__owVersioned = true;
-        el.textContent = 'obsidian-web ' + window.__owVersion + ' · Obsidian ' + el.textContent;
+        el.textContent = 'Markport ' + window.__owVersion + ' · Obsidian ' + el.textContent;
       }
     }
     apply();

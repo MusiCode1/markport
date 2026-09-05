@@ -1,6 +1,10 @@
-# obsidian-web
+# Markport
 
 Run Obsidian in a standard browser — no Electron, no native app needed.
+
+> **Formerly `obsidian-web`.** Renamed because Obsidian's [developer policies](https://docs.obsidian.md/Developer+policies) ask that project names not include the word "Obsidian". `mark` for Markdown, `-port` as in porting — and as in harbour.
+>
+> Internal identifiers keep the old string on purpose: `localStorage` keys and the layout plugin's `id` are unchanged, so existing vaults and preferences keep working. Historical notes under `docs/` also still say `obsidian-web`, because that is what the project was called then.
 
 **[Try the demo →](https://demo.obsidian-online.pages.dev)** — opens a ready-made vault, nothing to set up.
 **[Open the app →](https://obsidian-online.pages.dev)** — start with your own empty vault.
@@ -10,7 +14,7 @@ any server, and nothing is shared between visitors. They are two deployments of 
 differing only in a config profile chosen at build time — the demo seeds example content and opens
 it automatically, the app does neither. See "Two deployment modes" below.
 
-obsidian-web loads Obsidian's original renderer (`app.js`) completely unmodified — zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle — and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
+Markport loads Obsidian's original renderer (`app.js`) completely unmodified — zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle — and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
 
 ### What works
 
@@ -140,7 +144,7 @@ server adds; the static deployment's Worker serves `/`, `/starter`, `/vault/*`, 
 
 ## Obsidian Version
 
-> **Supported version: 1.12.7.** Obsidian 1.13 added a startup check that obsidian-web
+> **Supported version: 1.12.7.** Obsidian 1.13 added a startup check that Markport
 > deliberately does not satisfy, so 1.13+ will not load — you'll get an explanatory screen instead
 > of the app. This is a decision, not an outstanding bug. **Pass `--version 1.12.7` explicitly**;
 > the commands below default to the latest release, which will not work.
@@ -293,7 +297,7 @@ If the Obsidian team has any concerns about this project, please [open an issue]
 
 [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`).
 
-**This applies to obsidian-web's own code only** — everything under `src/` and `scripts/`.
+**This applies to Markport's own code only** — everything under `src/` and `scripts/`.
 You are free to use, study, modify and redistribute it; if you distribute a modified
 version, it must also be GPL-3.0 and its source must be available.
 

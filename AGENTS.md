@@ -1,4 +1,4 @@
-# AGENTS.md — obsidian-web
+# AGENTS.md — Markport
 
 > Conventions for anyone (human or coding agent) changing this repo.
 > Tool-neutral; `CLAUDE.md` just imports this file.
