@@ -192,33 +192,41 @@
       <strong>Obsidian 1.13 ומעלה.</strong> ‏Markport נעוץ ב-1.12.7. החל מ-1.13, Obsidian מבקש
       מסביבת האירוח שלו שדה <code dir="ltr">terms</code> שמכיל אישור מילה-במילה, לפני שהוא מאתחל.
       ההצהרה יושבת בשני הצדדים — אחד שולח, השני משווה לעותק שלו.
-      <p class="note" style="margin:10px 0 4px">‏הצד המשווה — המובייל. <code dir="ltr">dv</code> הוא
-      פלאגין ה-App של Capacitor, ו-<code dir="ltr">e</code> הוא מה ש-<code dir="ltr">getInfo()</code> החזיר:</p>
-      <pre dir="ltr"><code>case 0:return[4,dv.getInfo()];
-case 1:e=n.sent(),zp.build=e.build,zp.version=e.version,t="",n.label=2;
-case 2:return n.trys.push([2,4,,5]),[4,dv.getManagedPolicy()];
-case 3:return t=n.sent().value,[3,5];
-case 4:return n.sent(),[3,5];
-case 5:if(t&amp;&amp;function(e){ww||(bw=Object.freeze(e),ww=!0)}(yw(t)),
-"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.terms)throw new Error;return[2]</code></pre>
-      <p class="note" style="margin:10px 0 4px">‏ה-renderer של הדסקטופ — אותו ערך דרך IPC, לצד
-      <code dir="ltr">version</code> ו-<code dir="ltr">policy</code>:</p>
-      <pre dir="ltr"><code>td.version=e.ipcRenderer.sendSync("version"),
-td.build=e.remote.app.getVersion(),
-function(e){Tb||(xb=Object.freeze(e),Tb=!0)}(e.ipcRenderer.sendSync("policy")),
-(r=rf("os"))&amp;&amp;(td.deviceName=r.hostname(),td.osName=r.version(),td.osVersion=r.release()),
-"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.ipcRenderer.sendSync("terms"))return window.close(),[2];</code></pre>
+      <p class="note" style="margin:10px 0 4px">‏הצד המשווה — המובייל. ‏זו מכונת-המצבים
+      ש-TypeScript מייצר מ-async, ו-<code dir="ltr">App</code> הוא פלאגין ה-App של Capacitor:</p>
+      <pre dir="ltr"><code>case 0: return [4, App.getInfo()];
+case 1: appInfo = state.sent(), Platform.build = appInfo.build,
+        Platform.version = appInfo.version, managedPolicy = "", state.label = 2;
+case 2: return state.trys.push([2, 4, , 5]), [4, App.getManagedPolicy()];
+case 3: return managedPolicy = state.sent().value, [3, 5];
+case 4: return state.sent(), [3, 5];            // getManagedPolicy threw — swallowed
+case 5: if (managedPolicy &amp;&amp; freezePolicyOnce(parsePolicy(managedPolicy)),
+            "I understand and agree that I am not allowed to … granted by the Obsidian team." !== appInfo.terms) throw new Error;
+        return [2]</code></pre>
+      <p class="note" style="margin:8px 0 4px">‏<code dir="ltr">getManagedPolicy()</code> עטוף
+      ב-<code dir="ltr">try</code> שזרוע ה-catch שלו (<code dir="ltr">case 4</code>) בולעת ונופלת
+      הלאה — ולכן אינו קטלני. ההשוואה של <code dir="ltr">terms</code> אינה עטופה.</p>
+      <p class="note" style="margin:10px 0 4px">‏ה-renderer של הדסקטופ — אותו ערך דרך IPC, באותה
+      ריצה עם <code dir="ltr">version</code> ו-<code dir="ltr">policy</code>:</p>
+      <pre dir="ltr"><code>Platform.version = electron.ipcRenderer.sendSync("version"),
+Platform.build   = electron.remote.app.getVersion(),
+freezePolicyOnce(electron.ipcRenderer.sendSync("policy")),
+(os = requireNode("os")) &amp;&amp; (Platform.deviceName = os.hostname(),
+                             Platform.osName     = os.version(),
+                             Platform.osVersion  = os.release()),
+"I understand and agree that I am not allowed to … granted by the Obsidian team." !== electron.ipcRenderer.sendSync("terms")) return window.close(), [2];</code></pre>
       <p class="note" style="margin:10px 0 4px">‏והצד המספק — תהליך ה-main, הקבוע ושרשרת ה-handlers:</p>
-      <pre dir="ltr"><code>var Bt="I understand and agree that I am not allowed to … granted by the Obsidian team.";
+      <pre dir="ltr"><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
 …
-l.ipcMain.on("terms",t=&gt;{t.returnValue=Bt}),
-l.ipcMain.on("is-quitting",t=&gt;{t.returnValue=be}),
-l.ipcMain.on("is-closing",t=&gt;{let n=l.BrowserWindow.fromWebContents(t.sender);t.returnValue=be||!!(n!=null&amp;&amp;n.closing)}),
-l.ipcMain.on("desktop-dir",t=&gt;{t.returnValue=U}),
-l.ipcMain.on("documents-dir",t=&gt;{t.returnValue=F}),
-l.ipcMain.on("resources",t=&gt;{t.returnValue=i}),
-l.ipcMain.on("version",t=&gt;{t.returnValue=H}),</code></pre>
-      <p class="note" style="margin:8px 0 0">‏ציטוטים מהבילדים המוקטנים, עם ההצהרה מקוצרת ומעברי-שורה שנוספו בגבולות משפטים. ‏<code dir="ltr">terms</code> יושב בין
+electron.ipcMain.on("terms",         e =&gt; { e.returnValue = ACKNOWLEDGEMENT }),
+electron.ipcMain.on("is-quitting",   e =&gt; { e.returnValue = isQuitting }),
+electron.ipcMain.on("is-closing",    e =&gt; { const win = electron.BrowserWindow.fromWebContents(e.sender);
+                                            e.returnValue = isQuitting || !!(win != null &amp;&amp; win.closing) }),
+electron.ipcMain.on("desktop-dir",   e =&gt; { e.returnValue = desktopDir }),
+electron.ipcMain.on("documents-dir", e =&gt; { e.returnValue = documentsDir }),
+electron.ipcMain.on("resources",     e =&gt; { e.returnValue = resourcesPath }),
+electron.ipcMain.on("version",       e =&gt; { e.returnValue = appVersion }),</code></pre>
+      <p class="note" style="margin:8px 0 0">‏הבילדים המופצים מוקטנים; השמות כאן שלנו, המבנה וזרימת-הבקרה שלהם. ההצהרה עצמה מקוצרת. ‏<code dir="ltr">terms</code> יושב בין
       <code dir="ltr">is-quitting</code> ל-<code dir="ltr">is-closing</code>, ונענה בדיוק כמו
       <code dir="ltr">version</code>. באנדרואיד אותה מחרוזת מהודרת ל-<code dir="ltr">classes.dex</code>.</p>
     </li>
