@@ -23,43 +23,48 @@ Obsidian 1.13 added a check at startup. Before it initialises, it asks the host 
 distribute the Obsidian application in any form without explicit approval from the Obsidian team.
 
 The channel is platform-dependent, and the acknowledgement sits on both sides — the host supplies
-it, the renderer compares it against its own copy. Measured 2026-09-05 against both 1.13.4 builds:
+it, the renderer compares it against its own copy. Measured 2026-09-05 against both 1.13.4 builds.
 
 | | Channel | If it doesn't match |
 |---|---|---|
 | Mobile bundle (what Markport runs) | `App.getInfo().terms` (Capacitor) | `throw new Error` |
 | Desktop bundle | `ipcRenderer.sendSync("terms")` (Electron IPC) | `window.close()` |
 
-```js
-const EXPECTED_ACKNOWLEDGEMENT =
-  "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+The excerpts below are verbatim from Obsidian's own minified builds, with the acknowledgement
+itself elided — enough to identify the check, not to reproduce their text.
 
-// capacitor
-if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
-
-// electron.js
-if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();
-```
-
-And this is the supplying side — what Obsidian's own official clients answer with. On both
-platforms the string is stored in the native half of the client and handed to the renderer,
-which then compares it against its own copy.
+**The comparing side.** Mobile, `assets/public/app.js` inside `Obsidian-1.13.4.apk`:
 
 ```js
-// Desktop — the Electron main process, inside obsidian-1.13.4.asar
-const Bt = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
-
-ipcMain.on("terms", t => { t.returnValue = Bt });
-ipcMain.on("is-quitting", t => { t.returnValue = be });
-ipcMain.on("version",     t => { t.returnValue = H  });
-// …one handler per channel; "terms" is answered exactly like any other.
+"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.terms)throw new Error;return[2]
 ```
 
-On Android the same string is compiled into the native layer — it is present in `classes.dex`
-of the 1.13.4 APK, and reaches the renderer through Capacitor's `App.getInfo()`.
+Desktop renderer, inside `obsidian-1.13.4.asar`:
 
-So the acknowledgement is not something the user types or accepts anywhere. It is a constant
-that ships inside Obsidian's own client, on both halves of it.
+```js
+"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.ipcRenderer.sendSync("terms"))return window.close(),[2];
+```
+
+**The supplying side.** The Electron main process, same asar — the constant, and the handler that
+returns it:
+
+```js
+var Bt="I understand and agree that I am not allowed to … granted by the Obsidian team.";
+```
+
+```js
+l.ipcMain.on("terms",t=>{t.returnValue=Bt}),l.ipcMain.on("is-quitting",t=>{t.returnValue=be}),l.ipcMain.on("is-closing",t=>{let n=l.BrowserWindow.fromWebContents(t.sender);t.returnValue=be||!!(n!=null&&n.closing)}),l.ipcMain.on("desktop-d…
+```
+
+`terms` is registered in the same chain as `is-quitting`, `is-closing`, `version` and `resources`
+— one handler among many, answering with a constant.
+
+On Android the same string is compiled into the native layer: it is present in `classes.dex` of
+the 1.13.4 APK (found with `grep -a`; not in `classes2.dex`), and reaches the renderer through
+Capacitor's `App.getInfo()`.
+
+So the acknowledgement is not something the user types or accepts anywhere. It is a constant that
+ships inside Obsidian's own client, on both halves of it.
 
 On a real Android device, Obsidian's own native layer supplies it. Markport replaces that
 native layer with browser shims, and those shims don't supply it — `capacitor-shim.js` ships
