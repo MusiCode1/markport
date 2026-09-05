@@ -189,16 +189,38 @@
   <h2>מה לא עובד</h2>
   <ul>
     <li>
-      <strong>Obsidian 1.13 ומעלה.</strong> ‏Markport נעוץ ב-1.12.7. החל מ-1.13, Obsidian מבקש מסביבת האירוח שלו שדה <code dir="ltr">terms</code> שמכיל אישור מילה-במילה, לפני שהוא מאתחל. הערוץ תלוי-פלטפורמה, וההצהרה יושבת בשני הצדדים — אחד שולח, השני משווה לעותק שלו. הקטעים הבאים הם ציטוטים מהבילדים המוקטנים של 1.13.4, עם ההצהרה עצמה מקוצרת:
-      <p class="note" style="margin:10px 0 4px">הצד המשווה — הבאנדל של המובייל, ואז ה-renderer של הדסקטופ:</p>
-      <pre dir="ltr"><code>"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.terms)throw new Error;return[2]
-
+      <strong>Obsidian 1.13 ומעלה.</strong> ‏Markport נעוץ ב-1.12.7. החל מ-1.13, Obsidian מבקש
+      מסביבת האירוח שלו שדה <code dir="ltr">terms</code> שמכיל אישור מילה-במילה, לפני שהוא מאתחל.
+      ההצהרה יושבת בשני הצדדים — אחד שולח, השני משווה לעותק שלו.
+      <p class="note" style="margin:10px 0 4px">‏הצד המשווה — המובייל. <code dir="ltr">dv</code> הוא
+      פלאגין ה-App של Capacitor, ו-<code dir="ltr">e</code> הוא מה ש-<code dir="ltr">getInfo()</code> החזיר:</p>
+      <pre dir="ltr"><code>case 0:return[4,dv.getInfo()];
+case 1:e=n.sent(),zp.build=e.build,zp.version=e.version,t="",n.label=2;
+case 2:return n.trys.push([2,4,,5]),[4,dv.getManagedPolicy()];
+case 3:return t=n.sent().value,[3,5];
+case 4:return n.sent(),[3,5];
+case 5:if(t&amp;&amp;function(e){ww||(bw=Object.freeze(e),ww=!0)}(yw(t)),
+"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.terms)throw new Error;return[2]</code></pre>
+      <p class="note" style="margin:10px 0 4px">‏ה-renderer של הדסקטופ — אותו ערך דרך IPC, לצד
+      <code dir="ltr">version</code> ו-<code dir="ltr">policy</code>:</p>
+      <pre dir="ltr"><code>td.version=e.ipcRenderer.sendSync("version"),
+td.build=e.remote.app.getVersion(),
+function(e){Tb||(xb=Object.freeze(e),Tb=!0)}(e.ipcRenderer.sendSync("policy")),
+(r=rf("os"))&amp;&amp;(td.deviceName=r.hostname(),td.osName=r.version(),td.osVersion=r.release()),
 "I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.ipcRenderer.sendSync("terms"))return window.close(),[2];</code></pre>
-      <p class="note" style="margin:10px 0 4px">והצד המספק — תהליך ה-main של הדסקטופ, הקבוע וה-handler שמחזיר אותו:</p>
+      <p class="note" style="margin:10px 0 4px">‏והצד המספק — תהליך ה-main, הקבוע ושרשרת ה-handlers:</p>
       <pre dir="ltr"><code>var Bt="I understand and agree that I am not allowed to … granted by the Obsidian team.";
-
-l.ipcMain.on("terms",t=&gt;{t.returnValue=Bt}),l.ipcMain.on("is-quitting",t=&gt;{t.returnValue=be}),…</code></pre>
-      <p class="note" style="margin:8px 0 0">‏<code dir="ltr">terms</code> רשום באותה שרשרת עם <code dir="ltr">is-quitting</code>, <code dir="ltr">version</code> ו-<code dir="ltr">resources</code> — handler אחד מני רבים. באנדרואיד אותה מחרוזת מהודרת ל-<code dir="ltr">classes.dex</code> ומגיעה דרך Capacitor.</p>
+…
+l.ipcMain.on("terms",t=&gt;{t.returnValue=Bt}),
+l.ipcMain.on("is-quitting",t=&gt;{t.returnValue=be}),
+l.ipcMain.on("is-closing",t=&gt;{let n=l.BrowserWindow.fromWebContents(t.sender);t.returnValue=be||!!(n!=null&amp;&amp;n.closing)}),
+l.ipcMain.on("desktop-dir",t=&gt;{t.returnValue=U}),
+l.ipcMain.on("documents-dir",t=&gt;{t.returnValue=F}),
+l.ipcMain.on("resources",t=&gt;{t.returnValue=i}),
+l.ipcMain.on("version",t=&gt;{t.returnValue=H}),</code></pre>
+      <p class="note" style="margin:8px 0 0">‏ציטוטים מהבילדים המוקטנים, עם ההצהרה מקוצרת ומעברי-שורה שנוספו בגבולות משפטים. ‏<code dir="ltr">terms</code> יושב בין
+      <code dir="ltr">is-quitting</code> ל-<code dir="ltr">is-closing</code>, ונענה בדיוק כמו
+      <code dir="ltr">version</code>. באנדרואיד אותה מחרוזת מהודרת ל-<code dir="ltr">classes.dex</code>.</p>
     </li>
     <li><strong>תוספים שזקוקים ל-API אמיתי של Node</strong> — הרצת תהליכים, גישה מחוץ לכספת. תוספים שנכתבו מול ה-API הבטוח-למובייל עובדים בדרך כלל.</li>
     <li><strong>כספות־תיקייה</strong> — ב-Chromium בלבד; ‏Firefox ו-Safari לא מממשים את בורר-התיקיות.</li>

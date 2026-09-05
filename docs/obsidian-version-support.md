@@ -30,38 +30,50 @@ it, the renderer compares it against its own copy. Measured 2026-09-05 against b
 | Mobile bundle (what Markport runs) | `App.getInfo().terms` (Capacitor) | `throw new Error` |
 | Desktop bundle | `ipcRenderer.sendSync("terms")` (Electron IPC) | `window.close()` |
 
-The excerpts below are verbatim from Obsidian's own minified builds, with the acknowledgement
-itself elided — enough to identify the check, not to reproduce their text.
+Verbatim from the minified builds, with the acknowledgement elided and line breaks added at statement boundaries.
 
-**The comparing side.** Mobile, `assets/public/app.js` inside `Obsidian-1.13.4.apk`:
+**The comparing side.** Mobile — `assets/public/app.js` inside `Obsidian-1.13.4.apk`. `dv` is
+the Capacitor App plugin; `e` is what `getInfo()` resolved to:
 
 ```js
+case 0:return[4,dv.getInfo()];
+case 1:e=n.sent(),zp.build=e.build,zp.version=e.version,t="",n.label=2;
+case 2:return n.trys.push([2,4,,5]),[4,dv.getManagedPolicy()];
+case 3:return t=n.sent().value,[3,5];
+case 4:return n.sent(),[3,5];
+case 5:if(t&&function(e){ww||(bw=Object.freeze(e),ww=!0)}(yw(t)),
 "I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.terms)throw new Error;return[2]
 ```
 
-Desktop renderer, inside `obsidian-1.13.4.asar`:
+Desktop renderer, inside `obsidian-1.13.4.asar` — the same value read over IPC, alongside
+`version` and `policy`:
 
 ```js
+td.version=e.ipcRenderer.sendSync("version"),
+td.build=e.remote.app.getVersion(),
+function(e){Tb||(xb=Object.freeze(e),Tb=!0)}(e.ipcRenderer.sendSync("policy")),
+(r=rf("os"))&&(td.deviceName=r.hostname(),td.osName=r.version(),td.osVersion=r.release()),
 "I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.ipcRenderer.sendSync("terms"))return window.close(),[2];
 ```
 
-**The supplying side.** The Electron main process, same asar — the constant, and the handler that
-returns it:
+**The supplying side.** The Electron main process, same asar — the constant, and the handler
+chain it is registered in:
 
 ```js
 var Bt="I understand and agree that I am not allowed to … granted by the Obsidian team.";
+…
+l.ipcMain.on("terms",t=>{t.returnValue=Bt}),
+l.ipcMain.on("is-quitting",t=>{t.returnValue=be}),
+l.ipcMain.on("is-closing",t=>{let n=l.BrowserWindow.fromWebContents(t.sender);t.returnValue=be||!!(n!=null&&n.closing)}),
+l.ipcMain.on("desktop-dir",t=>{t.returnValue=U}),
+l.ipcMain.on("documents-dir",t=>{t.returnValue=F}),
+l.ipcMain.on("resources",t=>{t.returnValue=i}),
+l.ipcMain.on("version",t=>{t.returnValue=H}),
 ```
 
-```js
-l.ipcMain.on("terms",t=>{t.returnValue=Bt}),l.ipcMain.on("is-quitting",t=>{t.returnValue=be}),l.ipcMain.on("is-closing",t=>{let n=l.BrowserWindow.fromWebContents(t.sender);t.returnValue=be||!!(n!=null&&n.closing)}),l.ipcMain.on("desktop-d…
-```
-
-`terms` is registered in the same chain as `is-quitting`, `is-closing`, `version` and `resources`
-— one handler among many, answering with a constant.
-
-On Android the same string is compiled into the native layer: it is present in `classes.dex` of
-the 1.13.4 APK (found with `grep -a`; not in `classes2.dex`), and reaches the renderer through
-Capacitor's `App.getInfo()`.
+`terms` sits between `is-quitting` and `is-closing`, answered exactly like `version` or
+`resources`. On Android the same string is compiled into `classes.dex` of the 1.13.4 APK (found
+with `grep -a`; not in `classes2.dex`) and reaches the renderer through Capacitor.
 
 So the acknowledgement is not something the user types or accepts anywhere. It is a constant that
 ships inside Obsidian's own client, on both halves of it.
