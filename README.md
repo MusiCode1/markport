@@ -291,7 +291,7 @@ This is an **educational proof-of-concept** exploring how Electron-based apps ca
 
 This repository does **not** include Obsidian's source code. The `vendor/obsidian-desktop/` and `vendor/obsidian-mobile/` directories are gitignored — users must download Obsidian's renderer themselves using the provided setup scripts. Obsidian's code remains the property of Dynalist Inc. under their [Terms of Service](https://obsidian.md/terms).
 
-If the Obsidian team has any concerns about this project, please [open an issue](https://github.com/MusiCode1/obsidian-web/issues) and we will address them promptly.
+If the Obsidian team has any concerns about this project, please [open an issue](https://github.com/MusiCode1/markport/issues) and we will address them promptly.
 
 ## License
 
