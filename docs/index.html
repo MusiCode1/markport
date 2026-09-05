@@ -192,55 +192,45 @@
     <li>
       <strong>Obsidian 1.13 and newer.</strong> Markport is pinned to 1.12.7. Starting with 1.13,
       Obsidian asks its host environment for a <code>terms</code> field carrying a verbatim
-      acknowledgement before it initialises. The acknowledgement sits on both sides — one sends
-      it, the other compares against its own copy.
-      <p class="note" style="margin:10px 0 4px">The comparing side — mobile. <code>App</code> is
-      Capacitor's App plugin:</p>
-      <pre><code>const appInfo = await App.getInfo();
+      acknowledgement before it initialises. The acknowledgement sits on both sides — one supplies
+      it, the other compares against its own copy <em>(illustrative, not exact)</em>.
+      <p class="note" style="margin:10px 0 4px"><strong>On mobile</strong>, through Capacitor's App plugin:</p>
+      <pre><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+
+// ### Platform side — the Android native layer ###
+// The string is compiled into classes.dex and served through Capacitor's App plugin.
+App.getInfo = () =&gt; ({
+  name: 'Obsidian', id: 'md.obsidian', build: '…', version: '1.13.4',
+  terms: ACKNOWLEDGEMENT,
+});
+
+// ### Client side — the renderer, inside app.js ###
+const appInfo = await App.getInfo();
 Platform.build   = appInfo.build;
 Platform.version = appInfo.version;
 
-let managedPolicy = "";
-try {
-  managedPolicy = (await App.getManagedPolicy()).value;
-} catch {
-  // swallowed — getManagedPolicy is not fatal
-}
-if (managedPolicy) freezePolicyOnce(parsePolicy(managedPolicy));
+// …
 
-if ("I understand and agree that I am not allowed to … granted by the Obsidian team." !== appInfo.terms) throw new Error();</code></pre>
-      <p class="note" style="margin:8px 0 4px"><code>getManagedPolicy()</code> sits inside a
-      <code>try</code> whose catch arm swallows, so it is not fatal. The <code>terms</code>
-      comparison sits outside it — that is what makes it the only hard blocker.</p>
-      <p class="note" style="margin:10px 0 4px">The desktop renderer — the same value over IPC, in
-      the same run as <code>version</code> and <code>policy</code>:</p>
-      <pre><code>Platform.version = electron.ipcRenderer.sendSync("version");
-Platform.build   = electron.remote.app.getVersion();
-freezePolicyOnce(electron.ipcRenderer.sendSync("policy"));
-
-const os = requireNode("os");
-if (os) {
-  Platform.deviceName = os.hostname();
-  Platform.osName     = os.version();
-  Platform.osVersion  = os.release();
-}
-
-if ("I understand and agree that I am not allowed to … granted by the Obsidian team." !== electron.ipcRenderer.sendSync("terms")) return window.close();</code></pre>
-      <p class="note" style="margin:10px 0 4px">And the supplying side — the main process: the
-      constant, and the handler chain it is registered in:</p>
+if (ACKNOWLEDGEMENT !== appInfo.terms) throw new Error();</code></pre>
+      <p class="note" style="margin:10px 0 4px"><strong>On desktop</strong>, the same value over IPC —
+      in the same run that reads <code>version</code> and <code>resources</code>:</p>
       <pre><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
-…
+
+// ### Platform side — the Electron main process ###
 electron.ipcMain.on("terms",         e =&gt; { e.returnValue = ACKNOWLEDGEMENT }),
-electron.ipcMain.on("is-quitting",   e =&gt; { e.returnValue = isQuitting }),
-electron.ipcMain.on("is-closing",    e =&gt; { const win = electron.BrowserWindow.fromWebContents(e.sender);
-                                            e.returnValue = isQuitting || !!(win != null &amp;&amp; win.closing) }),
-electron.ipcMain.on("desktop-dir",   e =&gt; { e.returnValue = desktopDir }),
 electron.ipcMain.on("documents-dir", e =&gt; { e.returnValue = documentsDir }),
 electron.ipcMain.on("resources",     e =&gt; { e.returnValue = resourcesPath }),
-electron.ipcMain.on("version",       e =&gt; { e.returnValue = appVersion }),</code></pre>
-      <p class="note" style="margin:8px 0 0">Reconstructed, not copied: the shipped builds are minified, and the mobile one is TypeScript's ES5 downlevel — a generator state machine. Names and shape are ours; the control flow and the channels are theirs. The acknowledgement itself is elided. <code>terms</code> sits between
-      <code>is-quitting</code> and <code>is-closing</code>, answered exactly like
-      <code>version</code>. On Android the same string is compiled into <code>classes.dex</code>.</p>
+electron.ipcMain.on("version",       e =&gt; { e.returnValue = appVersion }),
+
+// ### Client side — the renderer ###
+Platform.version = electron.ipcRenderer.sendSync("version");
+Platform.build   = electron.remote.app.getVersion();
+
+// …
+
+const termsFromIPC = electron.ipcRenderer.sendSync("terms");
+
+if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
     </li>
     <li><strong>Plugins that need real Node APIs</strong> — spawning processes, reaching outside the vault. Plugins written against the mobile-safe API generally work.</li>
     <li><strong>Folder vaults</strong> — Chromium only; Firefox and Safari do not implement the directory picker.</li>

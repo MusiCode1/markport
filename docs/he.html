@@ -191,53 +191,45 @@
     <li>
       <strong>Obsidian 1.13 ומעלה.</strong> ‏Markport נעוץ ב-1.12.7. החל מ-1.13, Obsidian מבקש
       מסביבת האירוח שלו שדה <code dir="ltr">terms</code> שמכיל אישור מילה-במילה, לפני שהוא מאתחל.
-      ההצהרה יושבת בשני הצדדים — אחד שולח, השני משווה לעותק שלו.
-      <p class="note" style="margin:10px 0 4px">‏הצד המשווה — המובייל.
-      <code dir="ltr">App</code> הוא פלאגין ה-App של Capacitor:</p>
-      <pre dir="ltr"><code>const appInfo = await App.getInfo();
+      ההצהרה יושבת בשני הצדדים — אחד מספק, השני משווה לעותק שלו
+      <em>(הקוד אינו מדויק, והוא למטרת המחשה)</em>.
+      <p class="note" style="margin:10px 0 4px"><strong>במובייל</strong>, דרך פלאגין ה-App של Capacitor:</p>
+      <pre dir="ltr"><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+
+// ### צד הפלטפורמה — הקוד הנייטיבי של אנדרואיד ###
+// המחרוזת מהודרת לתוך classes.dex, ומוגשת דרך פלאגין ה-App של Capacitor.
+App.getInfo = () =&gt; ({
+  name: 'Obsidian', id: 'md.obsidian', build: '…', version: '1.13.4',
+  terms: ACKNOWLEDGEMENT,
+});
+
+// ### צד הלקוח — ה-renderer, בתוך app.js ###
+const appInfo = await App.getInfo();
 Platform.build   = appInfo.build;
 Platform.version = appInfo.version;
 
-let managedPolicy = "";
-try {
-  managedPolicy = (await App.getManagedPolicy()).value;
-} catch {
-  // swallowed — getManagedPolicy is not fatal
-}
-if (managedPolicy) freezePolicyOnce(parsePolicy(managedPolicy));
+// …
 
-if ("I understand and agree that I am not allowed to … granted by the Obsidian team." !== appInfo.terms) throw new Error();</code></pre>
-      <p class="note" style="margin:8px 0 4px">‏<code dir="ltr">getManagedPolicy()</code> יושב בתוך
-      <code dir="ltr">try</code> שזרוע ה-catch שלו בולעת, ולכן אינו קטלני. ההשוואה של
-      <code dir="ltr">terms</code> יושבת מחוצה לו — וזה מה שהופך אותה לחוסם היחיד.</p>
-      <p class="note" style="margin:10px 0 4px">‏ה-renderer של הדסקטופ — אותו ערך דרך IPC, באותה
-      ריצה עם <code dir="ltr">version</code> ו-<code dir="ltr">policy</code>:</p>
-      <pre dir="ltr"><code>Platform.version = electron.ipcRenderer.sendSync("version");
-Platform.build   = electron.remote.app.getVersion();
-freezePolicyOnce(electron.ipcRenderer.sendSync("policy"));
-
-const os = requireNode("os");
-if (os) {
-  Platform.deviceName = os.hostname();
-  Platform.osName     = os.version();
-  Platform.osVersion  = os.release();
-}
-
-if ("I understand and agree that I am not allowed to … granted by the Obsidian team." !== electron.ipcRenderer.sendSync("terms")) return window.close();</code></pre>
-      <p class="note" style="margin:10px 0 4px">‏והצד המספק — תהליך ה-main, הקבוע ושרשרת ה-handlers:</p>
+if (ACKNOWLEDGEMENT !== appInfo.terms) throw new Error();</code></pre>
+      <p class="note" style="margin:10px 0 4px"><strong>בדסקטופ</strong>, אותו ערך דרך IPC — באותה
+      ריצה שבה נקראים גם <code dir="ltr">version</code> ו-<code dir="ltr">resources</code>:</p>
       <pre dir="ltr"><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
-…
+
+// ### צד הפלטפורמה — תהליך ה-main של אלקטרון ###
 electron.ipcMain.on("terms",         e =&gt; { e.returnValue = ACKNOWLEDGEMENT }),
-electron.ipcMain.on("is-quitting",   e =&gt; { e.returnValue = isQuitting }),
-electron.ipcMain.on("is-closing",    e =&gt; { const win = electron.BrowserWindow.fromWebContents(e.sender);
-                                            e.returnValue = isQuitting || !!(win != null &amp;&amp; win.closing) }),
-electron.ipcMain.on("desktop-dir",   e =&gt; { e.returnValue = desktopDir }),
 electron.ipcMain.on("documents-dir", e =&gt; { e.returnValue = documentsDir }),
 electron.ipcMain.on("resources",     e =&gt; { e.returnValue = resourcesPath }),
-electron.ipcMain.on("version",       e =&gt; { e.returnValue = appVersion }),</code></pre>
-      <p class="note" style="margin:8px 0 0">‏שוחזר, לא הועתק: הבילדים המופצים מוקטנים, וזה של המובייל הוא הורדת-רמה של TypeScript ל-ES5 — מכונת-מצבים של גנרטור. השמות והצורה שלנו; זרימת-הבקרה והערוצים שלהם. ההצהרה עצמה מקוצרת. ‏<code dir="ltr">terms</code> יושב בין
-      <code dir="ltr">is-quitting</code> ל-<code dir="ltr">is-closing</code>, ונענה בדיוק כמו
-      <code dir="ltr">version</code>. באנדרואיד אותה מחרוזת מהודרת ל-<code dir="ltr">classes.dex</code>.</p>
+electron.ipcMain.on("version",       e =&gt; { e.returnValue = appVersion }),
+
+// ### צד הלקוח — ה-renderer ###
+Platform.version = electron.ipcRenderer.sendSync("version");
+Platform.build   = electron.remote.app.getVersion();
+
+// …
+
+const termsFromIPC = electron.ipcRenderer.sendSync("terms");
+
+if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
     </li>
     <li><strong>תוספים שזקוקים ל-API אמיתי של Node</strong> — הרצת תהליכים, גישה מחוץ לכספת. תוספים שנכתבו מול ה-API הבטוח-למובייל עובדים בדרך כלל.</li>
     <li><strong>כספות־תיקייה</strong> — ב-Chromium בלבד; ‏Firefox ו-Safari לא מממשים את בורר-התיקיות.</li>
