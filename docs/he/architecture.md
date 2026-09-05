@@ -1,6 +1,7 @@
-# Architecture - obsidian-web
+# Architecture - Markport
 
 > קהל: מי שמשנה את הקוד. ה"למה", לא ה"איך-משתמשים" (זה `README.md`).
+> גרסה אנגלית של המסמך הזה נמצאת ב-[`docs/architecture.md`](../architecture.md).
 
 ## מה זה
 מריצים את ה-renderer של Obsidian (בַּאנדל upstream, `vendor/obsidian-mobile/`)

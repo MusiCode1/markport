@@ -98,7 +98,9 @@ function processFile(file) {
   let blocks = 0;
 
   const out = src.replace(
-    /(<pre[^>]*><code>)([\s\S]*?)(<\/code><\/pre>)/g,
+    // <code> may carry a language class when the HTML came from a Markdown
+    // renderer, so the opening tag is matched loosely and preserved as-is.
+    /(<pre[^>]*><code[^>]*>)([\s\S]*?)(<\/code><\/pre>)/g,
     (_, open, body, close) => {
       blocks += 1;
       return open + highlight(unhighlight(body)) + close;

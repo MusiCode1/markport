@@ -59,3 +59,8 @@ user-data/*/
 
 # wrangler local state (deploy cache) — never published.
 .wrangler/
+
+# Build-only dependencies for scripts/ (marked, for the docs site build).
+# Never served to a visitor.
+scripts/node_modules/
+scripts/package-lock.json
