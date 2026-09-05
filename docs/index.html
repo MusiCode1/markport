@@ -65,6 +65,17 @@
     padding: 10px 13px; margin: 10px 0; font-size: .85rem; line-height: 1.5;
   }
   pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  /* comment - unicode-bidi:plaintext gives each line its own direction from
+     its first strong character, so a Hebrew comment inside an LTR code block
+     is not reordered by the bidi algorithm. */
+  pre code .t-c { color: #6e6e6e; font-style: italic; unicode-bidi: plaintext; }
+  pre code .t-s { color: #9ec98a; }                      /* string     */
+  pre code .t-k { color: #c792ea; }                      /* keyword    */
+  pre code .t-n { color: #e6a06c; }                      /* number     */
+  pre code .t-f { color: #82aaff; }                      /* call       */
+  pre code .t-p { color: #82aaff; }                      /* property   */
+  pre code .t-v { color: #dcddde; }                      /* identifier */
+  pre code .t-o { color: #8f8f8f; }                      /* operator   */
   .wordmark {
     font-size: .95rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
     color: var(--accent-soft); margin: 0 0 10px;
@@ -195,42 +206,42 @@
       acknowledgement before it initialises. The acknowledgement sits on both sides - one supplies
       it, the other compares against its own copy <em>(illustrative, not exact)</em>.
       <p class="note" style="margin:10px 0 4px"><strong>On mobile</strong>, through Capacitor's App plugin:</p>
-      <pre><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+      <pre><code><span class="t-k">const</span> <span class="t-v">ACKNOWLEDGEMENT</span> <span class="t-o">=</span> <span class="t-s">"I understand and agree that I am not allowed to … granted by the Obsidian team."</span>;
 
-// ### Platform side - the Android native layer ###
-// The string is compiled into classes.dex and served through Capacitor's App plugin.
-App.getInfo = () =&gt; ({
-  name: 'Obsidian', id: 'md.obsidian', build: '…', version: '1.13.4',
-  terms: ACKNOWLEDGEMENT,
+<span class="t-c">// ### Platform side - the Android native layer ###</span>
+<span class="t-c">// The string is compiled into classes.dex and served through Capacitor's App plugin.</span>
+<span class="t-v">App</span>.<span class="t-p">getInfo</span> <span class="t-o">=</span> () <span class="t-o">=&gt;</span> ({
+  <span class="t-v">name</span><span class="t-o">:</span> <span class="t-s">'Obsidian'</span>, <span class="t-v">id</span><span class="t-o">:</span> <span class="t-s">'md.obsidian'</span>, <span class="t-v">build</span><span class="t-o">:</span> <span class="t-s">'…'</span>, <span class="t-v">version</span><span class="t-o">:</span> <span class="t-s">'1.13.4'</span>,
+  <span class="t-v">terms</span><span class="t-o">:</span> <span class="t-v">ACKNOWLEDGEMENT</span>,
 });
 
-// ### Client side - the renderer, inside app.js ###
-const appInfo = await App.getInfo();
-Platform.build   = appInfo.build;
-Platform.version = appInfo.version;
+<span class="t-c">// ### Client side - the renderer, inside app.js ###</span>
+<span class="t-k">const</span> <span class="t-v">appInfo</span> <span class="t-o">=</span> <span class="t-k">await</span> <span class="t-v">App</span>.<span class="t-p">getInfo</span>();
+<span class="t-v">Platform</span>.<span class="t-p">build</span>   <span class="t-o">=</span> <span class="t-v">appInfo</span>.<span class="t-p">build</span>;
+<span class="t-v">Platform</span>.<span class="t-p">version</span> <span class="t-o">=</span> <span class="t-v">appInfo</span>.<span class="t-p">version</span>;
 
-// …
+<span class="t-c">// …</span>
 
-if (ACKNOWLEDGEMENT !== appInfo.terms) throw new Error();</code></pre>
+<span class="t-k">if</span> (<span class="t-v">ACKNOWLEDGEMENT</span> <span class="t-o">!==</span> <span class="t-v">appInfo</span>.<span class="t-p">terms</span>) <span class="t-k">throw</span> <span class="t-k">new</span> <span class="t-f">Error</span>();</code></pre>
       <p class="note" style="margin:10px 0 4px"><strong>On desktop</strong>, the same value over IPC -
       in the same run that reads <code>version</code> and <code>resources</code>:</p>
-      <pre><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+      <pre><code><span class="t-k">const</span> <span class="t-v">ACKNOWLEDGEMENT</span> <span class="t-o">=</span> <span class="t-s">"I understand and agree that I am not allowed to … granted by the Obsidian team."</span>;
 
-// ### Platform side - the Electron main process ###
-electron.ipcMain.on("terms",         e =&gt; { e.returnValue = ACKNOWLEDGEMENT }),
-electron.ipcMain.on("documents-dir", e =&gt; { e.returnValue = documentsDir }),
-electron.ipcMain.on("resources",     e =&gt; { e.returnValue = resourcesPath }),
-electron.ipcMain.on("version",       e =&gt; { e.returnValue = appVersion }),
+<span class="t-c">// ### Platform side - the Electron main process ###</span>
+<span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"terms"</span>,         <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">ACKNOWLEDGEMENT</span> }),
+<span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"documents-dir"</span>, <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">documentsDir</span> }),
+<span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"resources"</span>,     <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">resourcesPath</span> }),
+<span class="t-v">electron</span>.<span class="t-p">ipcMain</span>.<span class="t-p">on</span>(<span class="t-s">"version"</span>,       <span class="t-v">e</span> <span class="t-o">=&gt;</span> { <span class="t-v">e</span>.<span class="t-p">returnValue</span> <span class="t-o">=</span> <span class="t-v">appVersion</span> }),
 
-// ### Client side - the renderer ###
-Platform.version = electron.ipcRenderer.sendSync("version");
-Platform.build   = electron.remote.app.getVersion();
+<span class="t-c">// ### Client side - the renderer ###</span>
+<span class="t-v">Platform</span>.<span class="t-p">version</span> <span class="t-o">=</span> <span class="t-v">electron</span>.<span class="t-p">ipcRenderer</span>.<span class="t-p">sendSync</span>(<span class="t-s">"version"</span>);
+<span class="t-v">Platform</span>.<span class="t-p">build</span>   <span class="t-o">=</span> <span class="t-v">electron</span>.<span class="t-p">remote</span>.<span class="t-p">app</span>.<span class="t-p">getVersion</span>();
 
-// …
+<span class="t-c">// …</span>
 
-const termsFromIPC = electron.ipcRenderer.sendSync("terms");
+<span class="t-k">const</span> <span class="t-v">termsFromIPC</span> <span class="t-o">=</span> <span class="t-v">electron</span>.<span class="t-p">ipcRenderer</span>.<span class="t-p">sendSync</span>(<span class="t-s">"terms"</span>);
 
-if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
+<span class="t-k">if</span> (<span class="t-v">ACKNOWLEDGEMENT</span> <span class="t-o">!==</span> <span class="t-v">termsFromIPC</span>) <span class="t-k">return</span> <span class="t-v">window</span>.<span class="t-p">close</span>();</code></pre>
     </li>
     <li><strong>Plugins that need real Node APIs</strong> - spawning processes, reaching outside the vault. Plugins written against the mobile-safe API generally work.</li>
     <li><strong>Folder vaults</strong> - Chromium only; Firefox and Safari do not implement the directory picker.</li>
