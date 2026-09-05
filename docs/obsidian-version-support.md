@@ -101,6 +101,28 @@ native layer with browser shims, and those shims don't supply it — `capacitor-
 `terms` empty, and `shims/electron.js` answers the `terms` IPC channel with an empty string for
 the same reason.
 
+### The other thing 1.13 added: managed policy
+
+`getManagedPolicy()` in the excerpt above is not part of the gate, but it is worth knowing about.
+It is new in 1.13 — 1.12.7 does not call it at all — and it reads an enterprise MDM
+configuration: a JSON string with eight keys.
+
+```js
+{ plugins, themes, snippets, sync, publish, webViewer, devTools, insider }
+```
+
+Two different parsers. `snippets`, `sync`, `publish`, `webViewer`, `devTools` and `insider` are
+strict booleans — only a literal `true` permits, anything else denies. `plugins` and `themes`
+accept either `true` or a non-empty **array**, which is kept as-is and used as an allow-list of
+ids. The default, when no policy is supplied, is everything permitted; the object is
+`Object.freeze`d and only the first value wins.
+
+Markport's shims do not implement `getManagedPolicy` at all. On 1.12.7 that is moot — nothing
+calls it. On 1.13+ the call would reject, Obsidian's own `try` would swallow it, and the app
+would run with the permissive default. So an admin-supplied policy would not reach a Markport
+instance even if one were configured on the device. Nothing here is a workaround: it is simply
+not implemented, and it is not what stops 1.13 from starting.
+
 ## Why we don't work around it
 
 We could. The shim could return the string and the app would boot.
