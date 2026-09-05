@@ -30,6 +30,17 @@ it, the renderer compares it against its own copy. Measured 2026-09-05 against b
 | Mobile bundle (what Markport runs) | `App.getInfo().terms` (Capacitor) | `throw new Error` |
 | Desktop bundle | `ipcRenderer.sendSync("terms")` (Electron IPC) | `window.close()` |
 
+```js
+const EXPECTED_ACKNOWLEDGEMENT =
+  "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+
+// capacitor
+if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
+
+// electron.js
+if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();
+```
+
 On a real Android device, Obsidian's own native layer supplies it. Markport replaces that
 native layer with browser shims, and those shims don't supply it — `capacitor-shim.js` ships
 `terms` empty, and `shims/electron.js` answers the `terms` IPC channel with an empty string for
