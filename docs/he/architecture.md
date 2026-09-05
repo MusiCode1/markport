@@ -9,7 +9,7 @@ description: "איך Markport מריץ את המנוע של אובסידיאן �
 > גרסה אנגלית של המסמך הזה נמצאת ב-[`docs/architecture.md`](../architecture.md).
 
 ## מה זה
-מריצים את ה-renderer של Obsidian (בַּאנדל upstream, `vendor/obsidian-mobile/`)
+מריצים את ה-renderer של Obsidian (באנדל upstream, `vendor/obsidian-mobile/`)
 בדפדפן רגיל, ע"י shims שמזייפים את Electron/Capacitor. אחרי ה-mobile-first
 collapse יש **core אחד** (client-mobile) עם **backend מתחלף**, לא שני ראנטיימים.
 
@@ -59,7 +59,7 @@ src/
 - **"צד-שרת" עתידני** = OPFS + sync-plugin (LiveSync), לא הרחבת /api/fs.
 - **boot-order**: FS adapter חייב pre-boot (לפתוח כספת) → **לא יכול להיות פלאגין**.
 
-## הבַּאנדל של Obsidian (vendor)
+## הבאנדל של Obsidian (vendor)
 - `vendor/*` gitignored, מיוצר ע"י `scripts/update-obsidian-mobile.js` (מוריד APK).
 - **אפס patches** - `vendor/obsidian-mobile/app.js` זהה-בייט
   לרשומת ה-APK (`assets/public/app.js`). `scripts/patch-obsidian-mobile.js` נשאר קיים
