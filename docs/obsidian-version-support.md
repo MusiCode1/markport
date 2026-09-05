@@ -30,41 +30,51 @@ it, the renderer compares it against its own copy. Measured 2026-09-05 against b
 | Mobile bundle (what Markport runs) | `App.getInfo().terms` (Capacitor) | `throw new Error` |
 | Desktop bundle | `ipcRenderer.sendSync("terms")` (Electron IPC) | `window.close()` |
 
-The shipped builds are minified; the names here are ours, the structure and the control flow are theirs. The acknowledgement itself is elided.
+Reconstructed, not copied: the shipped builds are minified, and the mobile one is TypeScript's ES5 downlevel — a generator state machine. Names and shape are ours; the control flow and the channels are theirs. The acknowledgement itself is elided.
 
-**The comparing side.** Mobile — `assets/public/app.js` inside `Obsidian-1.13.4.apk`. This is
-TypeScript's downlevelled async state machine; `App` is Capacitor's App plugin:
+**The comparing side.** Mobile — `assets/public/app.js` inside `Obsidian-1.13.4.apk`. `App` is
+Capacitor's App plugin:
 
 ```js
-case 0: return [4, App.getInfo()];
-case 1: appInfo = state.sent(), Platform.build = appInfo.build,
-        Platform.version = appInfo.version, managedPolicy = "", state.label = 2;
-case 2: return state.trys.push([2, 4, , 5]), [4, App.getManagedPolicy()];
-case 3: return managedPolicy = state.sent().value, [3, 5];
-case 4: return state.sent(), [3, 5];            // getManagedPolicy threw — swallowed
-case 5: if (managedPolicy && freezePolicyOnce(parsePolicy(managedPolicy)),
-            "I understand and agree that I am not allowed to … granted by the Obsidian team." !== appInfo.terms) throw new Error;
-        return [2]
+const appInfo = await App.getInfo();
+Platform.build   = appInfo.build;
+Platform.version = appInfo.version;
+
+let managedPolicy = "";
+try {
+  managedPolicy = (await App.getManagedPolicy()).value;
+} catch {
+  // swallowed — getManagedPolicy is not fatal
+}
+if (managedPolicy) freezePolicyOnce(parsePolicy(managedPolicy));
+
+if ("I understand and agree that I am not allowed to … granted by the Obsidian team." !== appInfo.terms) throw new Error();
 ```
 
-`getManagedPolicy()` is wrapped in a `try` whose catch arm (`case 4`) swallows the error and
-falls through, so it is not fatal. The `terms` comparison is not wrapped.
+`getManagedPolicy()` sits inside a `try` whose catch arm swallows, so it is not fatal. The
+`terms` comparison sits outside it — that is what makes it the only hard blocker.
 
-Desktop renderer, inside `obsidian-1.13.4.asar` — the same value read over IPC, in the same
-run as `version` and `policy`:
+Desktop renderer, inside `obsidian-1.13.4.asar` — the same value read over IPC, in the same run
+as `version` and `policy`:
 
 ```js
-Platform.version = electron.ipcRenderer.sendSync("version"),
-Platform.build   = electron.remote.app.getVersion(),
-freezePolicyOnce(electron.ipcRenderer.sendSync("policy")),
-(os = requireNode("os")) && (Platform.deviceName = os.hostname(),
-                             Platform.osName     = os.version(),
-                             Platform.osVersion  = os.release()),
-"I understand and agree that I am not allowed to … granted by the Obsidian team." !== electron.ipcRenderer.sendSync("terms")) return window.close(), [2];
+Platform.version = electron.ipcRenderer.sendSync("version");
+Platform.build   = electron.remote.app.getVersion();
+freezePolicyOnce(electron.ipcRenderer.sendSync("policy"));
+
+const os = requireNode("os");
+if (os) {
+  Platform.deviceName = os.hostname();
+  Platform.osName     = os.version();
+  Platform.osVersion  = os.release();
+}
+
+if ("I understand and agree that I am not allowed to … granted by the Obsidian team." !== electron.ipcRenderer.sendSync("terms")) return window.close();
 ```
 
 **The supplying side.** The Electron main process, same asar — the constant, and the handler
-chain it is registered in:
+chain it is registered in. This one is quoted close to as-shipped; the desktop build targets a
+modern Chromium and is not downlevelled:
 
 ```js
 const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
