@@ -41,27 +41,25 @@ if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
 if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();
 ```
 
-And this is the client side — what Markport's shims actually answer:
+And this is the supplying side — what Obsidian's own official clients answer with. On both
+platforms the string is stored in the native half of the client and handed to the renderer,
+which then compares it against its own copy.
 
 ```js
-// src/client-mobile/shims/capacitor-shim.js
-let terms = localStorage.getItem('obsidian-terms')
-         || window.__obsidianTerms || '';
+// Desktop — the Electron main process, inside obsidian-1.13.4.asar
+const Bt = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
 
-const App = {
-  getInfo: () => Promise.resolve({
-    name: 'Obsidian', id: 'md.obsidian', build: '0',
-    terms,                                    // ← ships empty
-    version: window.__owObsidianVersion,
-  }),
-};
-
-// src/client-mobile/shims/electron.js
-const GET_CHANNEL_VALUES = {
-  // …
-  'terms': '',                                // ← ships empty
-};
+ipcMain.on("terms", t => { t.returnValue = Bt });
+ipcMain.on("is-quitting", t => { t.returnValue = be });
+ipcMain.on("version",     t => { t.returnValue = H  });
+// …one handler per channel; "terms" is answered exactly like any other.
 ```
+
+On Android the same string is compiled into the native layer — it is present in `classes.dex`
+of the 1.13.4 APK, and reaches the renderer through Capacitor's `App.getInfo()`.
+
+So the acknowledgement is not something the user types or accepts anywhere. It is a constant
+that ships inside Obsidian's own client, on both halves of it.
 
 On a real Android device, Obsidian's own native layer supplies it. Markport replaces that
 native layer with browser shims, and those shims don't supply it — `capacitor-shim.js` ships
