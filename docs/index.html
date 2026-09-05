@@ -59,6 +59,22 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   .note { color: var(--dim); font-size: .93rem; }
+  pre {
+    direction: ltr; text-align: left; overflow-x: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 13px; margin: 10px 0; font-size: .85rem; line-height: 1.5;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .wordmark {
+    font-size: .95rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent-soft); margin: 0 0 10px;
+  }
+  h3 { font-size: 1.02rem; margin: 22px 0 6px; color: var(--text); }
+  h3:first-of-type { margin-top: 6px; }
+  .disclaimer {
+    margin: 26px auto 0; max-width: 42em; font-size: .92rem; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--panel);
+  }
 
   table { width: 100%; border-collapse: collapse; font-size: .93rem; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
@@ -87,6 +103,7 @@
 <a class="lang" href="he.html" hreflang="he" lang="he" dir="rtl">עברית</a>
 
 <header class="wrap">
+  <p class="wordmark">Markport</p>
   <h1>Obsidian, running in <span>your browser</span></h1>
   <p class="tagline">
     Obsidian's own renderer — the real one, byte-for-byte unmodified — with every
@@ -94,30 +111,49 @@
   </p>
 
   <div class="actions">
-    <a class="btn btn-primary" href="https://demo.obsidian-online.pages.dev">
-      Try the demo
-      <small>Opens a ready vault — nothing to set up</small>
-    </a>
-    <a class="btn" href="https://obsidian-online.pages.dev">
-      Open the app
-      <small>Create your own vault</small>
+    <a class="btn btn-primary" href="https://github.com/MusiCode1/markport#readme">
+      Run it yourself
+      <small>A few minutes, on your own machine</small>
     </a>
   </div>
-  <p class="note">Free, open source, no account.</p>
+
+  <p class="disclaimer">
+    Markport is an independent project. It is not made by, affiliated with, or endorsed by
+    Obsidian. <strong>There is no public instance</strong> — see below for why.
+  </p>
 </header>
 
 <main class="wrap">
 
+
 <section>
   <h2>Where your notes live</h2>
+  <p>Two options, and neither one involves a server.</p>
+
+  <h3>A real folder on your computer</h3>
   <p>
-    In your browser, and nowhere else. Vaults are stored in
+    Point Markport at any directory and it reads and writes that directory directly, through
+    the browser's
+    <a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API">File System Access API</a>.
+    Your notes stay ordinary Markdown files on your disk — open them in any other editor, back
+    them up, sync them with whatever you already use. Nothing is copied into the browser, and
+    the browser cannot see anything outside the folder you picked. Chromium-based browsers only.
+  </p>
+
+  <h3>Inside the browser</h3>
+  <p>
+    If you would rather not grant folder access, vaults can live in
     <a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system">OPFS</a>
-    — private to you, never uploaded, never shared between visitors, and never reset on a
-    schedule. They survive a reload and stay until you clear this site's browsing data.
+    — private to you, never uploaded, never shared between visitors. They survive a reload and
+    stay until you clear that site's browsing data. Works in every modern browser.
   </p>
   <p class="note">
-    <strong>One exception, stated plainly:</strong> requests to <code>github.com</code>,
+    There is also an optional sync server you can run yourself — <strong>pull-only,
+    read-only, no encryption</strong>. Not ready for real use yet.
+  </p>
+
+  <p class="note">
+    <strong>One exception:</strong> requests to <code>github.com</code>,
     <code>githubusercontent.com</code> and <code>obsidian.md</code> — installing a community
     plugin, and the deprecated-plugin check Obsidian itself makes at vault load — pass through
     a small proxy, because a browser cannot reach those hosts directly. Your notes are never
@@ -134,8 +170,7 @@
     Obsidian's own <code>Platform</code> object instead of editing its source.
   </p>
   <p class="note">
-    This repository does not contain or redistribute that bundle. The setup scripts download
-    it from Obsidian directly.
+    This repository does not contain or redistribute that bundle.
   </p>
 </section>
 
@@ -146,8 +181,33 @@
     <li>File tree, tabs, split panes, graph view</li>
     <li>Wikilinks, backlinks, tags, search, command palette</li>
     <li>Core plugins, and community plugins installed from within the app</li>
-    <li>Folder vaults — open a real directory on your disk (Chromium)</li>
+    <li>Folder vaults, or browser-local storage — see above</li>
     <li>RTL and full Unicode</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What does not work</h2>
+  <ul>
+    <li>
+      <strong>Obsidian 1.13 and newer.</strong> Markport is pinned to 1.12.7. Starting with
+      1.13, Obsidian asks its host environment for a <code>terms</code> field carrying a
+      verbatim acknowledgement before it initialises. The channel is platform-dependent, and
+      the acknowledgement sits on both sides — one sends it, the other compares against its
+      own copy:
+      <pre><code>const EXPECTED_ACKNOWLEDGEMENT =
+  "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+
+// Capacitor
+if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
+
+// Electron
+if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();</code></pre>
+    </li>
+    <li><strong>Plugins that need real Node APIs</strong> — spawning processes, reaching outside the vault. Plugins written against the mobile-safe API generally work.</li>
+    <li><strong>Folder vaults</strong> — Chromium only; Firefox and Safari do not implement the directory picker.</li>
+    <li><strong>Auto-refresh on external file changes</strong> — Chromium only; elsewhere it refreshes when the tab regains focus.</li>
+    <li><strong>An insecure origin.</strong> Browser storage is unavailable without <code>https://</code> (or <code>localhost</code>), and vault creation fails silently on a bare-IP host.</li>
   </ul>
 </section>
 
@@ -168,11 +228,25 @@
 </section>
 
 <section>
+  <h2>There is no public instance</h2>
+  <p>
+    On purpose. Hosting one would mean serving Obsidian's own application code to strangers,
+    and that is Obsidian's call to make, not mine. This repository does not contain or
+    redistribute their bundle either — the setup script downloads it from Obsidian, onto your
+    own machine.
+  </p>
+  <p class="note">
+    So there is nothing to click here, and nothing to sign up for. What follows is what it
+    does, what it does not do, and how to run your own copy.
+  </p>
+</section>
+
+<section>
   <h2>Run it yourself</h2>
   <p>
-    Two deployment modes: a static, client-only build (what this site serves), and an optional
-    Node.js server that stores vaults as real files on disk and pushes live updates across tabs.
-    Both run the same browser-side core.
+    Two deployment modes. A static, client-only build — any static host, or a folder on your
+    own machine. Or an optional Node.js server that stores vaults as real files on disk and
+    pushes live updates across tabs. Both run the same browser-side core.
   </p>
   <p>
     <a href="https://github.com/MusiCode1/markport#readme">Setup instructions →</a>
@@ -184,10 +258,10 @@
 <footer class="wrap">
   <a href="https://github.com/MusiCode1/markport">GitHub</a>·
   <a href="https://github.com/MusiCode1/markport/blob/main/docs/architecture.md">Architecture</a>·
-  <a href="https://github.com/MusiCode1/markport/blob/main/docs/investigations.md">Reverse-engineering notes</a>·
-  <a href="https://obsidian.md">Obsidian</a>
+    <a href="https://obsidian.md">Obsidian</a>
   <p class="note" style="margin-top:14px">
-    An independent open-source project. Not affiliated with or endorsed by Obsidian.
+    Markport is free software under the GPL-3.0 — that covers Markport's own code, not
+    Obsidian's. Obsidian is a trademark of its owner.
   </p>
 </footer>
 

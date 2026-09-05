@@ -41,7 +41,6 @@ See `docs/architecture.md` for the full picture.
 | What | Where |
 |------|-------|
 | Architecture and rationale | `docs/architecture.md` |
-| Reverse-engineering notes, solved issues | `docs/investigations.md` |
 | Writing a system plugin | `docs/system-plugin-dev-guide.md` |
 | Runtime (the browser side) | `src/client-mobile/` |
 | Node backend (optional) | `src/runtime-server/` |

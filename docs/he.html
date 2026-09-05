@@ -60,6 +60,22 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   .note { color: var(--dim); font-size: .93rem; }
+  pre {
+    direction: ltr; text-align: left; overflow-x: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 13px; margin: 10px 0; font-size: .85rem; line-height: 1.5;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .wordmark {
+    font-size: .95rem; font-weight: 700; letter-spacing: .14em;
+    color: var(--accent-soft); margin: 0 0 10px; direction: ltr;
+  }
+  h3 { font-size: 1.02rem; margin: 22px 0 6px; color: var(--text); }
+  h3:first-of-type { margin-top: 6px; }
+  .disclaimer {
+    margin: 26px auto 0; max-width: 42em; font-size: .92rem; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--panel);
+  }
 
   table { width: 100%; border-collapse: collapse; font-size: .93rem; }
   th, td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--line); }
@@ -88,36 +104,55 @@
 <a class="lang" href="index.html" hreflang="en" lang="en" dir="ltr">English</a>
 
 <header class="wrap">
+  <p class="wordmark">Markport</p>
   <h1>אובסידיאן, רץ <span>בדפדפן שלך</span></h1>
   <p class="tagline">
-    המנוע המקורי של Obsidian — ממש הוא, בייט-בבייט ללא שינוי — כשכל תלות
-    ב-Electron וב-Capacitor הוחלפה בשכבות-ביניים מבוססות-דפדפן.
+    המנוע המקורי של Obsidian — ממש הוא, בייט-בייט ללא שינוי — כשכל תלות ב-Electron
+    וב-Capacitor הוחלפה בשכבות-ביניים מבוססות-דפדפן.
   </p>
 
   <div class="actions">
-    <a class="btn btn-primary" href="https://demo.obsidian-online.pages.dev">
-      לנסות את הדמו
-      <small>כספת מוכנה — אין מה להגדיר</small>
-    </a>
-    <a class="btn" href="https://obsidian-online.pages.dev">
-      לפתוח את האפליקציה
-      <small>ליצור כספת משלך</small>
+    <a class="btn btn-primary" href="https://github.com/MusiCode1/markport#readme">
+      להריץ בעצמך
+      <small>כמה דקות, על המחשב שלך</small>
     </a>
   </div>
-  <p class="note">חינמי, קוד פתוח, בלי חשבון.</p>
+
+  <p class="disclaimer">
+    Markport הוא פרויקט עצמאי. הוא אינו מיוצר על-ידי Obsidian, אינו מסונף אליה ואינו מאושר
+    על ידה. <strong>אין מופע ציבורי</strong> — ההסבר למטה.
+  </p>
 </header>
 
 <main class="wrap">
 
+
 <section>
   <h2>איפה הפתקים שלך יושבים</h2>
+  <p>ישנן שתי אפשרויות, ובאף אחת מהן אין שרת.</p>
+
+  <h3>תיקייה אמיתית על המחשב שלך</h3>
   <p>
-    בדפדפן שלך, ובשום מקום אחר. הכספות נשמרות ב־<a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system">OPFS</a>
-    — פרטיות לך, לא נשלחות לשום שרת, לא משותפות בין מבקרים, ולא מתאפסות מעצמן.
-    הן שורדות רענון של הדף ונשארות עד שתמחק את נתוני הגלישה של האתר הזה.
+    מכוונים את Markport לתיקייה כלשהי, והוא קורא וכותב ישירות אליה דרך
+    <a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API">File System Access API</a>
+    של הדפדפן. הפתקים נשארים קובצי Markdown רגילים על הדיסק — אפשר לפתוח אותם בכל עורך אחר,
+    לגבות אותם, ולסנכרן אותם במה שכבר יש לך. שום דבר לא מועתק לתוך הדפדפן, והדפדפן לא רואה
+    דבר מחוץ לתיקייה שבחרת. פועל בדפדפני Chromium בלבד.
+  </p>
+
+  <h3>בתוך הדפדפן</h3>
+  <p>
+    אם אתה מעדיף לא לתת גישה לתיקייה, הכספות יכולות לחיות ב־<a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system">OPFS</a>
+    — פרטיות לך, לא נשלחות לשום שרת, לא משותפות בין מבקרים. הן שורדות רענון של הדף ונשארות
+    עד שתמחק את נתוני הגלישה של אותו אתר. עובד בכל דפדפן מודרני.
   </p>
   <p class="note">
-    <strong>חריג אחד, בלי לטשטש:</strong> בקשות אל <code dir="ltr">github.com</code>,
+    יש גם שרת-סנכרון אופציונלי שאפשר להריץ בעצמך — הוא <strong>מושך בלבד, לקריאה בלבד,
+    בלי הצפנה</strong>. עדיין לא בשל לשימוש.
+  </p>
+
+  <p class="note">
+    <strong>חריג אחד:</strong> בקשות אל <code dir="ltr">github.com</code>,
     <code dir="ltr">githubusercontent.com</code> ו־<code dir="ltr">obsidian.md</code> — התקנת
     תוסף קהילתי, והבדיקה האחת ש-Obsidian עצמו עושה לתוספים מיושנים בטעינת הכספת — עוברות דרך
     פרוקסי קטן, כי דפדפן לא יכול לפנות למארחים האלה ישירות. הפתקים שלך לא חלק מזה בשום שלב.
@@ -134,7 +169,7 @@
     של Obsidian עצמה במקום לערוך את הקוד שלה.
   </p>
   <p class="note">
-    הריפוזיטורי הזה לא מכיל ולא מפיץ את הבאנדל. סקריפטי ההתקנה מורידים אותו מ-Obsidian ישירות.
+    הריפוזיטורי הזה לא מכיל ולא מפיץ את הבאנדל.
   </p>
 </section>
 
@@ -145,8 +180,31 @@
     <li>עץ קבצים, לשוניות, חלוקת מסך, תצוגת גרף</li>
     <li>קישורים דו־כיווניים, backlinks, תגיות, חיפוש, פלטת פקודות</li>
     <li>תוספי הליבה, ותוספי קהילה שמותקנים מתוך האפליקציה</li>
-    <li>כספות־תיקייה — פתיחת תיקייה אמיתית מהדיסק (Chromium)</li>
+    <li>כספות־תיקייה, או אחסון מקומי בדפדפן — ראה למעלה</li>
     <li>תמיכה מלאה בעברית, ב-RTL וביוניקוד</li>
+  </ul>
+</section>
+
+<section>
+  <h2>מה לא עובד</h2>
+  <ul>
+    <li>
+      <strong>Obsidian 1.13 ומעלה.</strong> ‏Markport נעוץ ב-1.12.7. החל מ-1.13, Obsidian מבקש
+      מסביבת האירוח שלו שדה <code dir="ltr">terms</code> שמכיל אישור מילה-במילה, לפני שהוא
+      מאתחל. הערוץ תלוי-פלטפורמה, וההצהרה יושבת בשני הצדדים — אחד שולח, השני משווה לעותק שלו:
+      <pre dir="ltr"><code>const EXPECTED_ACKNOWLEDGEMENT =
+  "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+
+// Capacitor
+if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
+
+// Electron
+if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();</code></pre>
+    </li>
+    <li><strong>תוספים שזקוקים ל-API אמיתי של Node</strong> — הרצת תהליכים, גישה מחוץ לכספת. תוספים שנכתבו מול ה-API הבטוח-למובייל עובדים בדרך כלל.</li>
+    <li><strong>כספות־תיקייה</strong> — ב-Chromium בלבד; ‏Firefox ו-Safari לא מממשים את בורר-התיקיות.</li>
+    <li><strong>רענון אוטומטי בשינוי חיצוני</strong> — ב-Chromium בלבד; במקומות אחרים הרענון קורה כשהטאב חוזר לפוקוס.</li>
+    <li><strong>מקור לא מאובטח.</strong> אחסון הדפדפן אינו זמין בלי <code dir="ltr">https://</code> (או <code dir="ltr">localhost</code>), ויצירת כספת נכשלת בשקט על מארח עם כתובת-IP חשופה.</li>
   </ul>
 </section>
 
@@ -167,11 +225,24 @@
 </section>
 
 <section>
+  <h2>אין מופע ציבורי</h2>
+  <p>
+    במכוון. להחזיק כזה פירושו להגיש את קוד היישום של Obsidian לזרים, וזו החלטה שלהם לקבל,
+    לא שלי. גם הריפוזיטורי הזה אינו מכיל ואינו מפיץ את הבאנדל שלהם — סקריפט ההתקנה מוריד
+    אותו מ-Obsidian, אל המחשב שלך.
+  </p>
+  <p class="note">
+    אז אין כאן על מה ללחוץ ואין להירשם לשום דבר. מה שבא עכשיו הוא מה זה עושה, מה זה לא עושה,
+    ואיך להריץ עותק משלך.
+  </p>
+</section>
+
+<section>
   <h2>להריץ בעצמך</h2>
   <p>
-    שני מצבי פריסה: בנייה סטטית לגמרי בצד־הלקוח (מה שהאתר הזה מגיש), ושרת Node.js אופציונלי
-    ששומר כספות כקבצים אמיתיים על הדיסק ודוחף עדכונים חיים בין לשוניות. שניהם מריצים את אותו
-    ליבת־דפדפן.
+    ישנם שני מצבי פריסה. בנייה סטטית לגמרי בצד־הלקוח — כל אחסון סטטי, או תיקייה על המחשב שלך.
+    או שרת Node.js אופציונלי ששומר כספות כקבצים אמיתיים על הדיסק ודוחף עדכונים חיים בין
+    לשוניות. שניהם מריצים את אותה ליבת־דפדפן.
   </p>
   <p>
     <a href="https://github.com/MusiCode1/markport#readme">הוראות התקנה ←</a>
@@ -183,10 +254,10 @@
 <footer class="wrap">
   <a href="https://github.com/MusiCode1/markport">GitHub</a>·
   <a href="https://github.com/MusiCode1/markport/blob/main/docs/architecture.md">ארכיטקטורה</a>·
-  <a href="https://github.com/MusiCode1/markport/blob/main/docs/investigations.md">הערות הנדסה־לאחור</a>·
-  <a href="https://obsidian.md">Obsidian</a>
+    <a href="https://obsidian.md">Obsidian</a>
   <p class="note" style="margin-top:14px">
-    פרויקט קוד פתוח עצמאי. לא מסונף ל-Obsidian ולא מאושר על ידה.
+    ‏Markport הוא תוכנה חופשית תחת GPL-3.0 — וזה חל על הקוד של Markport, לא של Obsidian.
+    ‏Obsidian הוא סימן מסחר של בעליו.
   </p>
 </footer>
 

@@ -4,7 +4,7 @@
 >
 > איך מוסיפים תוסף Obsidian חדש שמוזרק אוטומטית לכל vault דרך ה-`server/system-plugins.js` overlay.
 
-מסמך זה מסביר את ה-mechanics. הרקע התיאורטי על המנגנון נמצא ב-[`docs/investigations.md` → Virtual plugin overlay — deep dive](./investigations.md#virtual-overlay-deep-dive).
+מסמך זה מסביר את ה-mechanics של ה-overlay.
 
 ---
 
@@ -109,7 +109,7 @@ module.exports = MyPlugin;
 
 **מה קיים בסביבה?**
 - `require('obsidian')` — ה-API הרגיל של Obsidian (`Plugin`, `Notice`, `Modal`, `Setting`, `TFile`, ...). זמין דרך ה-runtime — אין `require` של Node.js, יש את ה-`require` של Obsidian.
-- `window.__owPlatform` — קיים רק על obsidian-web. השתמש כ-feature detection. ראה [`docs/investigations.md` → `__owPlatform` runtime API](./investigations.md#owplatform-api).
+- `window.__owPlatform` — קיים רק על obsidian-web. השתמש כ-feature detection.
   **הערה**: הוא נחשף ב**זמן ריצה** (יירוט `Object.defineProperty`, לא הזרקה בזמן build —
   ראה `docs/plans/runtime-platform-descriptors.md` §3.1a), ולכן הוא יכול להיות `undefined`
   זמנית **גם על obsidian-web עצמו**, למשך כמה שניות, בזמן ש-`app.js` עדיין נטען. אל תבסס
@@ -165,7 +165,7 @@ app.plugins.enablePlugin('obsidian-web-<name>');
 # או פשוט reload לדפדפן.
 ```
 
-**אזהרה:** `disablePlugin` של system plugin אינו persistent — הוא ייטען שוב ב-reload. זה התנהגות כוונה (ראה [Limitations](./investigations.md#virtual-overlay-deep-dive)), אבל מעצבן כשמנסים לבדוק התנהגות ללא הפלאגין. workaround: rename הזמני של תיקיית הפלאגין + restart לשרת.
+**אזהרה:** `disablePlugin` של system plugin אינו persistent — הוא ייטען שוב ב-reload. זו התנהגות מכוונת, אבל מעצבן כשמנסים לבדוק התנהגות ללא הפלאגין. workaround: rename הזמני של תיקיית הפלאגין + restart לשרת.
 
 ---
 

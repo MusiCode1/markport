@@ -18,14 +18,22 @@ Nothing is broken on your side and there is nothing to fix. Run
 
 ## What changed in 1.13
 
-Obsidian 1.13 added a check at startup. Before it initialises, it asks the host environment
-(through Capacitor's `App.getInfo()`) for a `terms` field, and expects the exact text of an
-acknowledgement stating that the user may not distribute the Obsidian application in any form
-without explicit approval from the Obsidian team. If the value doesn't come back verbatim, the
-bundle throws and never loads.
+Obsidian 1.13 added a check at startup. Before it initialises, it asks the host environment for a
+`terms` field, and expects the exact text of an acknowledgement stating that the user may not
+distribute the Obsidian application in any form without explicit approval from the Obsidian team.
+
+The channel is platform-dependent, and the acknowledgement sits on both sides — the host supplies
+it, the renderer compares it against its own copy. Measured 2026-09-05 against both 1.13.4 builds:
+
+| | Channel | If it doesn't match |
+|---|---|---|
+| Mobile bundle (what Markport runs) | `App.getInfo().terms` (Capacitor) | `throw new Error` |
+| Desktop bundle | `ipcRenderer.sendSync("terms")` (Electron IPC) | `window.close()` |
 
 On a real Android device, Obsidian's own native layer supplies it. Markport replaces that
-native layer with browser shims, and those shims don't supply it.
+native layer with browser shims, and those shims don't supply it — `capacitor-shim.js` ships
+`terms` empty, and `shims/electron.js` answers the `terms` IPC channel with an empty string for
+the same reason.
 
 ## Why we don't work around it
 

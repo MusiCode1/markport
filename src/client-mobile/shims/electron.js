@@ -416,6 +416,28 @@
     'get-icon': null,
     'get-sandbox-vault-path': '',
     'get-documents-path': '/documents',
+
+    // 'terms' — Obsidian 1.13+ asks the host for a verbatim acknowledgement
+    // before it initialises, and closes the window if the answer does not
+    // match its own copy of the string. Measured 2026-09-05 in the 1.13.4
+    // desktop asar:
+    //
+    //   "I understand and agree…" !== ipcRenderer.sendSync("terms")
+    //       → return window.close()
+    //
+    // (the mobile bundle asks the same question through Capacitor's
+    // App.getInfo().terms and throws instead — capacitor-shim.js.)
+    //
+    // We ship '' deliberately. Answering it would mean this code asserting
+    // that acknowledgement on the user's behalf, which is a decision for
+    // whoever runs the instance, not for the shim — see
+    // docs/obsidian-version-support.md.
+    //
+    // The entry exists so the channel reads as a decision rather than a gap:
+    // without it the fallback returns null, which behaves identically but
+    // logs an "unhandled" warning and pollutes __owMissing's inventory of
+    // channels we have genuinely not implemented yet.
+    'terms': '',
   };
 
   const ipcRenderer = {
@@ -603,7 +625,7 @@
       // synchronously — `once` must already be registered, which it always
       // is by the time `send` is even called, but a microtask hop keeps
       // this decoupled from that ordering guarantee, same reasoning as
-      // platform-bridge.js's onAppJsSettled). Payload shape reverse-engineered
+      // platform-bridge.js's onAppJsSettled). Payload shape derived
       // from the two callers (`p.webContentsId`, `p.editFlags.{canCut,
       // canCopy,canPaste}`, `p.misspelledWord`) — misspelledWord stays falsy
       // so the spellchecker-suggestions branch (out of scope) is skipped.

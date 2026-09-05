@@ -9,8 +9,7 @@ obsidian-web מזייף ל-Obsidian פלטפורמה (Electron/Capacitor/Node) �
 להישען על **ה-API הציבורי של Obsidian** במקום על מבנים פנימיים או על patches לבאנדל —
 הפרויקט יציב יותר מול שדרוגי גרסה, ועמדתו מול תנאי-השימוש של Obsidian נוחה יותר.
 
-`docs/investigations.md` ממפה את הצד ההפוך — את **Capacitor**, כלומר מה ש*אנחנו* מממשים.
-המסמך הזה ממפה מה ש**Obsidian מציעה**.
+המסמך הזה ממפה מה ש**Obsidian מציעה** — להבדיל מ-**Capacitor**, כלומר מה ש*אנחנו* מממשים.
 
 ## מאיפה זה נלקח
 
@@ -40,7 +39,7 @@ obsidian-web מזייף ל-Obsidian פלטפורמה (Electron/Capacitor/Node) �
 
 **`CapacitorAdapter` ו-`FileSystemAdapter`** — שני ה-adapters של Obsidian מיוצאים בפומבי.
 `app.vault.adapter` הוא `CapacitorAdapter` בבאנדל המובייל, וזה מה שה-shim שלנו מזין.
-⚠️ **הדגל `isMobileApp` הוא שקובע איזה adapter נבחר — אסור לדרוס אותו** (`investigations.md:711`).
+⚠️ **הדגל `isMobileApp` הוא שקובע איזה adapter נבחר — אסור לדרוס אותו**.
 
 **`Bases` — 29 סמלים, ואנחנו לא נוגעים באף אחד.** הפיצ'ר החדש של Obsidian
 (`BasesView`, `BasesQueryResult`, ומערכת טיפוסים שלמה: `StringValue`, `DateValue`, `LinkValue`…).

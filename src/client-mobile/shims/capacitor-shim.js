@@ -12,7 +12,7 @@
  *   to find each method. WITHOUT a matching header entry, every call throws
  *   "<plugin> is not implemented on android" — long before our nativePromise
  *   is ever invoked. We therefore declare PluginHeaders for every plugin +
- *   method below. See `docs/investigations.md` → "PluginHeaders mechanism".
+ *   method below.
  *
  * PLUGIN INVENTORY (13 plugins shipped in obsidian-mobile 1.12.7 APK):
  *
@@ -45,7 +45,7 @@
  * All FS calls get ?vault=<id> query param so the server routes to the right vault.
  *
  * Call flow is documented inline below at the "Android bridge" comment block
- * (~line 488). See also docs/investigations.md → "Capacitor plugin inventory".
+ * (~line 488).
  */
 (function () {
   'use strict';
