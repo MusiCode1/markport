@@ -19,7 +19,12 @@ bun.lockb
 
 # Private docs — NEVER published. Anything dropped here is auto-ignored
 # (directory-level boundary, so a private doc can't be committed by mistake).
+#
+# BOTH patterns are required, for the same reason as `vendor` above: in this
+# repo `docs-private` is a SYMLINK into the private docs repo, and `docs-private/`
+# does not match a symlink. Verified with `git check-ignore -v docs-private`.
 docs-private/
+docs-private
 
 # Session transcripts (raw, contain personal context) — never published.
 .specstory/
