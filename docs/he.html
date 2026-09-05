@@ -189,17 +189,16 @@
   <h2>מה לא עובד</h2>
   <ul>
     <li>
-      <strong>Obsidian 1.13 ומעלה.</strong> ‏Markport נעוץ ב-1.12.7. החל מ-1.13, Obsidian מבקש
-      מסביבת האירוח שלו שדה <code dir="ltr">terms</code> שמכיל אישור מילה-במילה, לפני שהוא
-      מאתחל. הערוץ תלוי-פלטפורמה, וההצהרה יושבת בשני הצדדים — אחד שולח, השני משווה לעותק שלו:
-      <pre dir="ltr"><code>const EXPECTED_ACKNOWLEDGEMENT =
-  "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+      <strong>Obsidian 1.13 ומעלה.</strong> ‏Markport נעוץ ב-1.12.7. החל מ-1.13, Obsidian מבקש מסביבת האירוח שלו שדה <code dir="ltr">terms</code> שמכיל אישור מילה-במילה, לפני שהוא מאתחל. הערוץ תלוי-פלטפורמה, וההצהרה יושבת בשני הצדדים — אחד שולח, השני משווה לעותק שלו. הקטעים הבאים הם ציטוטים מהבילדים המוקטנים של 1.13.4, עם ההצהרה עצמה מקוצרת:
+      <p class="note" style="margin:10px 0 4px">הצד המשווה — הבאנדל של המובייל, ואז ה-renderer של הדסקטופ:</p>
+      <pre dir="ltr"><code>"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.terms)throw new Error;return[2]
 
-// Capacitor
-if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
+"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.ipcRenderer.sendSync("terms"))return window.close(),[2];</code></pre>
+      <p class="note" style="margin:10px 0 4px">והצד המספק — תהליך ה-main של הדסקטופ, הקבוע וה-handler שמחזיר אותו:</p>
+      <pre dir="ltr"><code>var Bt="I understand and agree that I am not allowed to … granted by the Obsidian team.";
 
-// Electron
-if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();</code></pre>
+l.ipcMain.on("terms",t=&gt;{t.returnValue=Bt}),l.ipcMain.on("is-quitting",t=&gt;{t.returnValue=be}),…</code></pre>
+      <p class="note" style="margin:8px 0 0">‏<code dir="ltr">terms</code> רשום באותה שרשרת עם <code dir="ltr">is-quitting</code>, <code dir="ltr">version</code> ו-<code dir="ltr">resources</code> — handler אחד מני רבים. באנדרואיד אותה מחרוזת מהודרת ל-<code dir="ltr">classes.dex</code> ומגיעה דרך Capacitor.</p>
     </li>
     <li><strong>תוספים שזקוקים ל-API אמיתי של Node</strong> — הרצת תהליכים, גישה מחוץ לכספת. תוספים שנכתבו מול ה-API הבטוח-למובייל עובדים בדרך כלל.</li>
     <li><strong>כספות־תיקייה</strong> — ב-Chromium בלבד; ‏Firefox ו-Safari לא מממשים את בורר-התיקיות.</li>

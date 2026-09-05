@@ -190,19 +190,16 @@
   <h2>What does not work</h2>
   <ul>
     <li>
-      <strong>Obsidian 1.13 and newer.</strong> Markport is pinned to 1.12.7. Starting with
-      1.13, Obsidian asks its host environment for a <code>terms</code> field carrying a
-      verbatim acknowledgement before it initialises. The channel is platform-dependent, and
-      the acknowledgement sits on both sides — one sends it, the other compares against its
-      own copy:
-      <pre><code>const EXPECTED_ACKNOWLEDGEMENT =
-  "I understand and agree that I am not allowed to … granted by the Obsidian team.";
+      <strong>Obsidian 1.13 and newer.</strong> Markport is pinned to 1.12.7. Starting with 1.13, Obsidian asks its host environment for a <code>terms</code> field carrying a verbatim acknowledgement before it initialises. The channel is platform-dependent, and the acknowledgement sits on both sides — one sends it, the other compares against its own copy. The excerpts below are verbatim from the minified 1.13.4 builds, with the acknowledgement itself elided:
+      <p class="note" style="margin:10px 0 4px">The comparing side — the mobile bundle, then the desktop renderer:</p>
+      <pre><code>"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.terms)throw new Error;return[2]
 
-// Capacitor
-if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
+"I understand and agree that I am not allowed to … granted by the Obsidian team."!==e.ipcRenderer.sendSync("terms"))return window.close(),[2];</code></pre>
+      <p class="note" style="margin:10px 0 4px">And the supplying side — the desktop main process: the constant, and the handler that returns it:</p>
+      <pre><code>var Bt="I understand and agree that I am not allowed to … granted by the Obsidian team.";
 
-// Electron
-if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();</code></pre>
+l.ipcMain.on("terms",t=&gt;{t.returnValue=Bt}),l.ipcMain.on("is-quitting",t=&gt;{t.returnValue=be}),…</code></pre>
+      <p class="note" style="margin:8px 0 0"><code>terms</code> is registered in the same chain as <code>is-quitting</code>, <code>version</code> and <code>resources</code> — one handler among many. On Android the same string is compiled into <code>classes.dex</code> and arrives through Capacitor.</p>
     </li>
     <li><strong>Plugins that need real Node APIs</strong> — spawning processes, reaching outside the vault. Plugins written against the mobile-safe API generally work.</li>
     <li><strong>Folder vaults</strong> — Chromium only; Firefox and Safari do not implement the directory picker.</li>
