@@ -24,12 +24,12 @@
 | מי מתקין | המשתמש (דרך ה-UI / manually) | המפתח של obsidian-web (commit לrepo) |
 | `community-plugins.json` enable | המשתמש שולט | system plugins תמיד "enabled" (re-injected at load) |
 | `data.json` settings | per-vault, ב-vault | per-vault, ב-vault (system plugin אינו "global") |
-| Bundling | חוסם — או build (TS/Rollup) או JS פשוט | אין build chain — JS פשוט, CommonJS |
+| Bundling | חוסם - או build (TS/Rollup) או JS פשוט | אין build chain - JS פשוט, CommonJS |
 | Update | בייפול plugin / GitHub release | git pull / git commit |
 
 ---
 
-## הוספת system plugin חדש — 6 שלבים
+## הוספת system plugin חדש - 6 שלבים
 
 ### 1. צור תיקייה ב-`<repo>/plugins/`
 
@@ -49,7 +49,7 @@ cd plugins/obsidian-web-<name>
 ```json
 {
   "id": "obsidian-web-<name>",
-  "name": "Obsidian Web — <Human Name>",
+  "name": "Obsidian Web - <Human Name>",
   "version": "0.1.0",
   "minAppVersion": "1.0.0",
   "description": "Short description.",
@@ -59,10 +59,10 @@ cd plugins/obsidian-web-<name>
 ```
 
 חשוב:
-- `isDesktopOnly: false` — אחרת לא ייטען ב-mobile runtime.
+- `isDesktopOnly: false` - אחרת לא ייטען ב-mobile runtime.
 - אין `authorUrl`, `fundingUrl` וכו' שלא רלוונטיים לפלאגין שלא הולך לcommunity directory.
 
-### 3. צור `main.js` — CommonJS module
+### 3. צור `main.js` - CommonJS module
 
 אין build chain. הקובץ הוא ה-source. כתוב CommonJS פשוט שמייצא `default` בסגנון של פלאגין Obsidian:
 
@@ -75,11 +75,11 @@ class MyPlugin extends obsidian.Plugin {
   async onload() {
     // Detect that we are running inside obsidian-web before doing anything
     // that depends on our globals. On real Obsidian (desktop/mobile app),
-    // __owPlatform doesn't exist — keep the plugin a no-op there.
+    // __owPlatform doesn't exist - keep the plugin a no-op there.
     // Caveat (docs/plans/runtime-platform-descriptors.md §3.1a): __owPlatform
     // is now set at RUNTIME by intercepting Object.defineProperty as
     // Obsidian's own bundle loads, not injected into the bundle at build
-    // time — so this check can also be undefined ON obsidian-web itself, for
+    // time - so this check can also be undefined ON obsidian-web itself, for
     // a few seconds, while app.js is still downloading. Don't gate anything
     // that must run before the vault is up on this check alone.
     if (typeof window.__owPlatform === 'undefined') {
@@ -108,18 +108,18 @@ module.exports = MyPlugin;
 ```
 
 **מה קיים בסביבה?**
-- `require('obsidian')` — ה-API הרגיל של Obsidian (`Plugin`, `Notice`, `Modal`, `Setting`, `TFile`, ...). זמין דרך ה-runtime — אין `require` של Node.js, יש את ה-`require` של Obsidian.
-- `window.__owPlatform` — קיים רק על obsidian-web. השתמש כ-feature detection.
-  **הערה**: הוא נחשף ב**זמן ריצה** (יירוט `Object.defineProperty`, לא הזרקה בזמן build —
+- `require('obsidian')` - ה-API הרגיל של Obsidian (`Plugin`, `Notice`, `Modal`, `Setting`, `TFile`, ...). זמין דרך ה-runtime - אין `require` של Node.js, יש את ה-`require` של Obsidian.
+- `window.__owPlatform` - קיים רק על obsidian-web. השתמש כ-feature detection.
+  **הערה**: הוא נחשף ב**זמן ריצה** (יירוט `Object.defineProperty`, לא הזרקה בזמן build -
   ראה `docs/plans/runtime-platform-descriptors.md` §3.1a), ולכן הוא יכול להיות `undefined`
   זמנית **גם על obsidian-web עצמו**, למשך כמה שניות, בזמן ש-`app.js` עדיין נטען. אל תבסס
   עליו לוגיקה שחייבת לרוץ לפני עליית הכספת.
-- `window.app` — האפליקציה (זמין אחרי `onload`).
-- `localStorage` — נורמלי. שמירת state ב-`obsidian-web:<plugin-id>:*` keys היא הconvention.
+- `window.app` - האפליקציה (זמין אחרי `onload`).
+- `localStorage` - נורמלי. שמירת state ב-`obsidian-web:<plugin-id>:*` keys היא הconvention.
 
 **מה אסור?**
-- `require('fs')` / `require('child_process')` — לא קיים ב-mobile runtime. הוא כן קיים ב-desktop runtime, אבל אם אתה כותב system plugin, סבירות גבוהה שתרצה שהוא יעבוד בשני ה-runtimes. השתמש ב-`app.vault.adapter` במקום.
-- Build artifacts ב-`<repo>/plugins/<id>/` — `main.js` הוא הקובץ עצמו, לא תוצאת build.
+- `require('fs')` / `require('child_process')` - לא קיים ב-mobile runtime. הוא כן קיים ב-desktop runtime, אבל אם אתה כותב system plugin, סבירות גבוהה שתרצה שהוא יעבוד בשני ה-runtimes. השתמש ב-`app.vault.adapter` במקום.
+- Build artifacts ב-`<repo>/plugins/<id>/` - `main.js` הוא הקובץ עצמו, לא תוצאת build.
 
 ### 4. (אופציונלי) `styles.css`
 
@@ -129,7 +129,7 @@ module.exports = MyPlugin;
 
 `server/system-plugins.js` סורק את `<repo>/plugins/` ב-`init()` (ב-startup של השרת). שינוי בקבצי הפלאגין:
 
-- **Code change (`main.js`, `styles.css`, `manifest.json`):** restart לשרת **לא נדרש** — הקבצים מוגשים דרך `/api/fs/read` לכל request, ו-Obsidian טוען אותם ב-startup של ה-vault. כן צריך reload לדפדפן.
+- **Code change (`main.js`, `styles.css`, `manifest.json`):** restart לשרת **לא נדרש** - הקבצים מוגשים דרך `/api/fs/read` לכל request, ו-Obsidian טוען אותם ב-startup של ה-vault. כן צריך reload לדפדפן.
 - **הוספת/הסרת תיקייה ב-`plugins/`:** דורש restart לשרת (`init()` סורק ב-startup בלבד).
 
 ### 6. וריפיקציה
@@ -165,7 +165,7 @@ app.plugins.enablePlugin('obsidian-web-<name>');
 # או פשוט reload לדפדפן.
 ```
 
-**אזהרה:** `disablePlugin` של system plugin אינו persistent — הוא ייטען שוב ב-reload. זו התנהגות מכוונת, אבל מעצבן כשמנסים לבדוק התנהגות ללא הפלאגין. workaround: rename הזמני של תיקיית הפלאגין + restart לשרת.
+**אזהרה:** `disablePlugin` של system plugin אינו persistent - הוא ייטען שוב ב-reload. זו התנהגות מכוונת, אבל מעצבן כשמנסים לבדוק התנהגות ללא הפלאגין. workaround: rename הזמני של תיקיית הפלאגין + restart לשרת.
 
 ---
 
@@ -174,7 +174,7 @@ app.plugins.enablePlugin('obsidian-web-<name>');
 `plugins/obsidian-web-layout/` הוא ה-system plugin הראשון, מימוש מינימלי טוב:
 
 - ~140 שורות.
-- מוסיף ribbon icon + 3 commands — משתיק את שניהם ויזואלית כש-`localStorage.EmulateMobile`
+- מוסיף ribbon icon + 3 commands - משתיק את שניהם ויזואלית כש-`localStorage.EmulateMobile`
   פעיל (`docs/plans/runtime-platform-descriptors.md` §3.5), במקום להישאר "פעיל אך חסר-אפקט".
 - קורא/כותב ל-`localStorage` (אין `data.json` settings).
 - עושה feature detection על `window.__owPlatform`.

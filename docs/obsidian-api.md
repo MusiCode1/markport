@@ -1,20 +1,20 @@
-# Obsidian plugin API — מפת הסמלים המיוצאים
+# Obsidian plugin API - מפת הסמלים המיוצאים
 
-> **גרסה ראשונה, מיוצרת מהבאנדל.** טרם עברה אימות ידני — ראה "מצב המסמך" בסוף.
+> **גרסה ראשונה, מיוצרת מהבאנדל.** טרם עברה אימות ידני - ראה "מצב המסמך" בסוף.
 > קהל: מי שמפתח על obsidian-web ורוצה לדעת על מה אפשר להישען.
 
 ## למה המסמך הזה קיים
 
 obsidian-web מזייף ל-Obsidian פלטפורמה (Electron/Capacitor/Node) דרך shims. ככל שנוכל
-להישען על **ה-API הציבורי של Obsidian** במקום על מבנים פנימיים או על patches לבאנדל —
+להישען על **ה-API הציבורי של Obsidian** במקום על מבנים פנימיים או על patches לבאנדל -
 הפרויקט יציב יותר מול שדרוגי גרסה, ועמדתו מול תנאי-השימוש של Obsidian נוחה יותר.
 
-המסמך הזה ממפה מה ש**Obsidian מציעה** — להבדיל מ-**Capacitor**, כלומר מה ש*אנחנו* מממשים.
+המסמך הזה ממפה מה ש**Obsidian מציעה** - להבדיל מ-**Capacitor**, כלומר מה ש*אנחנו* מממשים.
 
 ## מאיפה זה נלקח
 
 מודול `obsidian` (זה ש-`require('obsidian')` מחזיר לפלאגינים) מייצא **155 סמלים**.
-הרשימה חולצה ממפת-הייצוא בבאנדל — רצף `Name:()=>symbol` בטווח 252,892–256,121
+הרשימה חולצה ממפת-הייצוא בבאנדל - רצף `Name:()=>symbol` בטווח 252,892-256,121
 של `vendor/obsidian-mobile/app.js` (Obsidian 1.12.7):
 
 ```js
@@ -25,41 +25,41 @@ obsidian-web מזייף ל-Obsidian פלטפורמה (Electron/Capacitor/Node) �
 
 ## מקרא
 
-**`שם`** ✅ — מוזכר היום בקוד שלנו (`src/`). 17 מתוך 155.
-`שם` — מיוצא ולא נגענו בו.
+**`שם`** ✅ - מוזכר היום בקוד שלנו (`src/`). 17 מתוך 155.
+`שם` - מיוצא ולא נגענו בו.
 
 > ⚠️ הסימון הוא היוריסטיקה טקסטואלית. שמות גנריים (`App`, `Vault`, `Setting`) עלולים
-> להיספר בהקשר אחר. אימות ידני — ראה "מצב המסמך".
+> להיספר בהקשר אחר. אימות ידני - ראה "מצב המסמך".
 
 ## ממצאים ששווים מבט
 
-**`Platform`** — האובייקט שדרכו Obsidian מדווחת mobile/desktop/phone/tablet. **הוא API ציבורי**,
+**`Platform`** - האובייקט שדרכו Obsidian מדווחת mobile/desktop/phone/tablet. **הוא API ציבורי**,
 לא סמל פנימי. זה הבסיס למעבר מ-build-time patches ל-property descriptors בזמן ריצה
 (בריף `runtime-platform-descriptors`).
 
-**`CapacitorAdapter` ו-`FileSystemAdapter`** — שני ה-adapters של Obsidian מיוצאים בפומבי.
+**`CapacitorAdapter` ו-`FileSystemAdapter`** - שני ה-adapters של Obsidian מיוצאים בפומבי.
 `app.vault.adapter` הוא `CapacitorAdapter` בבאנדל המובייל, וזה מה שה-shim שלנו מזין.
-⚠️ **הדגל `isMobileApp` הוא שקובע איזה adapter נבחר — אסור לדרוס אותו**.
+⚠️ **הדגל `isMobileApp` הוא שקובע איזה adapter נבחר - אסור לדרוס אותו**.
 
-**`Bases` — 29 סמלים, ואנחנו לא נוגעים באף אחד.** הפיצ'ר החדש של Obsidian
+**`Bases` - 29 סמלים, ואנחנו לא נוגעים באף אחד.** הפיצ'ר החדש של Obsidian
 (`BasesView`, `BasesQueryResult`, ומערכת טיפוסים שלמה: `StringValue`, `DateValue`, `LinkValue`…).
 כספת-הדמו כבר מכילה קובץ `.base`. משטח לא-בדוק לגמרי אצלנו.
 
-**עוזרי rendering שאולי מייתרים קוד שלנו** — `htmlToMarkdown`, `sanitizeHTMLToDom`,
+**עוזרי rendering שאולי מייתרים קוד שלנו** - `htmlToMarkdown`, `sanitizeHTMLToDom`,
 `renderMath`/`finishRenderMath`, ו-loaders עצלים: `loadMathJax`, `loadMermaid`, `loadPdfJs`, `loadPrism`.
 שווה לבדוק אם הם מייתרים טעינות שאנחנו מנהלים ידנית.
 
-**`SecretStorage`** — מיוצא. היום `SecureStorage` שלנו הוא `localStorage` עם קידומת ו**ללא הצפנה**
+**`SecretStorage`** - מיוצא. היום `SecureStorage` שלנו הוא `localStorage` עם קידומת ו**ללא הצפנה**
 (`capacitor-shim.js:31`), ושם נוחתים פרטי-החיבור של LiveSync. שווה בדיקה.
 
-**`requireApiVersion` / `apiVersion`** — מאפשרים לפלאגינים לבדוק תאימות. רלוונטי אם נרצה
+**`requireApiVersion` / `apiVersion`** - מאפשרים לפלאגינים לבדוק תאימות. רלוונטי אם נרצה
 שה-system plugins שלנו יתנהגו נכון על פני גרסאות.
 
 ---
 
 ## המפה המלאה (155)
 
-### Adapters — קבצים
+### Adapters - קבצים
 
 - **`CapacitorAdapter`** ✅
 - `FileManager`
@@ -71,7 +71,7 @@ obsidian-web מזייף ל-Obsidian פלטפורמה (Electron/Capacitor/Node) �
 - `getBlobArrayBuffer`
 - `normalizePath`
 
-### Bases — הפיצ'ר החדש
+### Bases - הפיצ'ר החדש
 
 - `BasesEntry`
 - `BasesEntryGroup`
@@ -248,14 +248,14 @@ obsidian-web מזייף ל-Obsidian פלטפורמה (Electron/Capacitor/Node) �
 
 ## מצב המסמך
 
-**מה מאומת:** רשימת 155 הסמלים — חולצה ישירות ממפת-הייצוא של הבאנדל.
+**מה מאומת:** רשימת 155 הסמלים - חולצה ישירות ממפת-הייצוא של הבאנדל.
 
 **מה לא מאומת:**
-1. **החתימות** — אין כאן טיפוסים/פרמטרים. המקור הרשמי הוא `obsidian.d.ts` בריפו
+1. **החתימות** - אין כאן טיפוסים/פרמטרים. המקור הרשמי הוא `obsidian.d.ts` בריפו
    `obsidianmd/obsidian-api`; כדאי להצליב.
-2. **סימוני ה-✅** — היוריסטיקה טקסטואלית, ראה מקרא.
-3. **הקטגוריות** — נגזרו מדפוסי-שמות, לא מקריאת קוד.
-4. **מה באמת שמיש אצלנו** — סמל מיוצא לא בהכרח עובד בסביבה שלנו. כל שימוש חדש
+2. **סימוני ה-✅** - היוריסטיקה טקסטואלית, ראה מקרא.
+3. **הקטגוריות** - נגזרו מדפוסי-שמות, לא מקריאת קוד.
+4. **מה באמת שמיש אצלנו** - סמל מיוצא לא בהכרח עובד בסביבה שלנו. כל שימוש חדש
    דורש בדיקה בדפדפן אמיתי.
 
 **הצעד הבא:** הצלבה מול `obsidian.d.ts` הרשמי, וסימון פר-סמל של

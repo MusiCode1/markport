@@ -1,20 +1,20 @@
 # Markport
 
-Run Obsidian in a standard browser — no Electron, no native app needed.
+Run Obsidian in a standard browser - no Electron, no native app needed.
 
-> **Formerly `obsidian-web`.** Renamed because Obsidian's [developer policies](https://docs.obsidian.md/Developer+policies) ask that project names not include the word "Obsidian". `mark` for Markdown, `-port` as in porting — and as in harbour.
+> **Formerly `obsidian-web`.** Renamed because Obsidian's [developer policies](https://docs.obsidian.md/Developer+policies) ask that project names not include the word "Obsidian". `mark` for Markdown, `-port` as in porting - and as in harbour.
 >
 > Internal identifiers keep the old string on purpose: `localStorage` keys and the layout plugin's `id` are unchanged, so existing vaults and preferences keep working. Historical notes under `docs/` also still say `obsidian-web`, because that is what the project was called then.
 
-**[Try the demo →](https://demo.obsidian-online.pages.dev)** — opens a ready-made vault, nothing to set up.
-**[Open the app →](https://obsidian-online.pages.dev)** — start with your own empty vault.
+**[Try the demo →](https://demo.obsidian-online.pages.dev)** - opens a ready-made vault, nothing to set up.
+**[Open the app →](https://obsidian-online.pages.dev)** - start with your own empty vault.
 
 Both are client-only: your vault lives entirely in your own browser (OPFS), nothing is stored on
 any server, and nothing is shared between visitors. They are two deployments of the *same build*,
-differing only in a config profile chosen at build time — the demo seeds example content and opens
+differing only in a config profile chosen at build time - the demo seeds example content and opens
 it automatically, the app does neither. See "Two deployment modes" below.
 
-Markport loads Obsidian's original renderer (`app.js`) completely unmodified — zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle — and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
+Markport loads Obsidian's original renderer (`app.js`) completely unmodified - zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle - and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
 
 ### What works
 
@@ -23,12 +23,12 @@ Markport loads Obsidian's original renderer (`app.js`) completely unmodified —
 - Bidirectional links and backlinks
 - Search and command palette
 - Core plugins (file explorer, tags, bookmarks, outgoing links, etc.)
-- Real-time sync across tabs via WebSocket — **Node.js server mode only** (`/api/watch`); not available in the client-only (OPFS) deployment, which has no server to push events from
+- Real-time sync across tabs via WebSocket - **Node.js server mode only** (`/api/watch`); not available in the client-only (OPFS) deployment, which has no server to push events from
 - RTL / Unicode support
 
 ### Fast bootstrap (Node.js server mode)
 
-Against the Node.js server, the browser version can load faster than the desktop app. Instead of Obsidian reading dozens of config files one by one from disk, everything is served in a single HTTP request (`/api/bootstrap`) — all files, directories, and metadata arrive at once, before Obsidian even starts running. When it calls `statSync` or `readFileSync`, the answer is already waiting in memory. **The client-only (OPFS) deployment doesn't use this path** — there's no HTTP round-trip for vault reads at all; the vault is read directly from the browser's local storage.
+Against the Node.js server, the browser version can load faster than the desktop app. Instead of Obsidian reading dozens of config files one by one from disk, everything is served in a single HTTP request (`/api/bootstrap`) - all files, directories, and metadata arrive at once, before Obsidian even starts running. When it calls `statSync` or `readFileSync`, the answer is already waiting in memory. **The client-only (OPFS) deployment doesn't use this path** - there's no HTTP round-trip for vault reads at all; the vault is read directly from the browser's local storage.
 
 ### Browser support (OPFS)
 
@@ -38,33 +38,33 @@ The client-only deployment (and local/folder vaults on the Node server) are back
 
 | Capability | Chromium | Firefox | Safari |
 |---|:---:|:---:|:---:|
-| Vault storage — read (`getDirectory`) | ✅ | ✅ | ✅ |
-| Vault storage — write (`createWritable`) | ✅ | ✅ | ⚠️ shipped much later than `getDirectory` — check your Safari version before relying on it |
+| Vault storage - read (`getDirectory`) | ✅ | ✅ | ✅ |
+| Vault storage - write (`createWritable`) | ✅ | ✅ | ⚠️ shipped much later than `getDirectory` - check your Safari version before relying on it |
 | Folder vaults (`showDirectoryPicker`) | ✅ | ❌ | ❌ |
-| Auto-refresh on external folder change (`FileSystemObserver`) | ✅ | ❌ | ❌ — falls back to refresh on tab focus |
+| Auto-refresh on external folder change (`FileSystemObserver`) | ✅ | ❌ | ❌ - falls back to refresh on tab focus |
 
-**OPFS requires a secure context** (`https://` or `localhost`). Over plain HTTP on a bare IP address, `navigator.storage.getDirectory` is `undefined` and vault creation fails silently — this applies to local development too, not just production.
+**OPFS requires a secure context** (`https://` or `localhost`). Over plain HTTP on a bare IP address, `navigator.storage.getDirectory` is `undefined` and vault creation fails silently - this applies to local development too, not just production.
 
 ### Two deployment modes
 
 | | **Node.js server** | **Cloudflare (client-only)** |
 |---|---|---|
 | Path | `src/runtime-server/server/` | `src/deployments/cloudflare/` |
-| Storage | Real filesystem, via `/api/fs` | OPFS — entirely inside your browser |
+| Storage | Real filesystem, via `/api/fs` | OPFS - entirely inside your browser |
 | Persistence | Full | Until you clear this site's browsing data |
-| Sharing | Whoever can reach the server/port | Nobody — your vault stays private to your browser; only GitHub/obsidian.md requests (plugin installs, plus one automatic check on vault load) pass through a small proxy, see "Cloudflare (client-only) deployment" below |
+| Sharing | Whoever can reach the server/port | Nobody - your vault stays private to your browser; only GitHub/obsidian.md requests (plugin installs, plus one automatic check on vault load) pass through a small proxy, see "Cloudflare (client-only) deployment" below |
 | Use case | Personal use, self-hosted | Public app + demo, zero-maintenance, no server-side vault storage |
 | URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) (app) · [demo.obsidian-online.pages.dev](https://demo.obsidian-online.pages.dev) (demo) |
 
 The two Cloudflare URLs come from **one build**. `scripts/build-assets.sh` picks a config profile
-from the `OW_PROFILE` environment variable — the default profile ships the app (no demo vault, no
+from the `OW_PROFILE` environment variable - the default profile ships the app (no demo vault, no
 seeding), `OW_PROFILE=demo` ships the demo (seeded example vault, opened automatically, re-seeded
 when the shipped content changes). A guard script refuses to upload an artifact to the wrong
 target. See `src/deployments/cloudflare/README.md`.
 
-There's also `src/sync-server/` — a separate, optional pull-sync server (`/sync/v1`, content-hash
+There's also `src/sync-server/` - a separate, optional pull-sync server (`/sync/v1`, content-hash
 based, Bearer-token auth via `SYNC_TOKEN`) that lets an OPFS vault pull from a server-hosted vault
-directory. It's not part of either deployment above — see `src/sync-server/README.md`.
+directory. It's not part of either deployment above - see `src/sync-server/README.md`.
 
 ### Requirements
 
@@ -79,20 +79,20 @@ src/                         our source code
 ├── client-mobile/           the (only) runtime, loaded at / (and aliased at /mobile)
 ├── runtime-server/
 │   └── server/              Node.js HTTP/WS backend
-├── sync-server/             optional pull-sync server (/sync/v1, SYNC_TOKEN) — separate from
+├── sync-server/             optional pull-sync server (/sync/v1, SYNC_TOKEN) - separate from
 │                             the runtime-server backend above, see src/sync-server/README.md
 ├── plugins/                 system plugin overlay (e.g. obsidian-web-layout)
 └── deployments/             provider-specific deployments
-    └── cloudflare/          client-only static deployment (OPFS) + a small edge Worker —
+    └── cloudflare/          client-only static deployment (OPFS) + a small edge Worker -
                               no server-side vault storage of any kind
 
 vendor/                      extracted Obsidian bundles (gitignored)
-├── obsidian-mobile/         mobile renderer (zero build-time patches — byte-identical to Obsidian's own APK) — the only renderer in use
-└── obsidian-desktop/        legacy desktop renderer — vestigial, no longer served by the
+├── obsidian-mobile/         mobile renderer (zero build-time patches - byte-identical to Obsidian's own APK) - the only renderer in use
+└── obsidian-desktop/        legacy desktop renderer - vestigial, no longer served by the
                               server (routes removed in collapse-desktop); kept only because
                               scripts/update-obsidian-desktop.js still exists (see Notes);
                               extracted from a downloaded `.asar.gz` release asset, not an
-                              AppImage — no AppImage is downloaded or kept anywhere
+                              AppImage - no AppImage is downloaded or kept anywhere
 
 user-data/                   user-facing data
 ├── demo-vault/              example vault (tracked)
@@ -104,7 +104,7 @@ scripts/                     build tooling (update-obsidian-mobile, patch-obsidi
                              update-obsidian-desktop.js is vestigial, see Notes)
 ```
 
-> **Note**: `src/client/` (the desktop runtime) was removed in the `collapse-desktop` slice —
+> **Note**: `src/client/` (the desktop runtime) was removed in the `collapse-desktop` slice -
 > the mobile runtime is now the only runtime, served at both `/` and `/mobile`. The desktop
 > code is still recoverable from git history via the `archive/desktop-runtime` tag.
 
@@ -133,41 +133,41 @@ npm start
 
 Open `http://127.0.0.1:3000`. `/mobile` also works (backwards-compatible alias, same page).
 `/starter` (the old desktop vault picker) returns the same app shell as `/` on the Node
-server — `GET /starter` is a 200, not a redirect — so existing bookmarks/links still land
+server - `GET /starter` is a 200, not a redirect - so existing bookmarks/links still land
 you on the app instead of a 404. The client-only Cloudflare deployment serves `/starter`
-too, via its own Worker route (`index.js`) that returns the same app shell — see
+too, via its own Worker route (`index.js`) that returns the same app shell - see
 "Cloudflare (client-only) deployment" below; that deployment is not a plain static host.
 
-`/mobile` is **not** part of the Cloudflare (client-only) deployment — it's a route this Node
+`/mobile` is **not** part of the Cloudflare (client-only) deployment - it's a route this Node
 server adds; the static deployment's Worker serves `/`, `/starter`, `/vault/*`, and
 `/api/proxy-request` (see "Cloudflare (client-only) deployment" below), but not `/mobile`.
 
 ## Obsidian Version
 
 > **Supported version: 1.12.7.** Obsidian 1.13 added a startup check that Markport
-> deliberately does not satisfy, so 1.13+ will not load — you'll get an explanatory screen instead
+> deliberately does not satisfy, so 1.13+ will not load - you'll get an explanatory screen instead
 > of the app. This is a decision, not an outstanding bug. **Pass `--version 1.12.7` explicitly**;
 > the commands below default to the latest release, which will not work.
 > Full explanation and what was measured: [`docs/obsidian-version-support.md`](docs/obsidian-version-support.md).
 
-### Mobile bundle (`vendor/obsidian-mobile/`) — the only runtime
+### Mobile bundle (`vendor/obsidian-mobile/`) - the only runtime
 
 `/` and `/mobile` are both served by the mobile runtime, which needs the Obsidian Android APK bundle extracted into `vendor/obsidian-mobile/`. Like the (now vestigial) `vendor/obsidian-desktop/`, this directory is gitignored and downloaded on demand:
 
 ```bash
-# the supported version — use this one
+# the supported version - use this one
 node scripts/update-obsidian-mobile.js --version 1.12.7
 
-# latest Android APK release — currently 1.13+, which will NOT boot (see the note above)
+# latest Android APK release - currently 1.13+, which will NOT boot (see the note above)
 node scripts/update-obsidian-mobile.js
 ```
 
-This script downloads the official APK and unpacks the `assets/public/` tree to `vendor/obsidian-mobile/` — **zero build-time patches are applied**; the extracted bundle is byte-for-byte identical to Obsidian's own Android renderer. All platform behaviour — exposing `window.__owPlatform` and merging `window.__owPlatformOverrides` into the live `Platform` flags, including the desktop-layout vault-profile panel — happens at runtime via `client-mobile/platform-bridge.js`, which intercepts `Object.defineProperty` instead of touching a single byte of app.js (see `docs/plans/runtime-platform-descriptors.md` and `docs/plans/zero-patches.md`). `scripts/patch-obsidian-mobile.js` still runs as part of the update step — its patch list is currently empty, kept as infrastructure in case a future Obsidian version needs one; if a future patch's regex fails to match, the script aborts loudly, same as before.
+This script downloads the official APK and unpacks the `assets/public/` tree to `vendor/obsidian-mobile/` - **zero build-time patches are applied**; the extracted bundle is byte-for-byte identical to Obsidian's own Android renderer. All platform behaviour - exposing `window.__owPlatform` and merging `window.__owPlatformOverrides` into the live `Platform` flags, including the desktop-layout vault-profile panel - happens at runtime via `client-mobile/platform-bridge.js`, which intercepts `Object.defineProperty` instead of touching a single byte of app.js (see `docs/plans/runtime-platform-descriptors.md` and `docs/plans/zero-patches.md`). `scripts/patch-obsidian-mobile.js` still runs as part of the update step - its patch list is currently empty, kept as infrastructure in case a future Obsidian version needs one; if a future patch's regex fails to match, the script aborts loudly, same as before.
 
 | Runtime URL | Updater |
 |---|---|
 | `/` | `node scripts/update-obsidian-mobile.js --version 1.12.7 && node scripts/patch-obsidian-mobile.js` |
-| `/mobile` (alias) | same as `/` — identical `index.html` |
+| `/mobile` (alias) | same as `/` - identical `index.html` |
 
 ## Configuration
 
@@ -184,14 +184,14 @@ The `/api/bootstrap` endpoint preloads vault content into memory for fast
 boot. Both `/` and `/mobile` (the same runtime) consume it. Defaults work
 for most vaults. To customize:
 
-- `BOOTSTRAP_DISABLED=true` — skip the bootstrap entirely. Each FS read
+- `BOOTSTRAP_DISABLED=true` - skip the bootstrap entirely. Each FS read
   goes individually over HTTP. Useful for minimal deployments where the
   precompute is not worth it. Cold boot of a large vault drops back to
   ~20s; with bootstrap enabled it is ~2-3s.
-- `BOOTSTRAP_MAX_FILE_KB=500` — skip individual files larger than this
+- `BOOTSTRAP_MAX_FILE_KB=500` - skip individual files larger than this
   from the cache (default: 500 KB). Their stat is still cached; content
   is fetched on demand.
-- `BOOTSTRAP_MAX_TOTAL_MB=50` — cap the total uncompressed response size
+- `BOOTSTRAP_MAX_TOTAL_MB=50` - cap the total uncompressed response size
   (default: 50 MB). When reached, server stops adding content but still
   returns dirs+stat for the remaining files. Response carries
   `capped: true` and `cappedReason`.
@@ -200,16 +200,16 @@ for most vaults. To customize:
 
 ## Cloudflare (client-only) deployment (`src/deployments/cloudflare/`)
 
-A static deployment that runs entirely on Cloudflare's edge. Vaults live in the browser (OPFS) —
+A static deployment that runs entirely on Cloudflare's edge. Vaults live in the browser (OPFS) -
 there is **no server-side vault storage of any kind** here (the old server-side in-memory vault
 store, internally called `VaultDO`, was removed). A small Worker (`index.js`) still handles two
 things a plain static host can't:
 
-- `POST /api/proxy-request` — a CORS-safe edge proxy that routes `github.com`/
+- `POST /api/proxy-request` - a CORS-safe edge proxy that routes `github.com`/
   `githubusercontent.com`/`obsidian.md` requests (community-plugin installs, plus one
-  automatic deprecated-plugins check on vault load — those hosts don't send CORS headers).
+  automatic deprecated-plugins check on vault load - those hosts don't send CORS headers).
   A sync server or any other host is never routed through it
-- `GET /starter` and `/vault/*` — SPA-fallback routes that return the same app shell as `/`, so
+- `GET /starter` and `/vault/*` - SPA-fallback routes that return the same app shell as `/`, so
   deep links and bookmarks don't 404
 
 Everything else is served as a static asset (`env.ASSETS`). See
@@ -220,7 +220,7 @@ gaps).
 cd src/deployments/cloudflare
 npm install
 npm run build   # scripts/build-assets.sh → .tmp/deployments/cloudflare/public
-npm run dev     # local emulation (wrangler pages dev) — does NOT publish anywhere
+npm run dev     # local emulation (wrangler pages dev) - does NOT publish anywhere
 ```
 
 `npm run build` needs network access (GitHub API + release-asset CDN) to fetch the LiveSync
@@ -231,8 +231,8 @@ Two publish commands, each carrying its own destination:
 
 | Command | Publishes to |
 |---|---|
-| `npm run deploy` | `obsidian-online.pages.dev` — the app, production |
-| `npm run deploy:demo` | `demo.obsidian-online.pages.dev` — the demo, a branch alias |
+| `npm run deploy` | `obsidian-online.pages.dev` - the app, production |
+| `npm run deploy:demo` | `demo.obsidian-online.pages.dev` - the demo, a branch alias |
 
 Both rebuild from source first and run a guard that refuses to upload a demo artifact to the
 app target (or the reverse). Only run them when you actually intend to publish; use
@@ -255,11 +255,11 @@ Browser
 |------|---------|
 | `src/deployments/cloudflare/index.js` | Worker entry: `/api/proxy-request` + `/starter`/`/vault/*` fallback, else static assets |
 | `src/deployments/cloudflare/proxy-worker.js` | The CORS-safe outbound proxy implementation |
-| `src/deployments/cloudflare/template.js` | Demo vault content — seeded client-side into a new visitor's own OPFS vault on first visit |
-| `src/config/deploy-config.json` / `deploy-config.demo.json` | The two build profiles — app and demo (`OW_PROFILE`) |
+| `src/deployments/cloudflare/template.js` | Demo vault content - seeded client-side into a new visitor's own OPFS vault on first visit |
+| `src/config/deploy-config.json` / `deploy-config.demo.json` | The two build profiles - app and demo (`OW_PROFILE`) |
 | `src/deployments/cloudflare/scripts/guard-deploy-target.sh` | Refuses to publish an artifact to the wrong target |
 | `src/deployments/cloudflare/scripts/build-assets.sh` | Build: copies the mobile bundle, builds the system-plugins manifest + example-vault JSON |
-| `src/deployments/cloudflare/test/` | `bun test` — proxy + build-assets tests |
+| `src/deployments/cloudflare/test/` | `bun test` - proxy + build-assets tests |
 | `.tmp/deployments/cloudflare/public/...` | Built static assets (generated by `npm run build`) |
 
 ---
@@ -271,7 +271,7 @@ The Node.js server (`src/runtime-server/server/`) can be deployed to any Linux b
 1. Clone the repo and run `node scripts/update-obsidian-mobile.js --version 1.12.7 && node scripts/patch-obsidian-mobile.js` to get Obsidian's renderer files
 2. `cd src/runtime-server/server && npm install && npm start`
 3. Put it behind a reverse proxy (nginx, Caddy, Cloudflare Tunnel) with HTTPS
-4. Do not expose the server directly to the internet without auth — there is no application-level authentication
+4. Do not expose the server directly to the internet without auth - there is no application-level authentication
 
 ## Notes
 
@@ -280,16 +280,16 @@ The Node.js server (`src/runtime-server/server/`) can be deployed to any Linux b
 - Do not bind the server to a public IP without a tunnel or auth layer in front.
 - See `docs/architecture.md` for the current architecture and design principles.
 - `vendor/obsidian-desktop/` and `scripts/update-obsidian-desktop.js` (the legacy desktop renderer + its
-  downloader) are **vestigial** — the server no longer serves any route from them (removed
+  downloader) are **vestigial** - the server no longer serves any route from them (removed
   in the `collapse-desktop` slice). They are left in place rather than deleted; if you don't
-  already have `vendor/obsidian-desktop/` populated, you don't need it — everything now runs on
+  already have `vendor/obsidian-desktop/` populated, you don't need it - everything now runs on
   `vendor/obsidian-mobile/`.
 
 ## Disclaimer
 
 This is an **educational proof-of-concept** exploring how Electron-based apps can run in a standard browser. It is not affiliated with, endorsed by, or associated with [Obsidian](https://obsidian.md) or Dynalist Inc.
 
-This repository does **not** include Obsidian's source code. The `vendor/obsidian-desktop/` and `vendor/obsidian-mobile/` directories are gitignored — users must download Obsidian's renderer themselves using the provided setup scripts. Obsidian's code remains the property of Dynalist Inc. under their [Terms of Service](https://obsidian.md/terms).
+This repository does **not** include Obsidian's source code. The `vendor/obsidian-desktop/` and `vendor/obsidian-mobile/` directories are gitignored - users must download Obsidian's renderer themselves using the provided setup scripts. Obsidian's code remains the property of Dynalist Inc. under their [Terms of Service](https://obsidian.md/terms).
 
 If the Obsidian team has any concerns about this project, please [open an issue](https://github.com/MusiCode1/markport/issues) and we will address them promptly.
 
@@ -297,19 +297,19 @@ If the Obsidian team has any concerns about this project, please [open an issue]
 
 [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`).
 
-**This applies to Markport's own code only** — everything under `src/` and `scripts/`.
+**This applies to Markport's own code only** - everything under `src/` and `scripts/`.
 You are free to use, study, modify and redistribute it; if you distribute a modified
 version, it must also be GPL-3.0 and its source must be available.
 
 It does **not** apply to Obsidian itself. The `vendor/` directories hold Obsidian's own
 proprietary bundle, are gitignored, and remain governed solely by
 [Dynalist Inc.'s Terms of Service](https://obsidian.md/terms). Nothing here grants any rights
-over Obsidian's code. **This repository** does not contain or distribute Obsidian's source —
+over Obsidian's code. **This repository** does not contain or distribute Obsidian's source -
 the setup scripts download it, unmodified, to **your local copy** at install time (a
 patch-application step still exists as infrastructure for a future Obsidian version that might
-require one, but currently applies zero patches — the extracted bundle is byte-for-byte
+require one, but currently applies zero patches - the extracted bundle is byte-for-byte
 identical to Obsidian's own APK). The **public live demo**, however, *does* serve that same
-unmodified bundle to visitors' browsers (so it can run there) — see `build-assets.sh`, which
+unmodified bundle to visitors' browsers (so it can run there) - see `build-assets.sh`, which
 copies it into the deployed static assets. If the Obsidian team has concerns about that, see the
 Disclaimer above.
 

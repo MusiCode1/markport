@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Markport — Obsidian, running in your browser</title>
+<title>Markport - Obsidian, running in your browser</title>
 <meta name="description" content="Obsidian's own renderer running in a standard browser. No Electron, no install, no server-side vault. Your notes stay in your browser.">
 <meta name="theme-color" content="#1e1e1e">
 
@@ -106,7 +106,7 @@
   <p class="wordmark">Markport</p>
   <h1>Obsidian, running in <span>your browser</span></h1>
   <p class="tagline">
-    Obsidian's own renderer — the real one, byte-for-byte unmodified — with every
+    Obsidian's own renderer - the real one, byte-for-byte unmodified - with every
     Electron and Capacitor dependency replaced by browser-native shims.
   </p>
 
@@ -119,7 +119,7 @@
 
   <p class="disclaimer">
     Markport is an independent project. It is not made by, affiliated with, or endorsed by
-    Obsidian. <strong>There is no public instance</strong> — see below for why.
+    Obsidian. <strong>There is no public instance</strong> - see below for why.
   </p>
 </header>
 
@@ -135,7 +135,7 @@
     Point Markport at any directory and it reads and writes that directory directly, through
     the browser's
     <a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API">File System Access API</a>.
-    Your notes stay ordinary Markdown files on your disk — open them in any other editor, back
+    Your notes stay ordinary Markdown files on your disk - open them in any other editor, back
     them up, sync them with whatever you already use. Nothing is copied into the browser, and
     the browser cannot see anything outside the folder you picked. Chromium-based browsers only.
   </p>
@@ -144,18 +144,18 @@
   <p>
     If you would rather not grant folder access, vaults can live in
     <a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system">OPFS</a>
-    — private to you, never uploaded, never shared between visitors. They survive a reload and
+    - private to you, never uploaded, never shared between visitors. They survive a reload and
     stay until you clear that site's browsing data. Works in every modern browser.
   </p>
   <p class="note">
-    There is also an optional sync server you can run yourself — <strong>pull-only,
+    There is also an optional sync server you can run yourself - <strong>pull-only,
     read-only, no encryption</strong>. Not ready for real use yet.
   </p>
 
   <p class="note">
     <strong>One exception:</strong> requests to <code>github.com</code>,
-    <code>githubusercontent.com</code> and <code>obsidian.md</code> — installing a community
-    plugin, and the deprecated-plugin check Obsidian itself makes at vault load — pass through
+    <code>githubusercontent.com</code> and <code>obsidian.md</code> - installing a community
+    plugin, and the deprecated-plugin check Obsidian itself makes at vault load - pass through
     a small proxy, because a browser cannot reach those hosts directly. Your notes are never
     part of that. A sync server you connect yourself is a direct connection and is never proxied.
   </p>
@@ -164,7 +164,7 @@
 <section>
   <h2>Zero patches to Obsidian's bundle</h2>
   <p>
-    <code>app.js</code> is served exactly as Obsidian ships it — verified by checksum against
+    <code>app.js</code> is served exactly as Obsidian ships it - verified by checksum against
     the official Android bundle. Nothing is rewritten at build time. Platform behaviour
     (desktop vs. mobile layout) is adjusted at <em>runtime</em>, through a shim that captures
     Obsidian's own <code>Platform</code> object instead of editing its source.
@@ -181,7 +181,7 @@
     <li>File tree, tabs, split panes, graph view</li>
     <li>Wikilinks, backlinks, tags, search, command palette</li>
     <li>Core plugins, and community plugins installed from within the app</li>
-    <li>Folder vaults, or browser-local storage — see above</li>
+    <li>Folder vaults, or browser-local storage - see above</li>
     <li>RTL and full Unicode</li>
   </ul>
 </section>
@@ -192,19 +192,19 @@
     <li>
       <strong>Obsidian 1.13 and newer.</strong> Markport is pinned to 1.12.7. Starting with 1.13,
       Obsidian asks its host environment for a <code>terms</code> field carrying a verbatim
-      acknowledgement before it initialises. The acknowledgement sits on both sides — one supplies
+      acknowledgement before it initialises. The acknowledgement sits on both sides - one supplies
       it, the other compares against its own copy <em>(illustrative, not exact)</em>.
       <p class="note" style="margin:10px 0 4px"><strong>On mobile</strong>, through Capacitor's App plugin:</p>
       <pre><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
 
-// ### Platform side — the Android native layer ###
+// ### Platform side - the Android native layer ###
 // The string is compiled into classes.dex and served through Capacitor's App plugin.
 App.getInfo = () =&gt; ({
   name: 'Obsidian', id: 'md.obsidian', build: '…', version: '1.13.4',
   terms: ACKNOWLEDGEMENT,
 });
 
-// ### Client side — the renderer, inside app.js ###
+// ### Client side - the renderer, inside app.js ###
 const appInfo = await App.getInfo();
 Platform.build   = appInfo.build;
 Platform.version = appInfo.version;
@@ -212,17 +212,17 @@ Platform.version = appInfo.version;
 // …
 
 if (ACKNOWLEDGEMENT !== appInfo.terms) throw new Error();</code></pre>
-      <p class="note" style="margin:10px 0 4px"><strong>On desktop</strong>, the same value over IPC —
+      <p class="note" style="margin:10px 0 4px"><strong>On desktop</strong>, the same value over IPC -
       in the same run that reads <code>version</code> and <code>resources</code>:</p>
       <pre><code>const ACKNOWLEDGEMENT = "I understand and agree that I am not allowed to … granted by the Obsidian team.";
 
-// ### Platform side — the Electron main process ###
+// ### Platform side - the Electron main process ###
 electron.ipcMain.on("terms",         e =&gt; { e.returnValue = ACKNOWLEDGEMENT }),
 electron.ipcMain.on("documents-dir", e =&gt; { e.returnValue = documentsDir }),
 electron.ipcMain.on("resources",     e =&gt; { e.returnValue = resourcesPath }),
 electron.ipcMain.on("version",       e =&gt; { e.returnValue = appVersion }),
 
-// ### Client side — the renderer ###
+// ### Client side - the renderer ###
 Platform.version = electron.ipcRenderer.sendSync("version");
 Platform.build   = electron.remote.app.getVersion();
 
@@ -232,9 +232,9 @@ const termsFromIPC = electron.ipcRenderer.sendSync("terms");
 
 if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
     </li>
-    <li><strong>Plugins that need real Node APIs</strong> — spawning processes, reaching outside the vault. Plugins written against the mobile-safe API generally work.</li>
-    <li><strong>Folder vaults</strong> — Chromium only; Firefox and Safari do not implement the directory picker.</li>
-    <li><strong>Auto-refresh on external file changes</strong> — Chromium only; elsewhere it refreshes when the tab regains focus.</li>
+    <li><strong>Plugins that need real Node APIs</strong> - spawning processes, reaching outside the vault. Plugins written against the mobile-safe API generally work.</li>
+    <li><strong>Folder vaults</strong> - Chromium only; Firefox and Safari do not implement the directory picker.</li>
+    <li><strong>Auto-refresh on external file changes</strong> - Chromium only; elsewhere it refreshes when the tab regains focus.</li>
     <li><strong>An insecure origin.</strong> Browser storage is unavailable without <code>https://</code> (or <code>localhost</code>), and vault creation fails silently on a bare-IP host.</li>
   </ul>
 </section>
@@ -243,13 +243,13 @@ if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
   <h2>Browser support</h2>
   <table>
     <tr><th>Capability</th><th>Chromium</th><th>Firefox</th><th>Safari</th></tr>
-    <tr><td>Vault storage — read</td><td>✅</td><td>✅</td><td>✅</td></tr>
-    <tr><td>Vault storage — write</td><td>✅</td><td>✅</td><td>⚠️</td></tr>
+    <tr><td>Vault storage - read</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Vault storage - write</td><td>✅</td><td>✅</td><td>⚠️</td></tr>
     <tr><td>Folder vaults</td><td>✅</td><td>❌</td><td>❌</td></tr>
     <tr><td>Auto-refresh on external change</td><td>✅</td><td>❌</td><td>❌</td></tr>
   </table>
   <p class="note">
-    Chromium gives the complete experience. Safari shipped OPFS writes much later than reads —
+    Chromium gives the complete experience. Safari shipped OPFS writes much later than reads -
     check your version. A secure context (<code>https://</code> or <code>localhost</code>) is
     required everywhere.
   </p>
@@ -260,7 +260,7 @@ if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
   <p>
     On purpose. Hosting one would mean serving Obsidian's own application code to strangers,
     and that is Obsidian's call to make, not mine. This repository does not contain or
-    redistribute their bundle either — the setup script downloads it from Obsidian, onto your
+    redistribute their bundle either - the setup script downloads it from Obsidian, onto your
     own machine.
   </p>
   <p class="note">
@@ -272,7 +272,7 @@ if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
 <section>
   <h2>Run it yourself</h2>
   <p>
-    Two deployment modes. A static, client-only build — any static host, or a folder on your
+    Two deployment modes. A static, client-only build - any static host, or a folder on your
     own machine. Or an optional Node.js server that stores vaults as real files on disk and
     pushes live updates across tabs. Both run the same browser-side core.
   </p>
@@ -288,7 +288,7 @@ if (ACKNOWLEDGEMENT !== termsFromIPC) return window.close();</code></pre>
   <a href="https://github.com/MusiCode1/markport/blob/main/docs/architecture.md">Architecture</a>·
     <a href="https://obsidian.md">Obsidian</a>
   <p class="note" style="margin-top:14px">
-    Markport is free software under the GPL-3.0 — that covers Markport's own code, not
+    Markport is free software under the GPL-3.0 - that covers Markport's own code, not
     Obsidian's. Obsidian is a trademark of its owner.
   </p>
 </footer>
