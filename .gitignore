@@ -56,3 +56,6 @@ reports/
 # (.obsidian/plugins/*/data.json).
 user-data/*/
 !user-data/demo-vault/
+
+# wrangler local state (deploy cache) — never published.
+.wrangler/

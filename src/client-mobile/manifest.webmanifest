@@ -1,6 +1,6 @@
 {
-  "name": "Obsidian Web",
-  "short_name": "Obsidian Web",
+  "name": "Markport",
+  "short_name": "Markport",
   "description": "Obsidian running in your browser. Notes are stored locally on your device (OPFS), work offline, and never touch a server.",
   "start_url": "/",
   "scope": "/",
