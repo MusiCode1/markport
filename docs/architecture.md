@@ -1,65 +1,77 @@
-# Architecture - obsidian-web
+# Architecture - Markport
 
-> קהל: מי שמשנה את הקוד. ה"למה", לא ה"איך-משתמשים" (זה `README.md`).
+> Audience: people changing the code. The "why", not the "how to use it" (that is `README.md`).
+> A Hebrew version of this document is at [`docs/he/architecture.md`](he/architecture.md).
 
-## מה זה
-מריצים את ה-renderer של Obsidian (בַּאנדל upstream, `vendor/obsidian-mobile/`)
-בדפדפן רגיל, ע"י shims שמזייפים את Electron/Capacitor. אחרי ה-mobile-first
-collapse יש **core אחד** (client-mobile) עם **backend מתחלף**, לא שני ראנטיימים.
+## What this is
 
-## שכבות ה-runtime (לא frozen - שכבות אמיתיות)
+Markport runs Obsidian's own renderer (the upstream bundle, `vendor/obsidian-mobile/`) in a
+standard browser, using shims that stand in for Electron and Capacitor. After the mobile-first
+collapse there is **one core** (`client-mobile`) with a **swappable backend**, not two runtimes.
 
-| שכבה | סטטוס | אחסון | פריסה |
-|------|-------|-------|-------|
-| **serverless** | ★ ראשי | OPFS (בדפדפן) + folder-vaults (FSA API) | CF Pages static + Worker proxy |
-| **server** | חי, אופציה 2 | קבצים אמיתיים דרך `/api/fs` | `deployments/server/` (node; אין Dockerfile בריפו) |
-| **desktop** | נשמר, עתיד פתוח | - | `vendor/obsidian-desktop` (מקביל ל-mobile) |
+## Runtime layers
 
-**הטריגר בין serverless↔server**: **לא** probe / capability-detection על `/api/fs` - אין
-כזה. הטריגר הוא **רישום מקומי** (`window.__owLocalVaults`, נטען סינכרונית ב-`<script>`
-לפני `boot.js`, ראה סדר-הטעינה ב-`index.html`): אם ה-vault-id מופיע ברישום, ה-`type`
-הרשום שלו (`'local'` / `'folder'`) קובע OPFS; **אחרת** ברירת-המחדל היא `'server'` - **גם
-בפריסה סטטית בלי שרת בכלל** (`boot.js:149-151`):
+| Layer | Status | Storage | Deployment |
+|---|---|---|---|
+| **serverless** | ★ primary | OPFS in the browser + folder vaults (File System Access API) | CF Pages static + Worker proxy |
+| **server** | supported, option 2 | real files through `/api/fs` | `deployments/server/` (node; no Dockerfile in the repo) |
+| **desktop** | kept, future open | - | `vendor/obsidian-desktop`, parallel to mobile |
+
+**What decides between serverless and server** is *not* a probe or capability detection against
+`/api/fs` - there is none. It is the **local registry** (`window.__owLocalVaults`, loaded
+synchronously in a `<script>` before `boot.js`; see the load order in `index.html`). If the vault
+id appears in the registry, its recorded `type` (`'local'` / `'folder'`) selects OPFS.
+**Otherwise the default is `'server'`** - including on a static deployment with no server at all
+(`boot.js:149-151`):
+
 ```js
 var __owV = window.__owLocalVaults && window.__owLocalVaults.get(VAULT_ID);
 var VAULT_TYPE = __owV ? (__owV.type || 'local') : 'server';
 ```
-כלומר: vault-id שלא נוצר/נפתח מקומית (ולכן לא ברישום) ינסה `'server'` גם על CF -
-אין נפילה-אוטומטית ל-OPFS למי שלא ברישום. ההשלכה ההתנהגותית (מה קורה בפועל כש-
-`'server'` נבחר בלי שרת) מטופלת בסלייס `client-only-resilience` (גל 2ב), לא כאן.
 
-## מבנה תיקיות (יעד)
+So a vault id that was never created or opened locally, and therefore is not in the registry,
+will try `'server'` even on Cloudflare. There is no automatic fallback to OPFS for an
+unregistered id.
+
+## Directory layout
+
 ```
-vendor/                    upstream, gitignored, מיוצר ע"י scripts (משותף)
-  obsidian-mobile/         ה-renderer הפעיל (מ-APK אנדרואיד)
-  obsidian-desktop/        אופציה שנייה (מקביל)
-  plugins/                 LiveSync וכו'
-scripts/                   tooling משותף: update/patch-obsidian-{mobile,desktop}
+vendor/                    upstream, gitignored, produced by scripts (shared)
+  obsidian-mobile/         the active renderer (from the Android APK)
+  obsidian-desktop/        second option (parallel)
+  plugins/                 LiveSync and friends
+scripts/                   shared tooling: update/patch-obsidian-{mobile,desktop}
 src/
-  core/                    (R3 עתידי) base shims משותפים: path/os/url/btime + dispatcher
-  client-mobile/           הלקוח (שומרים "Mobile") - OPFS backend, boot, seed, SW
-  runtime-server/          קוד ספציפי-לשרת, מבודד:
+  core/                    (future) shared base shims: path/os/url/btime + dispatcher
+  client-mobile/           the client (the "Mobile" name stays) - OPFS backend, boot, seed, SW
+  runtime-server/          server-specific code, isolated:
      server/               Node: /api/fs, watch, bootstrap
-     client-shims/         ענף ה-HTTP backend + shims ייחודיים-לשרת
+     client-shims/         the HTTP backend branch + server-only shims
   deployments/
-     cloudflare/           serverless (static + _worker.js)   ← ברירת-מחדל
-     server/               פריסת-שרת (node; אין Dockerfile בריפו כיום)
+     cloudflare/           serverless (static + _worker.js)   <- default
+     server/               server deployment (node; no Dockerfile in the repo today)
 ```
 
-## עקרונות מנחים
-- **serverless ראשי** - כל שינוי core לא שובר את הפריסה הסטטית.
-- **HTTPS+auth = אחריות המפעיל** - השרת מגיש HTTP; reverse-proxy (Caddy מומלץ)
-  נותן TLS+auth. לכן `crypto.subtle` נייטיבי, בלי polyfills כתובים-ביד.
-- **"צד-שרת" עתידני** = OPFS + sync-plugin (LiveSync), לא הרחבת /api/fs.
-- **boot-order**: FS adapter חייב pre-boot (לפתוח כספת) → **לא יכול להיות פלאגין**.
+## Guiding principles
 
-## הבַּאנדל של Obsidian (vendor)
-- `vendor/*` gitignored, מיוצר ע"י `scripts/update-obsidian-mobile.js` (מוריד APK).
-- **אפס patches** (`docs/plans/zero-patches.md`) - `vendor/obsidian-mobile/app.js` זהה-בייט
-  לרשומת ה-APK (`assets/public/app.js`). `scripts/patch-obsidian-mobile.js` נשאר קיים
-  כתשתית (`PATCHES = []`) לגרסה עתידית שתדרוש patch. כל התנהגות-הפלטפורמה (mobile/desktop
-  layout, כולל פאנל ה-vault-profile) מותאמת ב-runtime ע"י
-  `client-mobile/platform-bridge.js` (יירוט `Object.defineProperty`, לא עריכת app.js) -
-  ראה `docs/plans/runtime-platform-descriptors.md`.
-- version-bump: הרץ update עם `--version <X>`; אם ייווסף patch עתידי וזה יזרוק - עקוב אחר
-  בלוק ANCHOR/REBUILD שלו ב-`scripts/patch-obsidian-mobile.js`.
+- **Serverless is primary.** No change to the core may break the static deployment.
+- **HTTPS and auth are the operator's job.** The server speaks plain HTTP; a reverse proxy
+  (Caddy is a good choice) supplies TLS and authentication. That is why `crypto.subtle` is used
+  natively, with no hand-written polyfills.
+- **The forward-looking "server side"** is OPFS plus a sync plugin, not a wider `/api/fs`.
+- **Boot order:** the filesystem adapter has to exist before boot, in order to open a vault -
+  which means it **cannot** be a plugin.
+
+## Obsidian's bundle (`vendor/`)
+
+- `vendor/*` is gitignored and produced by `scripts/update-obsidian-mobile.js`, which downloads
+  the official APK.
+- **Zero patches.** `vendor/obsidian-mobile/app.js` is byte-identical to the APK's own
+  `assets/public/app.js`. `scripts/patch-obsidian-mobile.js` still exists as infrastructure,
+  with an empty `PATCHES` list, for a future Obsidian version that might need one.
+- All platform behaviour - mobile versus desktop layout, including the vault-profile panel - is
+  adjusted at **runtime** by `client-mobile/platform-bridge.js`, which intercepts
+  `Object.defineProperty` to capture Obsidian's own `Platform` object rather than editing
+  `app.js`.
+- **Version bump:** run the update script with `--version <X>`. If a future patch is ever added
+  and it throws, follow the ANCHOR/REBUILD block in `scripts/patch-obsidian-mobile.js`.

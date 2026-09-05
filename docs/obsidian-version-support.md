@@ -193,5 +193,4 @@ browser: that's a fair thing to want, and the place to raise it is with the Obsi
 ## Related
 
 - `AGENTS.md` - "Before you touch the bundle", and the zero-patches policy
-- `docs/plans/restructure/ROADMAP.md` - cross-slice decision 10 and the full measurement record
 - `src/client-mobile/boot.js` - the boot watchdog that produces the message above

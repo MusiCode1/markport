@@ -42,6 +42,7 @@ See `docs/architecture.md` for the full picture.
 |------|-------|
 | Architecture and rationale | `docs/architecture.md` |
 | Writing a system plugin | `docs/system-plugin-dev-guide.md` |
+| Hebrew copies of the above | `docs/he/` |
 | Runtime (the browser side) | `src/client-mobile/` |
 | Node backend (optional) | `src/runtime-server/` |
 | Pull-sync server | `src/sync-server/` |
@@ -49,20 +50,18 @@ See `docs/architecture.md` for the full picture.
 
 ## Before you touch the bundle
 
-`vendor/obsidian-mobile/app.js` is Obsidian's proprietary code. As of
-`docs/plans/zero-patches.md`, we apply **zero** build-time patches to the
-**local** copy - the extracted bundle is byte-identical to Obsidian's own
-APK. `scripts/patch-obsidian-mobile.js` still exists as infrastructure
-(an empty `PATCHES` list) for a future Obsidian version that might need one;
-keep that list as small as possible, and prefer a runtime shim over a patch
-whenever the same result is reachable through a platform API.
+`vendor/obsidian-mobile/app.js` is Obsidian's proprietary code. We apply
+**zero** build-time patches to the local copy - the extracted bundle is
+byte-identical to Obsidian's own APK. `scripts/patch-obsidian-mobile.js`
+still exists as infrastructure (an empty `PATCHES` list) for a future
+Obsidian version that might need one; keep that list as small as possible,
+and prefer a runtime shim over a patch whenever the same result is reachable
+through a platform API.
 
-**Precedent**: `docs/plans/runtime-platform-descriptors.md` replaced 3 of the
-4 patches that used to exist with a runtime shim
-(`src/client-mobile/platform-bridge.js`, which intercepts
+**Precedent**: three of the four patches that used to exist were replaced by
+a runtime shim - `src/client-mobile/platform-bridge.js`, which intercepts
 `Object.defineProperty` to capture Obsidian's own `Platform` object instead
-of rewriting app.js's byte-for-byte source); `docs/plans/zero-patches.md`
-removed the 4th and last one (`vault-profile-on-desktop-layout`) outright,
-once measurement showed `platform-bridge.js`'s existing `isDesktopApp`
-locking already covers what it used to patch. Read both before adding a new
-patch.
+of rewriting app.js's byte-for-byte source. The fourth and last
+(`vault-profile-on-desktop-layout`) was removed outright, once measurement
+showed that `platform-bridge.js`'s existing `isDesktopApp` locking already
+covers what it used to patch.

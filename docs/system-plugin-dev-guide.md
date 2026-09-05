@@ -1,70 +1,78 @@
 # System plugin dev guide
 
-> Added: 2026-05-11
->
-> איך מוסיפים תוסף Obsidian חדש שמוזרק אוטומטית לכל vault דרך ה-`server/system-plugins.js` overlay.
-
-מסמך זה מסביר את ה-mechanics של ה-overlay.
+> How to add an Obsidian plugin that is injected automatically into every vault, through the
+> overlay in `src/runtime-server/server/system-plugins.js`.
+> A Hebrew version of this document is at [`docs/he/system-plugin-dev-guide.md`](he/system-plugin-dev-guide.md).
 
 ---
 
-## מי זה "system plugin"?
+## What is a "system plugin"?
 
-תוסף Obsidian רגיל ש**נשמר ב-repo ב-`<repo>/plugins/<id>/`** במקום בכל vault של משתמש. השרת חושף אותו כאילו הוא חלק מ-`.obsidian/plugins/<id>/` של כל vault שנפתח, ו-`.obsidian/community-plugins.json` נראה לאפליקציה כאילו ה-id כבר רשום שם.
+An ordinary Obsidian plugin that lives **in the repo, under `src/plugins/<id>/`**, instead of
+inside each user's vault. The server exposes it as though it were part of every opened vault's
+`.obsidian/plugins/<id>/`, and `.obsidian/community-plugins.json` appears to the app as though
+the id were already registered there.
 
-יתרון: הפלאגין זמין מהרגע הראשון לכל משתמש שפותח את obsidian-web, בלי שצריך להתקין שום דבר ובלי שהvault שלו מתלכלך.
+The point: the plugin is available from the first moment, to every user, with nothing to install
+and without leaving anything behind in their vault.
 
 ---
 
-## טבלת הבדלים מ-Obsidian plugin רגיל
+## How it differs from a normal Obsidian plugin
 
 | | Community plugin | System plugin |
 |---|---|---|
-| איפה חי | `<vault>/.obsidian/plugins/<id>/` | `<repo>/plugins/<id>/` |
-| מי מתקין | המשתמש (דרך ה-UI / manually) | המפתח של obsidian-web (commit לrepo) |
-| `community-plugins.json` enable | המשתמש שולט | system plugins תמיד "enabled" (re-injected at load) |
-| `data.json` settings | per-vault, ב-vault | per-vault, ב-vault (system plugin אינו "global") |
-| Bundling | חוסם - או build (TS/Rollup) או JS פשוט | אין build chain - JS פשוט, CommonJS |
-| Update | בייפול plugin / GitHub release | git pull / git commit |
+| Where it lives | `<vault>/.obsidian/plugins/<id>/` | `src/plugins/<id>/` |
+| Who installs it | the user, through the UI or by hand | a Markport developer, by committing it |
+| `community-plugins.json` | the user controls it | always enabled; re-injected at load |
+| `data.json` settings | per vault, in the vault | per vault, in the vault - a system plugin is not "global" |
+| Bundling | up to you: a build (TS/Rollup) or plain JS | no build chain - plain CommonJS JS |
+| Updating | plugin marketplace / GitHub release | `git pull` |
 
 ---
 
-## הוספת system plugin חדש - 6 שלבים
+## Adding one, in six steps
 
-### 1. צור תיקייה ב-`<repo>/plugins/`
+### 1. Create a directory under `src/plugins/`
 
-שם התיקייה **חייב** להיות זהה ל-`id` שתצהיר ב-`manifest.json`. ה-server לא מתפשר על זה.
+The directory name **must** equal the `id` you declare in `manifest.json`. The server does not
+tolerate a mismatch.
 
 ```bash
-mkdir plugins/obsidian-web-<name>
-cd plugins/obsidian-web-<name>
+mkdir src/plugins/markport-<name>
+cd src/plugins/markport-<name>
 ```
 
-**Naming convention:** התחל ב-`obsidian-web-` כדי שיהיה ברור מאיפה הוא בא ושלא יתנגש עם תוספי community.
+**Naming:** prefix new plugins with `markport-`, so their origin is obvious and they cannot
+collide with a community plugin. The one existing system plugin is still called
+`obsidian-web-layout`; that id is deliberately frozen, because it is also the directory name
+inside every existing vault's `.obsidian/plugins/`.
 
-### 2. צור `manifest.json`
+### 2. Write `manifest.json`
 
-זה ה-manifest הסטנדרטי של Obsidian. ה-`id` חייב להיות אחיד עם שם התיקייה.
+A standard Obsidian manifest. The `id` has to match the directory name.
 
 ```json
 {
-  "id": "obsidian-web-<name>",
-  "name": "Obsidian Web - <Human Name>",
+  "id": "markport-<name>",
+  "name": "Markport - <Human Name>",
   "version": "0.1.0",
   "minAppVersion": "1.0.0",
   "description": "Short description.",
-  "author": "obsidian-web",
+  "author": "Markport",
   "isDesktopOnly": false
 }
 ```
 
-חשוב:
-- `isDesktopOnly: false` - אחרת לא ייטען ב-mobile runtime.
-- אין `authorUrl`, `fundingUrl` וכו' שלא רלוונטיים לפלאגין שלא הולך לcommunity directory.
+Two things matter here:
 
-### 3. צור `main.js` - CommonJS module
+- `isDesktopOnly: false`, or the mobile runtime will not load it.
+- Leave out `authorUrl`, `fundingUrl` and the rest - they are meaningless for a plugin that is
+  not going to the community directory.
 
-אין build chain. הקובץ הוא ה-source. כתוב CommonJS פשוט שמייצא `default` בסגנון של פלאגין Obsidian:
+### 3. Write `main.js` as a CommonJS module
+
+There is no build chain. The file *is* the source.
 
 ```js
 'use strict';
@@ -73,23 +81,22 @@ const obsidian = require('obsidian');
 
 class MyPlugin extends obsidian.Plugin {
   async onload() {
-    // Detect that we are running inside obsidian-web before doing anything
-    // that depends on our globals. On real Obsidian (desktop/mobile app),
-    // __owPlatform doesn't exist - keep the plugin a no-op there.
-    // Caveat (docs/plans/runtime-platform-descriptors.md §3.1a): __owPlatform
-    // is now set at RUNTIME by intercepting Object.defineProperty as
-    // Obsidian's own bundle loads, not injected into the bundle at build
-    // time - so this check can also be undefined ON obsidian-web itself, for
-    // a few seconds, while app.js is still downloading. Don't gate anything
-    // that must run before the vault is up on this check alone.
+    // Check that we are running inside Markport before touching anything
+    // that depends on our globals. On real Obsidian, __owPlatform does not
+    // exist, and the plugin should stay a no-op there.
+    //
+    // Caveat: __owPlatform is published at RUNTIME, by intercepting
+    // Object.defineProperty as Obsidian's own bundle loads - it is not
+    // injected at build time. So it can also be undefined ON Markport
+    // itself, for a few seconds, while app.js is still downloading. Do not
+    // gate anything that must run before the vault is up on this check alone.
     if (typeof window.__owPlatform === 'undefined') {
-      console.log('[obsidian-web-<name>] not running on obsidian-web, skipping');
+      console.log('[markport-<name>] not running on Markport, skipping');
       return;
     }
 
-    // ribbon icon, commands, settings, etc.
     this.addRibbonIcon('settings', 'My Plugin', () => {
-      new obsidian.Notice('Hello from obsidian-web');
+      new obsidian.Notice('Hello from Markport');
     });
 
     this.addCommand({
@@ -107,88 +114,99 @@ class MyPlugin extends obsidian.Plugin {
 module.exports = MyPlugin;
 ```
 
-**מה קיים בסביבה?**
-- `require('obsidian')` - ה-API הרגיל של Obsidian (`Plugin`, `Notice`, `Modal`, `Setting`, `TFile`, ...). זמין דרך ה-runtime - אין `require` של Node.js, יש את ה-`require` של Obsidian.
-- `window.__owPlatform` - קיים רק על obsidian-web. השתמש כ-feature detection.
-  **הערה**: הוא נחשף ב**זמן ריצה** (יירוט `Object.defineProperty`, לא הזרקה בזמן build -
-  ראה `docs/plans/runtime-platform-descriptors.md` §3.1a), ולכן הוא יכול להיות `undefined`
-  זמנית **גם על obsidian-web עצמו**, למשך כמה שניות, בזמן ש-`app.js` עדיין נטען. אל תבסס
-  עליו לוגיקה שחייבת לרוץ לפני עליית הכספת.
-- `window.app` - האפליקציה (זמין אחרי `onload`).
-- `localStorage` - נורמלי. שמירת state ב-`obsidian-web:<plugin-id>:*` keys היא הconvention.
+**What the environment gives you**
 
-**מה אסור?**
-- `require('fs')` / `require('child_process')` - לא קיים ב-mobile runtime. הוא כן קיים ב-desktop runtime, אבל אם אתה כותב system plugin, סבירות גבוהה שתרצה שהוא יעבוד בשני ה-runtimes. השתמש ב-`app.vault.adapter` במקום.
-- Build artifacts ב-`<repo>/plugins/<id>/` - `main.js` הוא הקובץ עצמו, לא תוצאת build.
+- `require('obsidian')` - Obsidian's own plugin API (`Plugin`, `Notice`, `Modal`, `Setting`,
+  `TFile`, …). This is Obsidian's `require`, not Node's.
+- `window.__owPlatform` - present only on Markport, so it works as feature detection. See the
+  caveat in the code above: it appears at runtime, not at load, so it can be briefly undefined.
+- `window.app` - the application, available after `onload`.
+- `localStorage` - ordinary. The convention is to namespace keys as
+  `obsidian-web:<plugin-id>:*`; that prefix is frozen for the same compatibility reason as the
+  plugin id above.
 
-### 4. (אופציונלי) `styles.css`
+**What you cannot use**
 
-אם הפלאגין מוסיף UI עם CSS, הוסף `styles.css` באותה תיקייה. Obsidian טוען אותו אוטומטית.
+- `require('fs')` and `require('child_process')` - they do not exist in the mobile runtime.
+  Use `app.vault.adapter` instead.
+- Build artefacts under `src/plugins/<id>/`. `main.js` is the file itself, not a build output.
 
-### 5. אין צורך ב-build / install
+### 4. Optionally, `styles.css`
 
-`server/system-plugins.js` סורק את `<repo>/plugins/` ב-`init()` (ב-startup של השרת). שינוי בקבצי הפלאגין:
+If the plugin adds UI with CSS, drop a `styles.css` in the same directory. Obsidian loads it
+automatically.
 
-- **Code change (`main.js`, `styles.css`, `manifest.json`):** restart לשרת **לא נדרש** - הקבצים מוגשים דרך `/api/fs/read` לכל request, ו-Obsidian טוען אותם ב-startup של ה-vault. כן צריך reload לדפדפן.
-- **הוספת/הסרת תיקייה ב-`plugins/`:** דורש restart לשרת (`init()` סורק ב-startup בלבד).
+### 5. There is no build or install step
 
-### 6. וריפיקציה
+`system-plugins.js` scans `src/plugins/` in `init()`, at server startup:
+
+- **Editing `main.js`, `styles.css` or `manifest.json`:** no server restart needed. The files are
+  served through `/api/fs/read` on every request, and Obsidian loads them when the vault starts.
+  You do need to reload the browser.
+- **Adding or removing a directory:** this does need a server restart, because `init()` only
+  scans at startup.
+
+### 6. Verify
+
+The server listens on port 3000 by default (`PORT` overrides it).
 
 ```bash
-# 1. בדוק שהמשרת מזהה את הפלאגין:
-curl -s http://localhost:3000/api/fs/readdir?path=.obsidian/plugins | jq '.[].name'
-# צריך לכלול "obsidian-web-<name>"
+# 1. the server sees the plugin
+curl -s "http://localhost:3000/api/fs/readdir?path=.obsidian/plugins" | jq '.[].name'
+# should include "markport-<name>"
 
-# 2. בדוק שה-manifest מוגש:
-curl -s "http://localhost:3000/api/fs/read?path=.obsidian/plugins/obsidian-web-<name>/manifest.json"
+# 2. the manifest is served
+curl -s "http://localhost:3000/api/fs/read?path=.obsidian/plugins/markport-<name>/manifest.json"
 
-# 3. בדוק שה-id מופיע ב-community-plugins.json הוירטואלי:
+# 3. the id appears in the virtual community-plugins.json
 curl -s "http://localhost:3000/api/fs/read?path=.obsidian/community-plugins.json"
-# צריך להחזיר array שמכיל "obsidian-web-<name>"
+# should return an array containing "markport-<name>"
 
-# 4. בדפדפן (אחרי reload):
-#    app.plugins.plugins['obsidian-web-<name>']      → instance של המחלקה
-#    app.plugins.manifests['obsidian-web-<name>']    → ה-manifest
+# 4. in the browser, after a reload
+#    app.plugins.plugins['markport-<name>']    -> an instance of your class
+#    app.plugins.manifests['markport-<name>']  -> the manifest
 ```
 
 ---
 
-## תרחיש פיתוח iterative
-
-לולאת פיתוח טיפוסית:
+## The iterative loop
 
 ```bash
-# 1. ערוך plugins/obsidian-web-<name>/main.js
-# 2. ב-browser DevTools:
-app.plugins.disablePlugin('obsidian-web-<name>');
-app.plugins.enablePlugin('obsidian-web-<name>');
-# או פשוט reload לדפדפן.
+# 1. edit src/plugins/markport-<name>/main.js
+# 2. in browser DevTools:
+app.plugins.disablePlugin('markport-<name>');
+app.plugins.enablePlugin('markport-<name>');
+# or just reload the page.
 ```
 
-**אזהרה:** `disablePlugin` של system plugin אינו persistent - הוא ייטען שוב ב-reload. זו התנהגות מכוונת, אבל מעצבן כשמנסים לבדוק התנהגות ללא הפלאגין. workaround: rename הזמני של תיקיית הפלאגין + restart לשרת.
+**Watch out:** `disablePlugin` on a system plugin is not persistent - it comes back on reload.
+That is deliberate, and annoying when you are trying to observe behaviour without the plugin.
+Workaround: rename the directory temporarily and restart the server.
 
 ---
 
-## דוגמה קיימת לעקוב אחריה
+## An existing example
 
-`plugins/obsidian-web-layout/` הוא ה-system plugin הראשון, מימוש מינימלי טוב:
+`src/plugins/obsidian-web-layout/` is the first system plugin and a good minimal one to copy:
 
-- ~140 שורות.
-- מוסיף ribbon icon + 3 commands - משתיק את שניהם ויזואלית כש-`localStorage.EmulateMobile`
-  פעיל (`docs/plans/runtime-platform-descriptors.md` §3.5), במקום להישאר "פעיל אך חסר-אפקט".
-- קורא/כותב ל-`localStorage` (אין `data.json` settings).
-- עושה feature detection על `window.__owPlatform`.
+- about 140 lines
+- adds a ribbon icon and three commands, and hides both when `localStorage.EmulateMobile` is
+  active, rather than staying visible but inert
+- reads and writes `localStorage`; no `data.json` settings
+- feature-detects `window.__owPlatform`
 
-קרא אותו לפני כתיבת system plugin חדש.
+Read it before writing a new one.
 
 ---
 
-## Future: opt-in via `SYSTEM_PLUGINS` env var
+## Planned: opt-in through a `SYSTEM_PLUGINS` env var
 
-תוכנית עתידית, **טרם מומשה** ב-`server/index.js` (אין `process.env.SYSTEM_PLUGINS` בקוד כיום):
+**Not implemented.** There is no `process.env.SYSTEM_PLUGINS` in the code today.
 
 ```bash
-SYSTEM_PLUGINS=obsidian-web-layout,obsidian-livesync node server/index.js
+SYSTEM_PLUGINS=markport-layout,obsidian-livesync node index.js
 ```
 
-שיגביל אילו ids מ-`<repo>/plugins/` יוזרקו. שימושי לפריסות שרוצות לצמצם אילו system plugins מוזרקים בכלל (למשל: פריסה שלא רוצה את קבצי LiveSync בפועל, לא רק disabled). אם תוסיף system plugin שמתאים רק לחלק מהפריסות, תיעד את זה ב-`README.md`.
+The idea is to limit which ids from `src/plugins/` get injected - useful for a deployment that
+does not want a given plugin's files present at all, rather than merely disabled. If you add a
+system plugin that only suits some deployments, document that in `README.md`.
