@@ -41,6 +41,28 @@ if ((await App.getInfo()).terms !== EXPECTED_ACKNOWLEDGEMENT) throw new Error();
 if (ipcRenderer.sendSync("terms") !== EXPECTED_ACKNOWLEDGEMENT) window.close();
 ```
 
+And this is the client side — what Markport's shims actually answer:
+
+```js
+// src/client-mobile/shims/capacitor-shim.js
+let terms = localStorage.getItem('obsidian-terms')
+         || window.__obsidianTerms || '';
+
+const App = {
+  getInfo: () => Promise.resolve({
+    name: 'Obsidian', id: 'md.obsidian', build: '0',
+    terms,                                    // ← ships empty
+    version: window.__owObsidianVersion,
+  }),
+};
+
+// src/client-mobile/shims/electron.js
+const GET_CHANNEL_VALUES = {
+  // …
+  'terms': '',                                // ← ships empty
+};
+```
+
 On a real Android device, Obsidian's own native layer supplies it. Markport replaces that
 native layer with browser shims, and those shims don't supply it — `capacitor-shim.js` ships
 `terms` empty, and `shims/electron.js` answers the `terms` IPC channel with an empty string for

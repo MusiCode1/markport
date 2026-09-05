@@ -736,14 +736,17 @@
 
   const Device = {
     getInfo: () => Promise.resolve({
-      name: 'obsidian-web',
+      name: 'Markport',
       model: 'Browser',
       platform: 'android',
       operatingSystem: 'android',
       osVersion: '12',
-      manufacturer: 'obsidian-web',
+      manufacturer: 'Markport',
       isVirtual: true,
     }),
+    // getId stays 'obsidian-web-id' on purpose: it is an IDENTIFIER, not a
+    // display value. Plugins that key device state on it (LiveSync keeps a
+    // per-device journal) would see a brand-new device if it changed.
     getId: () => Promise.resolve({ identifier: 'obsidian-web-id' }),
     getLanguageCode: () => Promise.resolve({ value: navigator.language || 'en' }),
   };
