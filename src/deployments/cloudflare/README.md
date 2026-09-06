@@ -173,8 +173,8 @@ silently drift apart (`git diff` always shows the one line that changed).
 npm run build           # main profile → .tmp/deployments/cloudflare/public
 npm run build:demo      # demo profile (OW_PROFILE=demo) → same output dir
 npm run dev              # local emulation (wrangler pages dev) - does NOT publish anywhere
-npm run deploy           # predeploy: rebuilds MAIN + guard, then publishes to --branch=main → obsidian-online.pages.dev
-npm run deploy:demo      # predeploy:demo: rebuilds DEMO + guard, then publishes to --branch=demo → demo.obsidian-online.pages.dev
+npm run deploy           # predeploy: rebuilds MAIN + guard, then publishes to --branch=main → <your-project>.pages.dev
+npm run deploy:demo      # predeploy:demo: rebuilds DEMO + guard, then publishes to --branch=demo → demo.<your-project>.pages.dev
 ```
 `npm run build`/`build:demo` need network access to GitHub (`api.github.com` +
 release-asset CDN) to fetch the LiveSync plugin on a cold cache - see
@@ -186,8 +186,8 @@ continue, layout-switcher only).
 
 | Script | Target | URL |
 |---|---|---|
-| `npm run deploy` | `obsidian-online`, branch `main` (the project's **production** branch) | `obsidian-online.pages.dev` |
-| `npm run deploy:demo` | `obsidian-online`, branch `demo` (a preview **branch alias**) | `demo.obsidian-online.pages.dev` |
+| `npm run deploy` | `$CF_PAGES_PROJECT`, branch `main` (the production branch) | `<your-project>.pages.dev` |
+| `npm run deploy:demo` | `$CF_PAGES_PROJECT`, branch `demo` (a preview **branch alias**) | `demo.<your-project>.pages.dev` |
 
 One Cloudflare Pages project serves both. A branch alias always tracks the
 latest deployment pushed to that branch name, and - unlike a git-integrated

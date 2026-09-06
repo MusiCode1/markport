@@ -6,13 +6,14 @@ Run Obsidian in a standard browser - no Electron, no native app needed.
 >
 > Internal identifiers keep the old string on purpose: `localStorage` keys and the layout plugin's `id` are unchanged, so existing vaults and preferences keep working. Historical notes under `docs/` also still say `obsidian-web`, because that is what the project was called then.
 
-**[Try the demo →](https://demo.obsidian-online.pages.dev)** - opens a ready-made vault, nothing to set up.
-**[Open the app →](https://obsidian-online.pages.dev)** - start with your own empty vault.
+**There is no public instance.** Hosting one would mean serving Obsidian's own application code
+to strangers, and that is Obsidian's call to make. This repository does not contain or
+redistribute their bundle either - the setup script downloads it from Obsidian, onto your machine.
 
-Both are client-only: your vault lives entirely in your own browser (OPFS), nothing is stored on
-any server, and nothing is shared between visitors. They are two deployments of the *same build*,
-differing only in a config profile chosen at build time - the demo seeds example content and opens
-it automatically, the app does neither. See "Two deployment modes" below.
+**[How to run your own →](https://markport.pages.dev/install)**
+
+Your vault lives entirely in your own browser (OPFS) or in a folder you pick on disk. Nothing is
+stored on any server.
 
 Markport loads Obsidian's original renderer (`app.js`) completely unmodified - zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle - and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
 
@@ -53,10 +54,10 @@ The client-only deployment (and local/folder vaults on the Node server) are back
 | Storage | Real filesystem, via `/api/fs` | OPFS - entirely inside your browser |
 | Persistence | Full | Until you clear this site's browsing data |
 | Sharing | Whoever can reach the server/port | Nobody - your vault stays private to your browser; only GitHub/obsidian.md requests (plugin installs, plus one automatic check on vault load) pass through a small proxy, see "Cloudflare (client-only) deployment" below |
-| Use case | Personal use, self-hosted | Public app + demo, zero-maintenance, no server-side vault storage |
-| URL | `http://localhost:3000` | [obsidian-online.pages.dev](https://obsidian-online.pages.dev) (app) · [demo.obsidian-online.pages.dev](https://demo.obsidian-online.pages.dev) (demo) |
+| Use case | Personal use, self-hosted | Static hosting, zero maintenance, no server-side vault storage |
+| URL | `http://localhost:3000` | wherever you deploy it |
 
-The two Cloudflare URLs come from **one build**. `scripts/build-assets.sh` picks a config profile
+The app profile and the demo profile come from **one build**. `scripts/build-assets.sh` picks a config profile
 from the `OW_PROFILE` environment variable - the default profile ships the app (no demo vault, no
 seeding), `OW_PROFILE=demo` ships the demo (seeded example vault, opened automatically, re-seeded
 when the shipped content changes). A guard script refuses to upload an artifact to the wrong
@@ -229,10 +230,13 @@ failing the build.
 
 Two publish commands, each carrying its own destination:
 
-| Command | Publishes to |
+| Command | Publishes |
 |---|---|
-| `npm run deploy` | `obsidian-online.pages.dev` - the app, production |
-| `npm run deploy:demo` | `demo.obsidian-online.pages.dev` - the demo, a branch alias |
+| `npm run deploy` | the app, to branch `main` of your project |
+| `npm run deploy:demo` | the demo, to branch `demo` |
+
+Both read the target from `CF_PAGES_PROJECT` and fail if it is unset - there is no default,
+because there is no instance for this project to publish to.
 
 Both rebuild from source first and run a guard that refuses to upload a demo artifact to the
 app target (or the reverse). Only run them when you actually intend to publish; use

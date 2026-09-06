@@ -266,9 +266,9 @@ LAYOUT_VER="$LAYOUT_VER" LAYOUT_ENABLED="$LAYOUT_ENABLED" LS_VERSION="$LS_VERSIO
 '
 
 # ── _headers (demo profile only — docs/plans/demo-origin-split.md §4 Commit 6)
-# A branch-alias Pages deployment (demo.obsidian-online.pages.dev) gets
+# A branch-alias Pages deployment (demo.<project>.pages.dev) gets
 # X-Robots-Tag: noindex injected automatically by Cloudflare (measured
-# 2026-07-28: hdrtest.obsidian-online.pages.dev returned it). A committed
+# 2026-07-28: a branch alias returned it). A committed
 # `_headers` file overrides that per-path — measured the same day that it
 # does: a test deploy with this file returned x-robots-tag: index, follow.
 # This is what lets the demo live on ONE Cloudflare Pages project instead of
@@ -290,6 +290,6 @@ echo "  files : $FILE_COUNT"
 echo "  size  : $TOTAL_SIZE"
 echo ""
 echo "Next:"
-echo "  npm run deploy           # publish the APP  → obsidian-online.pages.dev"
-echo "  npm run deploy:demo      # publish the DEMO → demo.obsidian-online.pages.dev"
+echo "  npm run deploy           # publish the APP  (needs CF_PAGES_PROJECT)"
+echo "  npm run deploy:demo      # publish the DEMO (needs CF_PAGES_PROJECT)"
 echo "  npm run dev              # local dev, publishes nothing"

@@ -8,9 +8,9 @@
     "build": "bash scripts/build-assets.sh",
     "build:demo": "OW_PROFILE=demo bash scripts/build-assets.sh",
     "predeploy": "npm run build && bash scripts/guard-deploy-target.sh main",
-    "deploy": "npx wrangler pages deploy ../../../.tmp/deployments/cloudflare/public --project-name=obsidian-online --branch=main --commit-dirty=true",
+    "deploy": "npx wrangler pages deploy ../../../.tmp/deployments/cloudflare/public --project-name=\"${CF_PAGES_PROJECT:?set CF_PAGES_PROJECT to your own Cloudflare Pages project}\" --branch=main --commit-dirty=true",
     "predeploy:demo": "npm run build:demo && bash scripts/guard-deploy-target.sh demo",
-    "deploy:demo": "npx wrangler pages deploy ../../../.tmp/deployments/cloudflare/public --project-name=obsidian-online --branch=demo --commit-dirty=true",
+    "deploy:demo": "npx wrangler pages deploy ../../../.tmp/deployments/cloudflare/public --project-name=\"${CF_PAGES_PROJECT:?set CF_PAGES_PROJECT to your own Cloudflare Pages project}\" --branch=demo --commit-dirty=true",
     "dev": "bash scripts/build-assets.sh && npx wrangler pages dev ../../../.tmp/deployments/cloudflare/public",
     "test": "bun test test/*.test.js"
   },

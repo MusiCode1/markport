@@ -52,7 +52,7 @@ export const TEMPLATE_FILES = new Map([
 
 > **Obsidian's desktop app — running in your browser, no Electron needed.**
 
-**This is a demo vault.** [Create your own →](https://obsidian-online.pages.dev)
+**This is a demo vault.** Create your own from the vault switcher.
 
 This is a live demo of **Markport** (formerly obsidian-web), an open-source project that runs Obsidian's original renderer in a standard browser by replacing every Capacitor/Electron dependency with lightweight browser-native shims.
 
