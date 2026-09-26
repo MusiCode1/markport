@@ -6,7 +6,6 @@ description: "איך Markport מריץ את המנוע של אובסידיאן �
 # Architecture - Markport
 
 > קהל: מי שמשנה את הקוד. ה"למה", לא ה"איך-משתמשים" (זה `README.md`).
-> [לקריאת הדף באנגלית](https://markport.pages.dev/architecture).
 
 ## מה זה
 מריצים את ה-renderer של Obsidian (באנדל upstream, `vendor/obsidian-mobile/`)

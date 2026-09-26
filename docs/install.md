@@ -6,7 +6,6 @@ description: "How to run your own instance of Markport, statically or on a Node 
 # Running Markport yourself
 
 > There is no public instance, on purpose. This page is how you run your own.
-> [Read this page in Hebrew](https://markport.pages.dev/he/install).
 
 There are two ways to run it, and they share the same browser-side core. Pick whichever fits:
 
