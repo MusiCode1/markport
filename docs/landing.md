@@ -24,7 +24,9 @@ description: "Obsidian's own renderer running in a standard browser. No Electron
 
 ## Where your notes live
 
-Two options, and neither one involves a server.
+In the client-only mode, your notes stay on your device in one of two ways; neither stores your
+vault on a server. The optional Node server mode, which does store vaults on a server, is described
+below.
 
 ### A real folder on your computer
 

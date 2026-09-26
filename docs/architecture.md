@@ -6,7 +6,7 @@ description: "How Markport runs Obsidian's renderer in a browser, and why it is 
 # Architecture - Markport
 
 > Audience: people changing the code. The "why", not the "how to use it" (that is `README.md`).
-> A Hebrew version of this document is at [`docs/he/architecture.md`](he/architecture.md).
+> [Read this page in Hebrew](https://markport.pages.dev/he/architecture).
 
 ## What this is
 
