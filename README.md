@@ -2,7 +2,7 @@
 
 Run Obsidian in a standard browser - no Electron, no native app needed.
 
-> **Formerly `obsidian-web`.** Renamed because Obsidian's [developer policies](https://docs.obsidian.md/Developer+policies) ask that project names not include the word "Obsidian". `mark` for Markdown, `-port` as in porting - and as in harbour.
+> **Formerly `obsidian-web`.** Renamed to avoid a name that could be mistaken for an official Obsidian product. Obsidian's [naming guidance for community plugins and themes](https://docs.obsidian.md/Reference/Manifest#name) follows the same principle. `mark` for Markdown, `-port` as in porting - and as in harbour.
 >
 > Internal identifiers keep the old string on purpose: `localStorage` keys and the layout plugin's `id` are unchanged, so existing vaults and preferences keep working. Historical notes under `docs/` also still say `obsidian-web`, because that is what the project was called then.
 
@@ -312,10 +312,11 @@ over Obsidian's code. **This repository** does not contain or distribute Obsidia
 the setup scripts download it, unmodified, to **your local copy** at install time (a
 patch-application step still exists as infrastructure for a future Obsidian version that might
 require one, but currently applies zero patches - the extracted bundle is byte-for-byte
-identical to Obsidian's own APK). The **public live demo**, however, *does* serve that same
-unmodified bundle to visitors' browsers (so it can run there) - see `build-assets.sh`, which
-copies it into the deployed static assets. If the Obsidian team has concerns about that, see the
-Disclaimer above.
+identical to Obsidian's own APK). Anyone who deploys the browser app publicly would serve that
+same unmodified bundle to visitors' browsers - `build-assets.sh` copies it into the deployed
+static assets. Markport does not offer a public app or demo; the project website serves only
+information and installation instructions. If the Obsidian team has concerns about this project,
+see the Disclaimer above.
 
 ## Credits
 

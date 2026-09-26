@@ -28,7 +28,7 @@ See `docs/architecture.md` for the full picture.
 - **`vendor/` is gitignored.** It holds Obsidian's own bundle, generated locally by
   `scripts/update-obsidian-*.js`, and is never committed. This repository does not
   contain or distribute that bundle - each user downloads Obsidian themselves via the
-  setup scripts. The public live demo deployment *does* serve the bundle to visitors'
+  setup scripts. A deployment of the browser app would serve the bundle to visitors'
   browsers (see `build-assets.sh`), which is a separate thing from this repo.
 - **The bundle is minified.** Anchor any patch or edit to a **pattern / symbol
   shape**, never to a line number - line numbers move on every Obsidian release.
