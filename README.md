@@ -12,8 +12,9 @@ redistribute their bundle either - the setup script downloads it from Obsidian, 
 
 **[How to run your own →](https://markport.pages.dev/install)**
 
-Your vault lives entirely in your own browser (OPFS) or in a folder you pick on disk. Nothing is
-stored on any server.
+In the client-only mode, your vault lives in your browser (OPFS) or in a folder you pick on disk;
+nothing is stored on a server. The optional Node.js server mode stores vaults on the server's
+filesystem.
 
 Markport loads Obsidian's original renderer (`app.js`) completely unmodified - zero build-time patches; all platform behaviour (mobile vs. desktop layout) is adjusted at runtime via `client-mobile/platform-bridge.js`, not by rewriting the bundle - and replaces every Node.js / Capacitor / Electron dependency it depends on with lightweight browser-compatible shims. The result is real Obsidian running in any modern browser.
 
